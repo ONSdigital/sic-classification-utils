@@ -1,0 +1,13 @@
+site_name: Standard Industrial Classification Utilities
+nav:
+  - Home: index.md
+  - Guide: guide.md
+  - API Reference:
+    - Overview: reference.md
+  - Example Data: example_data.md
+theme:
+  name: material  # Optional, you can change it
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python

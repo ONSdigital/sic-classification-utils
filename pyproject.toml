@@ -1,0 +1,100 @@
+[tool.poetry]
+name = "sic-classification-utils"
+version = "0.1.0"
+description = "Utility functions used for SIC classification"
+authors = ["Steve Gibbard <steve.gibbard@ons.gov.uk>"]
+license = "MIT"
+readme = "README.md"
+
+packages = [{ include = "industrial_classification_utils", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pandas = "^2.2.3"
+#langchain = "^0.3.21"
+#langchain-community = "^0.3.20"
+langchain = "0.1.0"
+sic-classification-library = { git = "https://github.com/ONSdigital/sic-classification-library.git", tag = "v0.1.2" }
+autocorrect = "^2.6.1"
+numpy = "^1.26.4"
+torch = "2.2.2"
+sentence-transformers = "2.3.1"
+transformers = "4.48.0"
+chromadb = "0.4.22"
+openpyxl = "^3.1.5"
+
+[tool.poetry.group.dev.dependencies]
+mkdocs-material = "^9.6.9"
+pytest-cov = "^6.0.0"
+black = "^25.1.0"
+ruff = "^0.11.1"
+pylint = "^3.3.6"
+mypy = "^1.15.0"
+isort = "^6.0.1"
+bandit = "^1.8.3"
+pytest = "^8.3.5"
+pre-commit = "^4.2.0"
+mkdocs = "^1.6.1"
+mkdocstrings = "^0.29.0"
+mkdocstrings-python = "^1.16.7"
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+
+[tool.ruff.lint]
+select = [
+    # Enabling ALL is not recommended it will implicitly enable new rules after upgrade.
+    # "ALL",
+
+    # Ruff rules: https://docs.astral.sh/ruff/rules/
+
+    "E",      # pycodestyle erros
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "UP",     # pyupgrade
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "SIM",    # flake8-simplify
+    "C4",     # flake8-comprehensions
+    "S",      # flake8-bandit
+    "D",      # pydocstyle - Enforce existing docstrings only
+    "C90",    # mccabe
+    "RUF",    # Ruff specific rules
+
+    # PL - Pylint is only partially supported, we also use the pylint tool to catch all the rules.
+    # It is enabled here to take advantage of the ruff's speed.
+    "PL",
+]
+
+ignore = [
+    # Conflicts with google docstring style
+    "D205",
+    # Allow missing docstring, remove to enforce docstrings across the board
+    "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107",
+    # Disable line length check as it is handled by black
+    # :TODO: Remove E501 when ruff supports all black rules
+    "E501",
+    # indentation contains tabs
+    "W191",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    # Allow use of assert statements in tests
+    "S101",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

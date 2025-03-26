@@ -169,3 +169,4 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+src/industrial_classification_utils/data/vector_store/*

@@ -1,0 +1,14 @@
+# Added pre-commit to check if __init__.py is added to the src folder
+# install using `pre-commit install`
+# skip using `git commit -m "message" --no-verify`
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-ast
+      - id: check-vcs-permalinks
+      - id: check-yaml
+      - id: debug-statements
+      - id: check-merge-conflict
