@@ -17,7 +17,7 @@
             runs-on: ubuntu-22.04
             strategy:
               matrix:
-                python-version: ["3.12"]
+                python-version: ["3.12.4"]
 
             steps:
                 - uses: actions/checkout@v4
@@ -33,8 +33,13 @@
                 - name: Display Python version
                   run: python -c "import sys; print(sys.version)"
 
+                - name: Set up Poetry environment
+                  run: |
+                    poetry env use $(which python)
+
                 - name: Install dependencies
-                  run: poetry install
+                  run: |
+                    poetry install --no-cache --no-interaction
   
                 - name: Install dependencies
                   run: make install-dev
@@ -44,7 +49,7 @@
                 
                 - name: Check Chroma
                   run: |
-                    python -c "from langchain_community.vectorstores import Chroma; print(Chroma)"
+                    poetry run python -c "import langchain_community; print(langchain_community.__file__)"
 
                 - name: Lint Python
                   run: make check-python-nofix
