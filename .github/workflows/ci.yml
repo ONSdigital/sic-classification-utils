@@ -41,6 +41,10 @@
                 
                 - name: Check Versions
                   run: poetry show
+                
+                - name: Check Chroma
+                  run: |
+                    python -c "from langchain_community.vectorstores import Chroma; print(Chroma)"
 
                 - name: Lint Python
                   run: make check-python-nofix
