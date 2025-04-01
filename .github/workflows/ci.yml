@@ -38,6 +38,9 @@
   
                 - name: Install dependencies
                   run: make install-dev
+                
+                - name: Check Versions
+                  run: poetry show
 
                 - name: Lint Python
                   run: make check-python-nofix
