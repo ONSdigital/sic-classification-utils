@@ -41,6 +41,7 @@ def get_config() -> dict[str, dict[str, str]]:
     """
     return {
         "llm": {
+            "llm_model_name": "gemini-1.0-pro",
             "embedding_model_name": "all-MiniLM-L6-v2",
             "db_dir": "src/industrial_classification_utils/data/vector_store",
         },
@@ -52,6 +53,10 @@ def get_config() -> dict[str, dict[str, str]]:
             "sic_structure": (
                 "src/industrial_classification_utils/data/sic_index/"
                 "publisheduksicsummaryofstructureworksheet.xlsx"
+            ),
+            "sic_condensed": (
+                "src/industrial_classification_utils/data/example/"
+                "sic_2d_condensed.txt"
             ),
         },
     }
