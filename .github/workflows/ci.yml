@@ -44,12 +44,21 @@
                 - name: Install dependencies
                   run: make install-dev
                 
-                - name: Check Versions
-                  run: poetry show
-                
-                - name: Check Chroma
+                - name: Check Poetry Virtual Environment
                   run: |
-                    poetry run python -c "import langchain_community; print(langchain_community.__file__)"
+                    poetry env info
+                    poetry env list      
+
+                - name: Check Versions
+                  run: poetry show | grep langchain 
+                
+                - name: Check Import path
+                  run: |
+                    poetry run python -c "import sys; print(sys.path)"
+
+                - name: Test Import in Poetry Environment
+                  run: |
+                    poetry run python -c "from langchain_community.vectorstores import Chroma; print(Chroma)"
 
                 - name: Lint Python
                   run: make check-python-nofix
