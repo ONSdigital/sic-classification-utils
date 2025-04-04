@@ -20,7 +20,7 @@ from autocorrect import Speller
 from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarchy
 from langchain.docstore.document import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings, VertexAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import Chroma  # pylint: disable=no-name-in-module
 
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
