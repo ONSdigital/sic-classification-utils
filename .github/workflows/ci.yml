@@ -44,6 +44,9 @@
                 - name: Install dependencies
                   run: make install-dev
                 
+                - name: Install SQLite headers
+                  run: sudo apt-get install -y libsqlite3-dev
+                
                 - name: Check Poetry Virtual Environment
                   run: |
                     poetry env info
