@@ -33,6 +33,11 @@
                 - name: Display Python version
                   run: python -c "import sys; print(sys.version)"
 
+                - name: Display SQLite version
+                  run: |
+                    python -c "import sqlite3; print('SQLite runtime version:', sqlite3.sqlite_version)"
+                    python -c "import sqlite3; print('SQLite module version:', sqlite3.version)"
+
                 - name: Set up Poetry environment
                   run: |
                     poetry env use $(which python)
