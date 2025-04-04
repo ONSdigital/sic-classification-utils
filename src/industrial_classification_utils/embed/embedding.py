@@ -5,11 +5,14 @@ It includes functionality for embedding SIC hierarchy data, managing vector stor
 and performing similarity searches.
 """
 
+# ruff: noqa: E402
+
+# Optional but doesn't hurt
 import logging
-import sqlite3  # noqa:F401  # pylint: disable=unused-import
+import sqlite3  # noqa: F401 # pylint: disable=unused-import
 
 # Docker Image may have old sqlite3 version for ChromaDB
-import sys
+# Top of your module (before any langchain or chroma import)
 import uuid
 from typing import Any, Optional, Union
 
@@ -23,11 +26,6 @@ from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
 )
-
-if sys.modules["sqlite3"].sqlite_version_info < (3, 35, 0):
-    __import__("pysqlite3")
-    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
-
 
 logger = logging.getLogger(__name__)
 
