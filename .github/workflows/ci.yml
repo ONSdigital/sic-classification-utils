@@ -17,7 +17,7 @@
             runs-on: ubuntu-22.04
             strategy:
               matrix:
-                python-version: ["3.12"]
+                python-version: ["3.12.4"]
 
             steps:
                 - uses: actions/checkout@v4
@@ -33,11 +33,40 @@
                 - name: Display Python version
                   run: python -c "import sys; print(sys.version)"
 
+                - name: Display SQLite version
+                  run: |
+                    python -c "import sqlite3; print('SQLite runtime version:', sqlite3.sqlite_version)"
+                    python -c "import sqlite3; print('SQLite module version:', sqlite3.version)"
+
+                - name: Set up Poetry environment
+                  run: |
+                    poetry env use $(which python)
+
                 - name: Install dependencies
-                  run: poetry install
+                  run: |
+                    poetry install --no-cache --no-interaction
   
                 - name: Install dependencies
                   run: make install-dev
+                
+                - name: Install SQLite headers
+                  run: sudo apt-get install -y libsqlite3-dev
+                
+                - name: Check Poetry Virtual Environment
+                  run: |
+                    poetry env info
+                    poetry env list      
+
+                - name: Check Versions
+                  run: poetry show | grep langchain 
+                
+                - name: Check Import path
+                  run: |
+                    poetry run python -c "import sys; print(sys.path)"
+
+                - name: Test Import in Poetry Environment
+                  run: |
+                    poetry run python -c "from langchain_community.vectorstores import Chroma; print(Chroma)"
 
                 - name: Lint Python
                   run: make check-python-nofix

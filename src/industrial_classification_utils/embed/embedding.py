@@ -5,11 +5,14 @@ It includes functionality for embedding SIC hierarchy data, managing vector stor
 and performing similarity searches.
 """
 
+# ruff: noqa: E402
+
+# Optional but doesn't hurt
 import logging
-import sqlite3  # noqa:F401  # pylint: disable=unused-import
+import sqlite3  # noqa: F401 # pylint: disable=unused-import
 
 # Docker Image may have old sqlite3 version for ChromaDB
-import sys
+# Top of your module (before any langchain or chroma import)
 import uuid
 from typing import Any, Optional, Union
 
@@ -17,17 +20,12 @@ from autocorrect import Speller
 from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarchy
 from langchain.docstore.document import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings, VertexAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import Chroma  # pylint: disable=no-name-in-module
 
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
 )
-
-if sys.modules["sqlite3"].sqlite_version_info < (3, 35, 0):
-    __import__("pysqlite3")
-    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
-
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +39,7 @@ def get_config() -> dict[str, dict[str, str]]:
     """
     return {
         "llm": {
+            "llm_model_name": "gemini-1.0-pro",
             "embedding_model_name": "all-MiniLM-L6-v2",
             "db_dir": "src/industrial_classification_utils/data/vector_store",
         },
@@ -52,6 +51,10 @@ def get_config() -> dict[str, dict[str, str]]:
             "sic_structure": (
                 "src/industrial_classification_utils/data/sic_index/"
                 "publisheduksicsummaryofstructureworksheet.xlsx"
+            ),
+            "sic_condensed": (
+                "src/industrial_classification_utils/data/example/"
+                "sic_2d_condensed.txt"
             ),
         },
     }
