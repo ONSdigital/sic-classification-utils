@@ -1,12 +1,17 @@
 [tool.poetry]
 name = "sic-classification-utils"
-version = "0.1.0"
+version = "0.1.1"
 description = "Utility functions used for SIC classification"
 authors = ["Steve Gibbard <steve.gibbard@ons.gov.uk>"]
 license = "MIT"
 readme = "README.md"
 
 packages = [{ include = "industrial_classification_utils", from = "src" }]
+
+include = [
+  { path = "src/industrial_classification_utils/data", format = "sdist" },
+  { path = "src/industrial_classification_utils/data", format = "wheel" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.12"
