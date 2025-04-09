@@ -10,7 +10,11 @@ packages = [{ include = "industrial_classification_utils", from = "src" }]
 
 include = [
   { path = "src/industrial_classification_utils/data", format = "sdist" },
-  { path = "src/industrial_classification_utils/data", format = "wheel" }
+  { path = "src/industrial_classification_utils/data", format = "wheel" },
+  { path = "src/industrial_classification_utils/data/**/*.xlsx", format = "sdist" },
+  { path = "src/industrial_classification_utils/data/**/*.xlsx", format = "wheel" },
+  { path = "src/industrial_classification_utils/data/**/*.txt", format = "sdist" },
+  { path = "src/industrial_classification_utils/data/**/*.txt", format = "wheel" }
 ]
 
 [tool.poetry.dependencies]
