@@ -29,6 +29,18 @@ from industrial_classification_utils.utils.sic_data_access import (
 
 logger = logging.getLogger(__name__)
 
+# Share configuration with other modules
+embedding_config = {
+    "embedding_model_name": "unknown",
+    "llm_model_name": "unknown",
+    "db_dir": "unknown",
+    "sic_index": "unknown",
+    "sic_structure": "unknown",
+    "sic_condensed": "unknown",
+    "matches": 0,
+    "index_size": 0,
+}
+
 
 def get_config() -> dict[str, dict[str, str]]:
     """Returns the configuration dictionary for the LLM.
@@ -104,6 +116,15 @@ class EmbeddingHandler:
         self.spell = Speller()
         self._index_size = self.vector_store._client.get_collection("langchain").count()
 
+        # 🔄 Update shared config
+        embedding_config["embedding_model_name"] = embedding_model_name
+        embedding_config["llm_model_name"] = config["llm"].get(
+            "llm_model_name", "unknown"
+        )
+        embedding_config["db_dir"] = db_dir
+        embedding_config["matches"] = self.k_matches
+        embedding_config["index_size"] = self._index_size
+
     def _create_vector_store(self) -> Chroma:
         """Initializes the Chroma vector store.
 
@@ -119,11 +140,13 @@ class EmbeddingHandler:
             embedding_function=self.embeddings, persist_directory=self.db_dir
         )
 
-    def embed_index(
+    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         from_empty: bool = True,
         sic: Optional[SIC] = None,
         file_object=None,
+        sic_index_file=None,
+        sic_structure_file=None,
     ):
         """Embeds the index entries into the vector store.
 
@@ -135,6 +158,10 @@ class EmbeddingHandler:
             file_object (StringIO object, optional): The index file as a StringIO object.
                 If provided, the file will be read line by line and embedded.
                 Each line should have the format **code**: **description**.
+            sic_index_file (optional): Custom path or file-like object to override
+                default SIC index source.
+            sic_structure_file (optional): Custom path or file-like object to override
+                default SIC structure source.
         """
         if from_empty:
             self.vector_store._client.delete_collection(  # pylint: disable=protected-access
@@ -162,8 +189,12 @@ class EmbeddingHandler:
 
         else:
             if sic is None:
-                sic_index_df = load_sic_index(config["lookups"]["sic_index"])
-                sic_df = load_sic_structure(config["lookups"]["sic_structure"])
+                sic_index_df = load_sic_index(
+                    sic_index_file or config["lookups"]["sic_index"]
+                )
+                sic_df = load_sic_structure(
+                    sic_structure_file or config["lookups"]["sic_structure"]
+                )
                 sic = load_hierarchy(sic_df, sic_index_df)
 
             logger.debug("Loading entries from SIC hierarchy for embedding.")
@@ -187,6 +218,22 @@ class EmbeddingHandler:
         ).count()
         logger.debug(
             "Inserted %s entries into vector embedding database.", f"{len(docs):,}"
+        )
+
+        # Update shared config
+        embedding_config["index_size"] = self._index_size
+        embedding_config["sic_index"] = sic_index_file or config["lookups"]["sic_index"]
+        embedding_config["sic_structure"] = (
+            sic_structure_file or config["lookups"]["sic_structure"]
+        )
+        embedding_config["sic_condensed"] = (
+            sic_index_file or config["lookups"]["sic_condensed"]
+        )
+        embedding_config["matches"] = self.k_matches
+        embedding_config["db_dir"] = self.db_dir
+        embedding_config["embedding_model_name"] = self.embeddings.model_name
+        embedding_config["llm_model_name"] = config["llm"].get(
+            "llm_model_name", "unknown"
         )
 
     def search_index(
@@ -236,3 +283,16 @@ class EmbeddingHandler:
             search_terms_list.add(self.spell(x))
         short_list = [y for x in search_terms_list for y in self.search_index(query=x)]
         return sorted(short_list, key=lambda x: x["distance"])  # type: ignore
+
+    def get_embed_config(self) -> dict:
+        """Returns the current embedding configuration as a dictionary."""
+        return {
+            "embedding_model_name": str(embedding_config["embedding_model_name"]),
+            "llm_model_name": str(embedding_config["llm_model_name"]),
+            "db_dir": str(embedding_config["db_dir"]),
+            "sic_index": str(embedding_config["sic_index"]),
+            "sic_structure": str(embedding_config["sic_structure"]),
+            "sic_condensed": str(embedding_config["sic_condensed"]),
+            "matches": embedding_config["matches"],
+            "index_size": embedding_config["index_size"],
+        }
