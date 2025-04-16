@@ -41,6 +41,7 @@ embedding_config = {
     "index_size": 0,
 }
 
+
 def get_config() -> dict[str, dict[str, str]]:
     """Returns the configuration dictionary for the LLM.
 
@@ -117,7 +118,9 @@ class EmbeddingHandler:
 
         # 🔄 Update shared config
         embedding_config["embedding_model_name"] = embedding_model_name
-        embedding_config["llm_model_name"] = config["llm"].get("llm_model_name", "unknown")
+        embedding_config["llm_model_name"] = config["llm"].get(
+            "llm_model_name", "unknown"
+        )
         embedding_config["db_dir"] = db_dir
         embedding_config["matches"] = self.k_matches
         embedding_config["index_size"] = self._index_size
@@ -137,7 +140,7 @@ class EmbeddingHandler:
             embedding_function=self.embeddings, persist_directory=self.db_dir
         )
 
-    def embed_index(
+    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         from_empty: bool = True,
         sic: Optional[SIC] = None,
@@ -229,7 +232,9 @@ class EmbeddingHandler:
         embedding_config["matches"] = self.k_matches
         embedding_config["db_dir"] = self.db_dir
         embedding_config["embedding_model_name"] = self.embeddings.model_name
-        embedding_config["llm_model_name"] = config["llm"].get("llm_model_name", "unknown")
+        embedding_config["llm_model_name"] = config["llm"].get(
+            "llm_model_name", "unknown"
+        )
 
     def search_index(
         self, query: str, return_dicts: bool = True
@@ -279,7 +284,6 @@ class EmbeddingHandler:
         short_list = [y for x in search_terms_list for y in self.search_index(query=x)]
         return sorted(short_list, key=lambda x: x["distance"])  # type: ignore
 
-
     def get_embed_config(self) -> dict:
         """Returns the current embedding configuration as a dictionary."""
         return {
@@ -289,6 +293,6 @@ class EmbeddingHandler:
             "sic_index": str(embedding_config["sic_index"]),
             "sic_structure": str(embedding_config["sic_structure"]),
             "sic_condensed": str(embedding_config["sic_condensed"]),
-            "matches": int(embedding_config["matches"]),
-            "index_size": int(embedding_config["index_size"]),
+            "matches": embedding_config["matches"],
+            "index_size": embedding_config["index_size"],
         }
