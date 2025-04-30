@@ -27,7 +27,7 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain_google_vertexai import VertexAI
 from langchain_openai import ChatOpenAI
 
-from industrial_classification_utils.embed.embedding import EmbeddingHandler, get_config
+from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.llm.prompt import (
     GENERAL_PROMPT_RAG,
     SA_SIC_PROMPT_RAG,
@@ -37,7 +37,6 @@ from industrial_classification_utils.llm.prompt import (
     SIC_PROMPT_UNAMBIGUOUS,
 )
 from industrial_classification_utils.models.response_model import (
-    RagResponse,
     RerankingResponse,
     SicResponse,
     SurveyAssistSicResponse,
@@ -65,8 +64,6 @@ class ClassificationLLM:
         model_name (str): Name of the model. Defaults to the value in the `config` file.
             Used if no LLM object is passed.
         llm (LLM): LLM to use. Optional.
-        embedding_handler (EmbeddingHandler): Embedding handler. Optional.
-            If None a default embedding handler is retrieved based on config file.
         max_tokens (int): Maximum number of tokens to generate. Defaults to 1600.
         temperature (float): Temperature of the LLM model. Defaults to 0.0.
         verbose (bool): Whether to print verbose output. Defaults to False.
@@ -77,7 +74,6 @@ class ClassificationLLM:
         self,
         model_name: str = config["llm"]["llm_model_name"],
         llm: Optional[Union[VertexAI, ChatOpenAI]] = None,
-        embedding_handler: Optional[EmbeddingHandler] = None,
         max_tokens: int = 1600,
         temperature: float = 0.0,
         verbose: bool = True,
@@ -113,28 +109,8 @@ class ClassificationLLM:
         self.general_prompt_rag = GENERAL_PROMPT_RAG
         self.sic_prompt_unambiguous = SIC_PROMPT_UNAMBIGUOUS
         self.sic_prompt_reranker = SIC_PROMPT_RERANKER
-        self.embed = embedding_handler
         self.sic = None
         self.verbose = verbose
-
-    def _load_embedding_handler(self):
-        """Loads the default embedding handler according to the 'config' file.
-        Expects an existing and populated persistent vector store.
-
-        Raises:
-            ValueError: If the retrieved embedding handler has an empty vector store.
-                Please embed an index before using it in the ClassificationLLM.
-        """
-        logger.info(
-            """Loading default embedding handler according to 'config' file.
-            Expecting existing & populated persistent vector store."""
-        )
-        self.embed = EmbeddingHandler()
-        if self.embed._index_size == 0:  # pylint: disable=protected-access
-            raise ValueError(
-                """The retrieved embedding handler has an empty vector store.
-                Please embed an index before using in the ClassificationLLM."""
-            )
 
     @lru_cache  # noqa: B019
     def get_sic_code(
@@ -281,143 +257,14 @@ class ClassificationLLM:
 
         return "\n".join(sic_candidates)
 
-    def rag_sic_code(  # noqa: PLR0913
-        self,
-        industry_descr: str,
-        job_title: Optional[str] = None,
-        job_description: Optional[str] = None,
-        expand_search_terms: bool = True,
-        code_digits: int = 5,
-        candidates_limit: int = 5,
-    ) -> tuple[SicResponse, Optional[list[dict[Any, Any]]], Optional[Any]]:
-        """Generates a SIC classification based on respondent's data using RAG approach.
-
-        Args:
-            industry_descr (str): The description of the industry.
-            job_title (str, optional): The job title. Defaults to None.
-            job_description (str, optional): The job description. Defaults to None.
-            expand_search_terms (bool, optional): Whether to expand the search terms
-                to include job title and description. Defaults to True.
-            code_digits (int, optional): The number of digits in the generated
-                SIC code. Defaults to 5.
-            candidates_limit (int, optional): The maximum number of SIC code candidates
-                to consider. Defaults to 5.
-
-        Returns:
-            SicResponse: The generated response to the query.
-
-        Raises:
-            ValueError: If there is an error during the parsing of the response.
-            ValueError: If the default embedding handler is required but
-                not loaded correctly.
-
-        """
-
-        def prep_call_dict(industry_descr, job_title, job_description, sic_codes):
-            # Helper function to prepare the call dictionary
-            is_job_title_present = job_title is None or job_title in {"", " "}
-            job_title = "Unknown" if is_job_title_present else job_title
-
-            is_job_description_present = job_description is None or job_description in {
-                "",
-                " ",
-            }
-            job_description = (
-                "Unknown" if is_job_description_present else job_description
-            )
-
-            call_dict = {
-                "industry_descr": industry_descr,
-                "job_title": job_title,
-                "job_description": job_description,
-                "sic_index": sic_codes,
-            }
-            return call_dict
-
-        if self.embed is None:
-            try:
-                self._load_embedding_handler()
-            except ValueError as err:
-                logger.exception(err)
-                logger.warning("Error: Empty embedding vector store, exit early")
-                validated_answer = SicResponse(
-                    codable=False,
-                    sic_candidates=[],
-                    reasoning="Error, Empty embedding vector store, exit early",
-                )
-                return validated_answer, None, None
-
-        # Retrieve relevant SIC codes and format them for prompt
-        if expand_search_terms:
-            short_list = self.embed.search_index_multi(  # type: ignore # False positive
-                query=[industry_descr or "", job_title or "", job_description or ""]
-            )
-        else:
-            short_list = self.embed.search_index(  # type: ignore # False positive
-                query=industry_descr
-            )
-
-        sic_codes = self._prompt_candidate_list(
-            short_list, code_digits=code_digits, candidates_limit=candidates_limit
-        )
-
-        call_dict = prep_call_dict(
-            industry_descr=industry_descr,
-            job_title=job_title,
-            job_description=job_description,
-            sic_codes=sic_codes,
-        )
-
-        if self.verbose:
-            final_prompt = self.sic_prompt_rag.format(**call_dict)
-            logger.debug("%s", final_prompt)
-
-        chain = LLMChain(llm=self.llm, prompt=self.sic_prompt_rag)
-
-        try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
-        except ValueError as err:
-            logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
-            validated_answer = SicResponse(
-                codable=False,
-                sic_candidates=[],
-                reasoning="Error from LLMChain, exit early",
-            )
-            return validated_answer, short_list, call_dict
-
-        if self.verbose:
-            logger.debug("%s", response)
-
-        # Parse the output to the desired format
-        parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
-            pydantic_object=SicResponse
-        )
-        try:
-            validated_answer = parser.parse(response["text"])
-        except ValueError as parse_error:
-            logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response["text"])
-
-            reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
-            )
-            validated_answer = SicResponse(
-                codable=False,
-                sic_candidates=[],
-                reasoning=reasoning,
-            )
-
-        return validated_answer, short_list, call_dict
-
     def sa_rag_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        expand_search_terms: bool = True,
         code_digits: int = 5,
         candidates_limit: int = 5,
+        short_list: Optional[list[dict[Any, Any]]] = None,
     ) -> tuple[SurveyAssistSicResponse, Optional[list[dict[Any, Any]]], Optional[Any]]:
         """Generates a SIC classification based on respondent's data using RAG approach.
 
@@ -425,12 +272,11 @@ class ClassificationLLM:
             industry_descr (str): The description of the industry.
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
-            expand_search_terms (bool, optional): Whether to expand the search terms
-                to include job title and description. Defaults to True.
             code_digits (int, optional): The number of digits in the generated
                 SIC code. Defaults to 5.
             candidates_limit (int, optional): The maximum number of SIC code candidates
                 to consider. Defaults to 5.
+            short_list (list[dict[Any, Any]], optional): A list of results from embedding search
 
         Returns:
             SurveyAssistSicResponse: The generated response to the query.
@@ -463,30 +309,8 @@ class ClassificationLLM:
             }
             return call_dict
 
-        if self.embed is None:
-            try:
-                self._load_embedding_handler()
-            except ValueError as err:
-                logger.exception(err)
-                logger.warning("Error: Empty embedding vector store, exit early")
-                validated_answer = SurveyAssistSicResponse(
-                    followup="Follow-up question not available due to error.",
-                    sic_code="N/A",
-                    sic_descriptive="N/A",
-                    sic_candidates=[],
-                    reasoning="Error, Empty embedding vector store, exit early",
-                )
-                return validated_answer, None, None
-
-        # Retrieve relevant SIC codes and format them for prompt
-        if expand_search_terms:
-            short_list = self.embed.search_index_multi(  # type: ignore # False positive
-                query=[industry_descr or "", job_title or "", job_description or ""]
-            )
-        else:
-            short_list = self.embed.search_index(  # type: ignore # False positive
-                query=industry_descr
-            )
+        if short_list is None:
+            raise ValueError("Short list is None - list provided from embedding search.")
 
         sic_codes = self._prompt_candidate_list(
             short_list, code_digits=code_digits, candidates_limit=candidates_limit
@@ -544,110 +368,6 @@ class ClassificationLLM:
             )
 
         return validated_answer, short_list, call_dict
-
-    def rag_general_code(
-        self,
-        respondent_data: dict,
-        candidates_limit: int = 7,
-    ) -> tuple[RagResponse, Optional[Any]]:
-        """Generates a classification answer based on respondent's data
-        using RAG and custom index.
-
-        Args:
-            respondent_data (dict): A dictionary containing respondent data.
-            candidates_limit (int, optional): The maximum number of candidate
-                codes to consider. Defaults to 7.
-
-        Returns:
-            RagResponse: The generated classification response to the query.
-
-        Raises:
-            ValueError: If there is an error during the parsing of the response.
-            ValueError: If the default embedding handler is required but
-                not loaded correctly.
-        """
-        if self.embed is None:
-            try:
-                self._load_embedding_handler()
-            except ValueError as err:
-                logger.exception(err)
-                logger.warning("Error: Empty embedding vector store, exit early")
-                validated_answer = RagResponse(
-                    codable=False,
-                    alt_candidates=[],
-                    reasoning="Error: Empty embedding vector store, exit early",
-                )
-                return validated_answer, None
-
-        # Retrieve relevant SIC codes and format them for prompt
-        query = (
-            [str(value) for value in respondent_data.values()]
-            if respondent_data
-            else [""]
-        )
-        short_list = self.embed.search_index_multi(query=query)  # type: ignore # False positive
-
-        candidate_codes = (
-            "{"
-            + "}, /n{".join(
-                [
-                    "Code: " + x["code"] + ", Description: " + x["title"]
-                    for x in short_list[:candidates_limit]
-                ]
-            )
-            + "}"
-        )
-
-        if self.verbose:
-            final_prompt = self.general_prompt_rag.format(
-                respondent_data=str(respondent_data),
-                classification_index=candidate_codes,
-            )
-            logger.debug("%s", final_prompt)
-
-        chain = LLMChain(llm=self.llm, prompt=self.general_prompt_rag)
-
-        try:
-            response = chain.invoke(
-                {
-                    "respondent_data": str(respondent_data),
-                    "classification_index": candidate_codes,
-                },
-                return_only_outputs=True,
-            )
-        except ValueError as err:
-            logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
-            validated_answer = RagResponse(
-                codable=False,
-                alt_candidates=[],
-                reasoning="Error from LLMChain, exit early",
-            )
-            return validated_answer, short_list
-
-        if self.verbose:
-            logger.debug("llm_response=%s", response)
-
-        # Parse the output to desired format
-        parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
-            pydantic_object=RagResponse
-        )
-        try:
-            validated_answer = parser.parse(response["text"])
-        except ValueError as parse_error:
-            logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response["text"])
-
-            reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
-            )
-            validated_answer = RagResponse(
-                codable=False,
-                alt_candidates=[],
-                reasoning=reasoning,
-            )
-
-        return validated_answer, short_list
 
     def unambiguous_sic_code(
         self,
@@ -755,10 +475,10 @@ class ClassificationLLM:
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        expand_search_terms: bool = True,
         code_digits: int = 5,
         candidates_limit: int = 7,
         output_limit: int = 5,
+        short_list: Optional[list[dict[Any, Any]]] = None,
     ) -> Union[tuple[Any, Optional[list], Optional[dict[str, Any]]], dict[str, Any]]:
         """Generates a set of relevant SIC codes based on respondent's data
             using reranking approach.
@@ -767,14 +487,13 @@ class ClassificationLLM:
             industry_descr (str): The description of the industry.
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
-            expand_search_terms (bool, optional): Whether to expand the search terms
-                to include job title and description. Defaults to True.
             code_digits (int, optional): The number of digits in the generated
                 SIC code. Defaults to 5.
             candidates_limit (int, optional): The maximum number of SIC code candidates
                 to consider. Defaults to 7.
             output_limit (int, optional): The maximum number of SIC codes to return.
                 Defaults to 5.
+            short_list (list[dict[Any, Any]], optional): A list of results from embedding search.
 
         Returns:
             tuple[RerankingResponse, dict[str, Any]]: The reranking response and additional data.
@@ -810,29 +529,8 @@ class ClassificationLLM:
             }
             return call_dict
 
-        if self.embed is None:
-            try:
-                self._load_embedding_handler()
-            except ValueError as err:
-                logger.exception(err)
-                logger.warning("Error: Empty embedding vector store, exit early")
-                validated_answer = RerankingResponse(
-                    selected_codes=[],
-                    excluded_codes=[],
-                    status="Error, Empty embedding vector store, exit early",
-                    n_requested=output_limit,
-                )
-                return validated_answer, None, None
-
-        # Retrieve relevant SIC codes and format them for prompt
-        if expand_search_terms:
-            short_list = self.embed.search_index_multi(  # type: ignore # False positive
-                query=[industry_descr or "", job_title or "", job_description or ""]
-            )
-        else:
-            short_list = self.embed.search_index(  # type: ignore # False positive
-                query=industry_descr
-            )
+        if short_list is None:
+            raise ValueError("Short list is None - list provided from embedding search.")
 
         sic_codes = self._prompt_candidate_list(
             short_list, code_digits=code_digits, candidates_limit=candidates_limit

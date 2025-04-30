@@ -39,6 +39,9 @@ from industrial_classification_utils.models.response_model import (
     SurveyAssistSicResponse,
     UnambiguousResponse,
 )
+from industrial_classification_utils.utils.sic_data_access import (
+    load_text_from_config,
+)
 
 config = get_config()
 
@@ -65,8 +68,8 @@ Make sure to use the provided 2007 SIC Index.
 {sic_index}
 """
 
-with open(config["lookups"]["sic_condensed"], encoding="utf-8") as f:
-    sic_index = f.read()
+
+sic_index = load_text_from_config(config["lookups"]["sic_condensed"])
 
 
 parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug

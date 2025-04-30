@@ -10,7 +10,6 @@ The example then uses llm from the `industrial_classification_utils.llm.llm_embe
 package to perform a lookup using the embeddings index.
 """
 
-from industrial_classification_utils.embed.embedding import EmbeddingHandler
 from industrial_classification_utils.llm.llm import ClassificationLLM
 
 EXAMPLE_QUERY = "school teacher primary education"
@@ -20,23 +19,51 @@ JOB_DESCRIPTION = "teach maths"
 ORG_DESCRIPTION = "school"
 CANDIDATE_LIMIT = 100
 
-print("Creating embeddings index...")
-# Create the embeddings index
-embed = EmbeddingHandler()
-gemini_llm = ClassificationLLM(model_name=LLM_MODEL, embedding_handler=embed)
+# The following is a mock response for the embedding search
+EXAMPLE_EMBED_SHORT_LIST = [
+    {
+        "distance": 0.6347243785858154,
+        "title": "Education agent",
+        "code": "85600",
+        "four_digit_code": "8560",
+        "two_digit_code": "85"
+    },
+    {
+        "distance": 0.6422433257102966,
+        "title": "Teacher n.e.c.",
+        "code": "85590",
+        "four_digit_code": "8559",
+        "two_digit_code": "85"
+    },
+    {
+        "distance": 0.7757259607315063,
+        "title": "Teachers of sport",
+        "code": "85510",
+        "four_digit_code": "8551",
+        "two_digit_code": "85"
+    },
+    {
+        "distance": 0.8803297281265259,
+        "title": "Kindergartens",
+        "code": "85100",
+        "four_digit_code": "8510",
+        "two_digit_code": "85"
+    }
+]
 
-embed.embed_index(from_empty=False)
-print(
-    f"Embeddings index created with {embed._index_size} entries."  # pylint: disable=protected-access
-)
 
-print(f"Performing LLM lookup for {JOB_TITLE}...")
+# The vector store is decoupled from the LLM.
+# The expectation is that the embedding will be queried and then
+# the results will be passed to the LLM for classification.
+# This example uses mocked data for the embedding search.
+gemini_llm = ClassificationLLM(model_name=LLM_MODEL)
 
 response, short_list, prompt = gemini_llm.sa_rag_sic_code(
     ORG_DESCRIPTION,
     JOB_TITLE,
     JOB_DESCRIPTION,
     candidates_limit=CANDIDATE_LIMIT,
+    short_list=EXAMPLE_EMBED_SHORT_LIST,
 )
 
 # Print the response
