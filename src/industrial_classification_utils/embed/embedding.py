@@ -281,7 +281,7 @@ class EmbeddingHandler:
             sic_structure_file or config["lookups"]["sic_structure"]
         )
         embedding_config["sic_condensed"] = (
-            sic_index_file or config["lookups"]["sic_condensed"]
+            config["lookups"]["sic_condensed"]
         )
         embedding_config["matches"] = self.k_matches
         embedding_config["db_dir"] = self.db_dir
