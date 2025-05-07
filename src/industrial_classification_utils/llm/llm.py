@@ -310,7 +310,9 @@ class ClassificationLLM:
             return call_dict
 
         if short_list is None:
-            raise ValueError("Short list is None - list provided from embedding search.")
+            raise ValueError(
+                "Short list is None - list provided from embedding search."
+            )
 
         sic_codes = self._prompt_candidate_list(
             short_list, code_digits=code_digits, candidates_limit=candidates_limit
@@ -530,7 +532,9 @@ class ClassificationLLM:
             return call_dict
 
         if short_list is None:
-            raise ValueError("Short list is None - list provided from embedding search.")
+            raise ValueError(
+                "Short list is None - list provided from embedding search."
+            )
 
         sic_codes = self._prompt_candidate_list(
             short_list, code_digits=code_digits, candidates_limit=candidates_limit

@@ -23,6 +23,9 @@ from langchain.docstore.document import Document
 from langchain_community.embeddings import HuggingFaceEmbeddings, VertexAIEmbeddings
 from langchain_community.vectorstores import Chroma  # pylint: disable=no-name-in-module
 
+from industrial_classification_utils.models.config_model import (
+    FullConfig,
+)
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
@@ -44,7 +47,7 @@ embedding_config = {
 }
 
 
-def get_config() -> dict[str, dict[str, str]]:
+def get_config() -> FullConfig:
     """Returns the configuration dictionary for the LLM.
 
     Returns:
@@ -118,16 +121,12 @@ class EmbeddingHandler:
         self.db_dir = db_dir
         logger.debug("Create vector store in database directory: %s", db_dir)
         self.vector_store = self._create_vector_store()
-        logger.debug(
-            "Vector store created."
-        )
+        logger.debug("Vector store created.")
         self.k_matches = k_matches
         self.spell = Speller()
         self._index_size = self.vector_store._client.get_collection("langchain").count()
 
-        logger.debug(
-            f"Vector store contains {self._index_size} entries."
-        )
+        logger.debug("Vector store contains %s entries.", self._index_size)
         # 🔄 Update shared config
         embedding_config["embedding_model_name"] = embedding_model_name
         embedding_config["llm_model_name"] = config["llm"].get(
@@ -145,9 +144,8 @@ class EmbeddingHandler:
             Chroma: The LangChain vector store object for Chroma.
         """
         logger.debug("Creating vector store...")
-        logger.debug(f"Embedding function: {self.embeddings}")
-        logger.debug(f"Persist directory: {self.db_dir}")
-
+        logger.debug("Embedding function: %s", self.embeddings)
+        logger.debug("Persist directory: %s", self.db_dir)
 
         if self.db_dir is None:
             logger.warning("No db_dir provided; using in-memory vector store.")
@@ -157,25 +155,21 @@ class EmbeddingHandler:
         # else
 
         if not os.path.exists(self.db_dir):
-            logger.warning(f"Persist directory does not exist: {self.db_dir}")
+            logger.warning("Persist directory does not exist: %s", self.db_dir)
         else:
-            logger.debug(f"Persist directory exists: {self.db_dir}")
-            logger.debug(f"Readable: {os.access(self.db_dir, os.R_OK)}")
-            logger.debug(f"Writable: {os.access(self.db_dir, os.W_OK)}")
+            logger.debug("Persist directory exists: %s", self.db_dir)
+            logger.debug("Readable: %s", os.access(self.db_dir, os.R_OK))
+            logger.debug("Writable: %s", os.access(self.db_dir, os.W_OK))
 
         try:
             chroma = Chroma(  # pylint: disable=not-callable
-                embedding_function=self.embeddings,
-                persist_directory=self.db_dir
+                embedding_function=self.embeddings, persist_directory=self.db_dir
             )
             logger.info("Chroma vector store created successfully.")
             return chroma
         except Exception as e:
-            logger.exception(f"Failed to create Chroma vector store: {e}")
+            logger.exception("Failed to create Chroma vector store: %s", e)
             raise
-        # return Chroma(  # pylint: disable=not-callable
-        #     embedding_function=self.embeddings, persist_directory=self.db_dir
-        # )
 
     def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
@@ -237,7 +231,11 @@ class EmbeddingHandler:
 
         else:
             if sic is None:
-                logger.debug(f"Loading SIC hierarchy from files: {sic_index_file}, {sic_structure_file}")
+                logger.debug(
+                    "Loading SIC hierarchy from files: %s, %s",
+                    sic_index_file,
+                    sic_structure_file,
+                )
 
                 if sic_index_file is None:
                     sic_index_file = config["lookups"]["sic_index"]
@@ -246,9 +244,7 @@ class EmbeddingHandler:
                 if sic_structure_file is None:
                     sic_structure_file = config["lookups"]["sic_structure"]
                 sic_df = load_sic_structure(sic_structure_file)
-                logger.debug(
-                    "Loading SIC hierarchy from index and structure files."
-                )
+                logger.debug("Loading SIC hierarchy from index and structure files.")
                 sic = load_hierarchy(sic_df, sic_index_df)
 
             logger.debug("Loading entries from SIC hierarchy for embedding.")
@@ -280,18 +276,14 @@ class EmbeddingHandler:
         embedding_config["sic_structure"] = (
             sic_structure_file or config["lookups"]["sic_structure"]
         )
-        embedding_config["sic_condensed"] = (
-            config["lookups"]["sic_condensed"]
-        )
+        embedding_config["sic_condensed"] = config["lookups"]["sic_condensed"]
         embedding_config["matches"] = self.k_matches
         embedding_config["db_dir"] = self.db_dir
         embedding_config["embedding_model_name"] = self.embeddings.model_name
         embedding_config["llm_model_name"] = config["llm"].get(
             "llm_model_name", "unknown"
         )
-        logger.debug(
-            "Updated shared config: %s", embedding_config
-        )
+        logger.debug("Updated shared config: %s", embedding_config)
 
     def search_index(
         self, query: str, return_dicts: bool = True

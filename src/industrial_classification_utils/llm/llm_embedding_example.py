@@ -26,29 +26,29 @@ EXAMPLE_EMBED_SHORT_LIST = [
         "title": "Education agent",
         "code": "85600",
         "four_digit_code": "8560",
-        "two_digit_code": "85"
+        "two_digit_code": "85",
     },
     {
         "distance": 0.6422433257102966,
         "title": "Teacher n.e.c.",
         "code": "85590",
         "four_digit_code": "8559",
-        "two_digit_code": "85"
+        "two_digit_code": "85",
     },
     {
         "distance": 0.7757259607315063,
         "title": "Teachers of sport",
         "code": "85510",
         "four_digit_code": "8551",
-        "two_digit_code": "85"
+        "two_digit_code": "85",
     },
     {
         "distance": 0.8803297281265259,
         "title": "Kindergartens",
         "code": "85100",
         "four_digit_code": "8510",
-        "two_digit_code": "85"
-    }
+        "two_digit_code": "85",
+    },
 ]
 
 
