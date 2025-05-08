@@ -61,7 +61,12 @@ def test_load_sic_index(mock_read_excel, mock_sic_index_data):
         - The returned DataFrame matches the mock SIC index data.
     """
     mock_read_excel.return_value = mock_sic_index_data
-    result = load_sic_index(("industrial_classification_utils.data.sic_index", "uksic2007indexeswithaddendumdecember2022.xlsx"))
+    result = load_sic_index(
+        (
+            "industrial_classification_utils.data.sic_index",
+            "uksic2007indexeswithaddendumdecember2022.xlsx",
+        )
+    )
 
     mock_read_excel.assert_called_once_with(
         ANY,
@@ -91,7 +96,12 @@ def test_load_sic_structure(mock_read_excel, mock_sic_structure_data):
         - The returned DataFrame matches the mock SIC structure data.
     """
     mock_read_excel.return_value = mock_sic_structure_data
-    result = load_sic_structure(("industrial_classification_utils.data.sic_index", "publisheduksicsummaryofstructureworksheet.xlsx"))
+    result = load_sic_structure(
+        (
+            "industrial_classification_utils.data.sic_index",
+            "publisheduksicsummaryofstructureworksheet.xlsx",
+        )
+    )
     mock_read_excel.assert_called_once_with(
         ANY,
         sheet_name="reworked structure",
@@ -106,6 +116,8 @@ def test_load_sic_structure(mock_read_excel, mock_sic_structure_data):
 
     # Verify the path used in the call
     called_args, _ = mock_read_excel.call_args
-    assert str(called_args[0]).endswith("publisheduksicsummaryofstructureworksheet.xlsx")
+    assert str(called_args[0]).endswith(
+        "publisheduksicsummaryofstructureworksheet.xlsx"
+    )
 
     assert result.equals(mock_sic_structure_data)

@@ -116,9 +116,7 @@ class EmbeddingHandler:
         else:
             self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
 
-        logger.info(
-            "Using embedding model: %s", embedding_model_name
-        )
+        logger.info("Using embedding model: %s", embedding_model_name)
 
         self.db_dir = db_dir
         self.vector_store = self._create_vector_store()
@@ -127,7 +125,11 @@ class EmbeddingHandler:
         self.spell = Speller()
         self._index_size = self.vector_store._client.get_collection("langchain").count()
 
-        logger.info("Vector store created in: %s containing %s entries.", self.db_dir, self._index_size)
+        logger.info(
+            "Vector store created in: %s containing %s entries.",
+            self.db_dir,
+            self._index_size,
+        )
 
         # 🔄 Update shared config
         embedding_config["embedding_model_name"] = embedding_model_name
