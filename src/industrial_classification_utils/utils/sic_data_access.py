@@ -10,7 +10,7 @@ from importlib.resources import files
 
 import pandas as pd
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +30,7 @@ def load_sic_index(resource_ref: tuple[str, str]) -> pd.DataFrame:
     pkg, filename = resource_ref
     file_path = files(pkg).joinpath(filename)
 
-    logger.debug("Loading SIC index from %s", file_path)
+    logger.info("Loading SIC index from %s", file_path)
 
     sic_index_df = pd.read_excel(
         file_path,
@@ -63,7 +63,7 @@ def load_sic_structure(resource_ref: tuple[str, str]) -> pd.DataFrame:
     pkg, filename = resource_ref
     file_path = files(pkg).joinpath(filename)
 
-    logger.debug("Loading SIC structure from %s", file_path)
+    logger.info("Loading SIC structure from %s", file_path)
 
     sic_df = pd.read_excel(
         file_path,
@@ -102,7 +102,7 @@ def load_text_from_config(config_section: tuple[str, str]) -> str:
     pkg, filename = config_section
     file_path = files(pkg).joinpath(filename)
 
-    logger.debug("Loading text from %s", file_path)
+    logger.info("Loading text from %s", file_path)
 
     with file_path.open(encoding="utf-8") as f:
         return f.read()

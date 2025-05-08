@@ -31,7 +31,7 @@ from industrial_classification_utils.utils.sic_data_access import (
     load_sic_structure,
 )
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Share configuration with other modules
@@ -114,19 +114,21 @@ class EmbeddingHandler:
         ) or embedding_model_name.startswith("text-embedding-"):
             self.embeddings = VertexAIEmbeddings(model_name=embedding_model_name)
         else:
-            logger.debug(
-                "Using HuggingFaceEmbeddings with model name: %s", embedding_model_name
-            )
             self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
+
+        logger.info(
+            "Using embedding model: %s", embedding_model_name
+        )
+
         self.db_dir = db_dir
-        logger.debug("Create vector store in database directory: %s", db_dir)
         self.vector_store = self._create_vector_store()
-        logger.debug("Vector store created.")
+
         self.k_matches = k_matches
         self.spell = Speller()
         self._index_size = self.vector_store._client.get_collection("langchain").count()
 
-        logger.debug("Vector store contains %s entries.", self._index_size)
+        logger.info("Vector store created in: %s containing %s entries.", self.db_dir, self._index_size)
+
         # 🔄 Update shared config
         embedding_config["embedding_model_name"] = embedding_model_name
         embedding_config["llm_model_name"] = config["llm"].get(
@@ -143,10 +145,6 @@ class EmbeddingHandler:
         Returns:
             Chroma: The LangChain vector store object for Chroma.
         """
-        logger.debug("Creating vector store...")
-        logger.debug("Embedding function: %s", self.embeddings)
-        logger.debug("Persist directory: %s", self.db_dir)
-
         if self.db_dir is None:
             logger.warning("No db_dir provided; using in-memory vector store.")
             return Chroma(  # pylint: disable=not-callable
@@ -165,10 +163,10 @@ class EmbeddingHandler:
             chroma = Chroma(  # pylint: disable=not-callable
                 embedding_function=self.embeddings, persist_directory=self.db_dir
             )
-            logger.info("Chroma vector store created successfully.")
+            logger.info("Vector store created successfully.")
             return chroma
         except Exception as e:
-            logger.exception("Failed to create Chroma vector store: %s", e)
+            logger.exception("Failed to create vector store: %s", e)
             raise
 
     def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments
@@ -195,8 +193,8 @@ class EmbeddingHandler:
                 default SIC structure source.
         """
         # Log parameters
-        logger.debug(
-            "Embedding index with parameters: from_empty=%s, sic=%s, file_object=%s, "
+        logger.info(
+            "Embedding index: from_empty=%s, sic=%s, file_object=%s, "
             "sic_index_file=%s, sic_structure_file=%s",
             from_empty,
             sic,
@@ -205,7 +203,7 @@ class EmbeddingHandler:
             sic_structure_file,
         )
         if from_empty:
-            logger.debug("Dropping existing vector store content.")
+            logger.info("Dropping existing vector store content.")
             self.vector_store._client.delete_collection(  # pylint: disable=protected-access
                 "langchain"
             )
@@ -231,7 +229,7 @@ class EmbeddingHandler:
 
         else:
             if sic is None:
-                logger.debug(
+                logger.info(
                     "Loading SIC hierarchy from files: %s, %s",
                     sic_index_file,
                     sic_structure_file,
@@ -244,10 +242,8 @@ class EmbeddingHandler:
                 if sic_structure_file is None:
                     sic_structure_file = config["lookups"]["sic_structure"]
                 sic_df = load_sic_structure(sic_structure_file)
-                logger.debug("Loading SIC hierarchy from index and structure files.")
                 sic = load_hierarchy(sic_df, sic_index_df)
 
-            logger.debug("Loading entries from SIC hierarchy for embedding.")
             for _, row in sic.all_leaf_text().iterrows():
                 code = (row["code"].replace(".", "").replace("/", "") + "0")[:5]
                 docs.append(
@@ -266,6 +262,7 @@ class EmbeddingHandler:
         self._index_size = self.vector_store._client.get_collection(  # pylint: disable=protected-access
             "langchain"
         ).count()
+
         logger.debug(
             "Inserted %s entries into vector embedding database.", f"{len(docs):,}"
         )
@@ -283,7 +280,7 @@ class EmbeddingHandler:
         embedding_config["llm_model_name"] = config["llm"].get(
             "llm_model_name", "unknown"
         )
-        logger.debug("Updated shared config: %s", embedding_config)
+        logger.info("Embedding config updated: %s", embedding_config)
 
     def search_index(
         self, query: str, return_dicts: bool = True

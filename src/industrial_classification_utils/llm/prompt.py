@@ -68,9 +68,8 @@ Make sure to use the provided 2007 SIC Index.
 {sic_index}
 """
 
-
+# Load the SIC index from the configuration and convert to file path string
 sic_index = load_text_from_config(config["lookups"]["sic_condensed"])
-
 
 parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
     pydantic_object=SicResponse
