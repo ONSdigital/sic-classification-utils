@@ -4,7 +4,7 @@ This module contains tests for the `load_sic_index` and `load_sic_structure`
 functions from the `industrial_classification_utils.utils.sic_data_access` module.
 """
 
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import pandas as pd
 import pytest
@@ -61,15 +61,24 @@ def test_load_sic_index(mock_read_excel, mock_sic_index_data):
         - The returned DataFrame matches the mock SIC index data.
     """
     mock_read_excel.return_value = mock_sic_index_data
-    filepath = "dummy_path.xlsx"
-    result = load_sic_index(filepath)
+    result = load_sic_index(
+        (
+            "industrial_classification_utils.data.sic_index",
+            "uksic2007indexeswithaddendumdecember2022.xlsx",
+        )
+    )
+
     mock_read_excel.assert_called_once_with(
-        filepath,
+        ANY,
         sheet_name="Alphabetical Index",
         skiprows=2,
         usecols=["UK SIC 2007", "Activity"],
         dtype=str,
     )
+
+    # Verify the path used in the call
+    called_args, _ = mock_read_excel.call_args
+    assert str(called_args[0]).endswith("uksic2007indexeswithaddendumdecember2022.xlsx")
     assert result.equals(mock_sic_index_data)
 
 
@@ -87,10 +96,14 @@ def test_load_sic_structure(mock_read_excel, mock_sic_structure_data):
         - The returned DataFrame matches the mock SIC structure data.
     """
     mock_read_excel.return_value = mock_sic_structure_data
-    filepath = "dummy_path.xlsx"
-    result = load_sic_structure(filepath)
+    result = load_sic_structure(
+        (
+            "industrial_classification_utils.data.sic_index",
+            "publisheduksicsummaryofstructureworksheet.xlsx",
+        )
+    )
     mock_read_excel.assert_called_once_with(
-        filepath,
+        ANY,
         sheet_name="reworked structure",
         usecols=[
             "Description",
@@ -100,4 +113,11 @@ def test_load_sic_structure(mock_read_excel, mock_sic_structure_data):
         ],
         dtype=str,
     )
+
+    # Verify the path used in the call
+    called_args, _ = mock_read_excel.call_args
+    assert str(called_args[0]).endswith(
+        "publisheduksicsummaryofstructureworksheet.xlsx"
+    )
+
     assert result.equals(mock_sic_structure_data)
