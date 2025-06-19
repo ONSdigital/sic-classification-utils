@@ -27,13 +27,14 @@ sic-classification-library = { git = "https://github.com/ONSdigital/sic-classifi
 autocorrect = "^2.6.1"
 numpy = "^2.3.0"
 torch = "2.2.2"
-sentence-transformers = "2.3.1"
-transformers = "4.48.0"
-chromadb = "0.4.22"
+sentence-transformers = "4.1.0"
+transformers = "4.52.4"
+chromadb = "1.0.12"
 openpyxl = "^3.1.5"
 langchain-google-genai = "2.1.5"
 # langchain-google-vertexai = "0.0.1"
 langchain-openai = "0.3.21"
+langchain-huggingface = "0.3.0"
 pydantic = "^2.11.1"
 
 [tool.poetry.group.dev.dependencies]
