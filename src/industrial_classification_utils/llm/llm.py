@@ -24,7 +24,8 @@ from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 from industrial_classification.meta import sic_meta
 from langchain.chains.llm import LLMChain
 from langchain.output_parsers import PydanticOutputParser
-from langchain_google_vertexai import VertexAI
+# from langchain_google_vertexai import VertexAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 
 from industrial_classification_utils.embed.embedding import get_config
@@ -73,7 +74,7 @@ class ClassificationLLM:
     def __init__(  # noqa: PLR0913
         self,
         model_name: str = config["llm"]["llm_model_name"],
-        llm: Optional[Union[VertexAI, ChatOpenAI]] = None,
+        llm: Optional[Union[ChatGoogleGenerativeAI, ChatOpenAI]] = None,
         max_tokens: int = 1600,
         temperature: float = 0.0,
         verbose: bool = True,
@@ -84,11 +85,11 @@ class ClassificationLLM:
         if llm is not None:
             self.llm = llm
         elif model_name.startswith("text-") or model_name.startswith("gemini"):
-            self.llm = VertexAI(
+            self.llm = ChatGoogleGenerativeAI(
                 model_name=model_name,
                 max_output_tokens=max_tokens,
                 temperature=temperature,
-                location="europe-west2",
+                # location="europe-west2",
             )
         elif model_name.startswith("gpt"):
             if openai_api_key is None:

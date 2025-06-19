@@ -20,19 +20,20 @@ include = [
 [tool.poetry.dependencies]
 python = "^3.12"
 pandas = "^2.2.3"
-#langchain = "^0.3.21"
-#langchain-community = "^0.3.20"
-langchain = "0.1.0"
+# langchain = "0.1.0"
+langchain-core = "0.3.65"
+langchain-community = "0.3.25"
 sic-classification-library = { git = "https://github.com/ONSdigital/sic-classification-library.git", tag = "v0.1.2" }
 autocorrect = "^2.6.1"
-numpy = "^1.26.4"
+numpy = "^2.3.0"
 torch = "2.2.2"
 sentence-transformers = "2.3.1"
 transformers = "4.48.0"
 chromadb = "0.4.22"
 openpyxl = "^3.1.5"
-langchain-google-vertexai = "0.0.1"
-langchain-openai = "0.0.2"
+langchain-google-genai = "2.1.5"
+# langchain-google-vertexai = "0.0.1"
+langchain-openai = "0.3.21"
 pydantic = "^2.11.1"
 
 [tool.poetry.group.dev.dependencies]
