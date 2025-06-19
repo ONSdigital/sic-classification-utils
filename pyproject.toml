@@ -19,7 +19,7 @@ include = [
 
 [tool.poetry.dependencies]
 python = "^3.12"
-pandas = "^2.2.3"
+pandas = "^2.3.0"
 # langchain = "0.1.0"
 langchain-core = "0.3.65"
 langchain-community = "0.3.25"
