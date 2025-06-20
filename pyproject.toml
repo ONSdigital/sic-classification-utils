@@ -23,7 +23,8 @@ pandas = "^2.3.0"
 # langchain = "0.1.0"
 langchain-core = "0.3.65"
 langchain-community = "0.3.25"
-sic-classification-library = { git = "https://github.com/ONSdigital/sic-classification-library.git", tag = "v0.1.2" }
+# sic-classification-library = { git = "https://github.com/ONSdigital/sic-classification-library.git", tag = "v0.1.2" }
+sic-classification-library = { git = "https://github.com/ONSdigital/sic-classification-library.git" }
 autocorrect = "^2.6.1"
 numpy = "^2.3.0"
 torch = "2.2.2"

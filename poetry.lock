@@ -4860,14 +4860,14 @@ files = []
 develop = false
 
 [package.dependencies]
-pandas = "^2.2.3"
-pydantic = "^2.10.6"
+pandas = "^2.3.0"
+pydantic = "^2.11.7"
 
 [package.source]
 type = "git"
 url = "https://github.com/ONSdigital/sic-classification-library.git"
-reference = "v0.1.2"
-resolved_reference = "c6c0901b3678baa17a17300a0f8e1e9818291b87"
+reference = "HEAD"
+resolved_reference = "462097d20262d1742ba5ef4e39674289830147a2"
 
 [[package]]
 name = "six"
@@ -6071,4 +6071,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "33873b0d4e2a85e1512684968cb243558a18d14002fbe9715606dffa4c5616ed"
+content-hash = "15aa8483fa8307596655c0549a162bedc44bd542e8413fba08428645987fc823"
