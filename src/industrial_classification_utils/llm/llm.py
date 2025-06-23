@@ -652,24 +652,21 @@ class ClassificationLLM:
     def unambiguous_sic_code(
         self,
         industry_descr: str,
-        job_title: Optional[str] = None,
-        job_description: Optional[str] = None,
-        reranker_response: Optional[RerankingResponse] = None,
-    ) -> tuple[UnambiguousResponse, dict[str, Any]]:
-        """Evaluates codability to a 5-digit SIC code based on respondent's
-            data and reranker output.
+        job_title: str = None,
+        job_description: str = None,
+        shortlist: list = None,
+    ) -> UnambiguousResponse:
+        """
+        Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
         Args:
             industry_descr (str): The description of the industry.
             job_title (str, optional): The job title. Defaults to None.
-            job_description (str, optional): The job description.
-                Defaults to None.
-            reranker_response (RerankingResponse, optional): The response
-                from the reranker.
+            job_description (str, optional): The job description. Defaults to None.
+            shortlist (list, optional): The response from the reranker.
 
         Returns:
-            Tuple[UnambiguousResponse, Dict[str, Any]]: The generated response
-                to the query and the call dictionary.
+            UnambiguousResponse: The generated response to the query.
 
         Raises:
             ValueError: If there is an error during the parsing of the response.
@@ -678,9 +675,7 @@ class ClassificationLLM:
 
         """
 
-        def prep_call_dict(
-            industry_descr, job_title, job_description, reranker_response
-        ):
+        def prep_call_dict(industry_descr, job_title, job_description, shortlist):
             # Helper function to prepare the call dictionary
             is_job_title_present = job_title is None or job_title in {"", " "}
             job_title = "Unknown" if is_job_title_present else job_title
@@ -697,7 +692,7 @@ class ClassificationLLM:
                 "industry_descr": industry_descr,
                 "job_title": job_title,
                 "job_description": job_description,
-                "reranker_response": str(reranker_response),
+                "shortlist": str(shortlist),
             }
             return call_dict
 
@@ -705,12 +700,12 @@ class ClassificationLLM:
             industry_descr=industry_descr,
             job_title=job_title,
             job_description=job_description,
-            reranker_response=reranker_response,
+            shortlist=shortlist,
         )
 
         if self.verbose:
             final_prompt = self.sic_prompt_unambiguous.format(**call_dict)
-            logger.debug("%s", final_prompt)
+            logger.debug(final_prompt)
 
         chain = LLMChain(llm=self.llm, prompt=self.sic_prompt_unambiguous)
 
@@ -719,7 +714,7 @@ class ClassificationLLM:
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from LLMChain, exit early")
-            validated_answer = UnambiguousResponse(
+            validated_answer = UnambiguousResponseResponse(
                 codable=False,
                 alt_candidates=[],
                 reasoning="Error from LLMChain, exit early",
@@ -727,17 +722,15 @@ class ClassificationLLM:
             return validated_answer, call_dict
 
         if self.verbose:
-            logger.debug("%s", response)
+            logger.debug(f"{response=}")
 
         # Parse the output to the desired format
-        parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
-            pydantic_object=UnambiguousResponse
-        )
+        parser = PydanticOutputParser(pydantic_object=UnambiguousResponse)
         try:
             validated_answer = parser.parse(response["text"])
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response["text"])
+            logger.warning(f"Failed to parse response:\n{response['text']}")
 
             reasoning = (
                 f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
