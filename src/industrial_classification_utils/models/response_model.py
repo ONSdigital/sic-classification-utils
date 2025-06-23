@@ -22,7 +22,7 @@ Constants:
     MAX_ALT_CANDIDATES: Maximum number of alternative candidates allowed in certain models.
 """
 
-from typing import Annotated, Optional
+from typing import Annotated, Optional, List
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -271,56 +271,46 @@ class SurveyAssistSicResponse(BaseModel):
 
 class UnambiguousResponse(BaseModel):
     """Represents a response model for classification code assignment.
-
     Attributes:
         codable (bool): True only if enough information is provided to assign
             an unambiguous single classification code, False otherwise.
-        disambiguation_followup (Optional[str]): Question to ask user in order to
-            disambiguate between possible codes. Must be present if codable=False,
-            must be None if codable=True.
-        class_code (Optional[str]): Full classification code (to the required number
-            of digits) assigned based on provided respondent's data. Must be present
-            if codable=True, must be None if codable=False.
-        class_descriptive (Optional[str]): Descriptive label of the classification
-            category. Must be present if codable=True, must be None if codable=False.
-        alt_candidates (List[RagCandidate]): Short list of possible classification codes
-            with their descriptive labels and estimated likelihoods.
-        reasoning (str): Step by step reasoning behind the classification selected.
-    """
+        class_code (Optional[str]): Full classification code (to the required number of digits)
+            assigned based on provided respondent's data. Must be present if codable=True,
+            must be None if codable=False.
+        class_descriptive (Optional[str]): Descriptive label of the classification category.
+            Must be present if codable=True, must be None if codable=False.
+        alt_candidates (List[RagCandidate]): Short list of possible classification codes with their
+            descriptive labels and estimated likelihoods.
+        reasoning (str): Step by step reasoning behind the classification selected."""
 
     codable: bool = Field(
-        description="True only if enough information is provided to decide an "
-        "unambiguous classification code, False otherwise."
+        description="True only if enough information is provided to decide an unambiguous "
+        "classification code, False otherwise."
     )
-
-    disambiguation_followup: Optional[str] = Field(
-        description="Question to ask user in order to disambiguate between possible "
-        "codes. Must be present if codable=False, must be None if codable=True.",
-        default=None,
-    )
-
+    
     class_code: Optional[str] = Field(
         description="Full classification code (to the required number of digits) "
-        "assigned based on provided respondent's data. Must be present if codable=True,"
+        "assigned based on provided respondent's data. Must be present if codable=True, "
         "must be None if codable=False.",
-        default=None,
+        default=None
     )
-
+    
     class_descriptive: Optional[str] = Field(
         description="Descriptive label of the classification category. "
         "Must be present if codable=True, must be None if codable=False.",
-        default=None,
+        default=None
     )
-
-    alt_candidates: list[RagCandidate] = Field(
-        default_factory=list,
+    
+    alt_candidates: List[RagCandidate] = Field(
         description="Short list of possible classification codes with their "
         "descriptive labels and estimated likelihoods.",
+        min_items=1,  # Ensure there's always at least one candidate
+        max_items=10  # Limit to less than 10 candidates
     )
-
+    
     reasoning: str = Field(
         description="Step by step reasoning behind the classification selected.",
-        min_length=50,  # Ensure detailed reasoning is provided
+        min_length=50  # Ensure detailed reasoning is provided
     )
 
     @field_validator("alt_candidates")
