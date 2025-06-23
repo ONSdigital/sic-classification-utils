@@ -652,12 +652,11 @@ class ClassificationLLM:
     def unambiguous_sic_code(
         self,
         industry_descr: str,
-        job_title: str = None,
-        job_description: str = None,
-        shortlist: list = None,
-    ) -> UnambiguousResponse:
-        """
-        Evaluates codability to a single 5-digit SIC code based on respondent's data.
+        job_title: Optional[str] = None,
+        job_description: Optional[str] = None,
+        shortlist: Optional[list[Any]] = None,
+    ) -> tuple[UnambiguousResponse, Optional[Any]]:
+        """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
         Args:
             industry_descr (str): The description of the industry.
@@ -714,7 +713,7 @@ class ClassificationLLM:
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from LLMChain, exit early")
-            validated_answer = UnambiguousResponseResponse(
+            validated_answer = UnambiguousResponse(
                 codable=False,
                 alt_candidates=[],
                 reasoning="Error from LLMChain, exit early",
@@ -722,15 +721,15 @@ class ClassificationLLM:
             return validated_answer, call_dict
 
         if self.verbose:
-            logger.debug(f"{response=}")
+            logger.debug("llm_response=%s", response)
 
         # Parse the output to the desired format
-        parser = PydanticOutputParser(pydantic_object=UnambiguousResponse)
+        parser = PydanticOutputParser(pydantic_object=UnambiguousResponse)  # type: ignore
         try:
             validated_answer = parser.parse(response["text"])
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning(f"Failed to parse response:\n{response['text']}")
+            logger.warning("Failed to parse response:\n%s", response["text"])
 
             reasoning = (
                 f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'

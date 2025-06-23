@@ -22,7 +22,7 @@ Constants:
     MAX_ALT_CANDIDATES: Maximum number of alternative candidates allowed in certain models.
 """
 
-from typing import Annotated, Optional, List
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -186,7 +186,7 @@ class RagResponse(BaseModel):
         class_descriptive (Optional[str]): Descriptive label of the classification
             category associated with class_code if provided.
             Empty if codable=False.
-        alt_candidates (List[RagCandidate]): Short list of less than ten possible
+        alt_candidates (list[RagCandidate]): Short list of less than ten possible
             or alternative classification codes that may be applicable with their
             descriptive label and estimated likelihood.
         reasoning (str): Step by step reasoning behind the classification selected.
@@ -237,7 +237,7 @@ class SurveyAssistSicResponse(BaseModel):
         sic_descriptive (str): Descriptive label of the classification
             category associated with class_code if provided.
             This is the most likely coding.
-        sic_candidates (List[RagCandidate]): Short list of less than ten possible
+        sic_candidates (list[RagCandidate]): Short list of less than ten possible
             or alternative classification codes that may be applicable with their
             descriptive label and estimated likelihood.
         reasoning (str): Step by step reasoning for the most likely classification
@@ -271,6 +271,7 @@ class SurveyAssistSicResponse(BaseModel):
 
 class UnambiguousResponse(BaseModel):
     """Represents a response model for classification code assignment.
+
     Attributes:
         codable (bool): True only if enough information is provided to assign
             an unambiguous single classification code, False otherwise.
@@ -279,38 +280,40 @@ class UnambiguousResponse(BaseModel):
             must be None if codable=False.
         class_descriptive (Optional[str]): Descriptive label of the classification category.
             Must be present if codable=True, must be None if codable=False.
-        alt_candidates (List[RagCandidate]): Short list of possible classification codes with their
+        alt_candidates (list[RagCandidate]): Short list of possible classification codes with their
             descriptive labels and estimated likelihoods.
-        reasoning (str): Step by step reasoning behind the classification selected."""
+        reasoning (str): Step by step reasoning behind the classification selected.
+    """
 
     codable: bool = Field(
         description="True only if enough information is provided to decide an unambiguous "
         "classification code, False otherwise."
     )
-    
+
     class_code: Optional[str] = Field(
+        default=None,
         description="Full classification code (to the required number of digits) "
         "assigned based on provided respondent's data. Must be present if codable=True, "
         "must be None if codable=False.",
-        default=None
     )
-    
+
     class_descriptive: Optional[str] = Field(
+        default=None,
         description="Descriptive label of the classification category. "
         "Must be present if codable=True, must be None if codable=False.",
-        default=None
     )
-    
-    alt_candidates: List[RagCandidate] = Field(
+
+    alt_candidates: list[RagCandidate] = Field(
+        default_factory=list,
         description="Short list of possible classification codes with their "
         "descriptive labels and estimated likelihoods.",
-        min_items=1,  # Ensure there's always at least one candidate
-        max_items=10  # Limit to less than 10 candidates
+        min_length=1,  # Ensure there's always at least one candidate
+        max_length=10,  # Limit to less than 10 candidates
     )
-    
+
     reasoning: str = Field(
         description="Step by step reasoning behind the classification selected.",
-        min_length=50  # Ensure detailed reasoning is provided
+        min_length=50,  # Ensure detailed reasoning is provided
     )
 
     @field_validator("alt_candidates")
