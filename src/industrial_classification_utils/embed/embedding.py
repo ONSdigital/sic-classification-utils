@@ -19,11 +19,14 @@ from typing import Any, Optional, Union
 
 from autocorrect import Speller
 from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarchy
+
+# from langchain_community.embeddings import HuggingFaceEmbeddings#, VertexAIEmbeddings
+# from langchain_community.vectorstores import Chroma  # pylint: disable=no-name-in-module
+from langchain_chroma import Chroma
+
 # from langchain.docstore.document import Document
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
-# from langchain_community.embeddings import HuggingFaceEmbeddings#, VertexAIEmbeddings
-from langchain_community.vectorstores import Chroma  # pylint: disable=no-name-in-module
 
 from industrial_classification_utils.models.config_model import (
     FullConfig,

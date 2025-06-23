@@ -24,6 +24,7 @@ from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 from industrial_classification.meta import sic_meta
 from langchain.chains.llm import LLMChain
 from langchain.output_parsers import PydanticOutputParser
+
 # from langchain_google_vertexai import VertexAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
