@@ -26,6 +26,7 @@ from langchain.chains.llm import LLMChain
 from langchain.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.llm.prompt import (
@@ -77,7 +78,7 @@ class ClassificationLLM:
         max_tokens: int = 1600,
         temperature: float = 0.0,
         verbose: bool = True,
-        openai_api_key: Optional[str] = None,
+        openai_api_key: Optional[SecretStr] = None,
     ):
         """Initialises the ClassificationLLM object."""
         print(f"model_name: {model_name}")
@@ -97,7 +98,7 @@ class ClassificationLLM:
                 model=model_name,
                 api_key=openai_api_key,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                model_kwargs={"max_tokens": max_tokens},
             )
         else:
             raise NotImplementedError("Unsupported model family")
