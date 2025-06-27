@@ -26,6 +26,7 @@ from langchain_chroma import Chroma
 
 # from langchain.docstore.document import Document
 from langchain_core.documents import Document
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from industrial_classification_utils.models.config_model import (
@@ -117,7 +118,7 @@ class EmbeddingHandler:
         if embedding_model_name.startswith(
             "textembedding-"
         ) or embedding_model_name.startswith("text-embedding-"):
-            self.embeddings = VertexAIEmbeddings(model_name=embedding_model_name)
+            self.embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model_name)
         else:
             self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
 
