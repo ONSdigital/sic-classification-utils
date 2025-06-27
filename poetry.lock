@@ -4927,7 +4927,7 @@ files = [
 
 [[package]]
 name = "sic-classification-library"
-version = "0.1.2"
+version = "0.1.3"
 description = "Standard Industrial Classification library"
 optional = false
 python-versions = "^3.12"
@@ -4942,8 +4942,8 @@ pydantic = "^2.11.7"
 [package.source]
 type = "git"
 url = "https://github.com/ONSdigital/sic-classification-library.git"
-reference = "HEAD"
-resolved_reference = "462097d20262d1742ba5ef4e39674289830147a2"
+reference = "v0.1.3"
+resolved_reference = "3487e260c58072337818b314d74dce8ba24750b3"
 
 [[package]]
 name = "six"
@@ -6177,4 +6177,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "b1abf44148820fd33e3ab4d1c49638691cc91541299fbccd15f1885bc088fd9b"
+content-hash = "92cb64f59f70dce208bf94d4e0c0e40767276e6a7708fa41ce0a425bf83548c4"
