@@ -2,7 +2,10 @@
 and searching functionalities.
 """
 
+from unittest.mock import patch
+
 import pytest
+from industrial_classification.hierarchy.sic_hierarchy import SIC, SicCode, SicNode
 
 from industrial_classification_utils.embed.embedding import EmbeddingHandler
 
@@ -71,3 +74,56 @@ def test_search_index_multi(embedding_handler):
     queries = ["has gills", "has scales"]
     results = embedding_handler.search_index_multi(queries)
     assert len(results) == 8  # noqa: PLR2004
+
+
+@pytest.fixture
+def embedding_handler_sic():
+    embedding_handler_sic = EmbeddingHandler(db_dir=None)
+    nodes = [
+        SicNode(sic_code=SicCode("A0111x"), description="Bird watching"),
+        SicNode(sic_code=SicCode("A0112x"), description="Petting animals"),
+    ]
+    lookup = {}
+    for node in nodes:
+        lookup[str(node.sic_code)] = node
+        lookup[node.sic_code.alpha_code] = node
+        lookup[node.sic_code.alpha_code.replace("x", "")] = node
+        if node.sic_code.n_digits > 1:
+            lookup[node.sic_code.alpha_code[1:].replace("x", "")] = node
+
+        if node.sic_code.n_digits == 4 and not node.children:  # noqa: PLR2004
+            key = node.sic_code.alpha_code[1:5] + "0"
+            lookup[key] = node
+    sic = SIC(nodes=nodes, code_lookup=lookup)
+    embedding_handler_sic.embed_index(sic=sic)
+    return embedding_handler_sic
+
+
+@pytest.mark.embed
+def test_embed_index_with_sic_object(embedding_handler_sic):
+    assert embedding_handler_sic._index_size == 2  # noqa: PLR2004
+
+
+@pytest.mark.parametrize(
+    "model_name, expected_class",
+    [
+        ("textembedding-abc", "GoogleGenerativeAIEmbeddings"),
+        ("text-embedding-xyz", "GoogleGenerativeAIEmbeddings"),
+        ("other", "HuggingFaceEmbeddings"),
+    ],
+)
+@pytest.mark.embed
+def test_embedding_handler_initialization(model_name, expected_class):
+    with patch(
+        "industrial_classification_utils.embed.embedding.GoogleGenerativeAIEmbeddings"
+    ) as mock_google, patch(
+        "industrial_classification_utils.embed.embedding.HuggingFaceEmbeddings"
+    ) as mock_huggingface:
+        EmbeddingHandler(model_name)
+
+        if expected_class == "GoogleGenerativeAIEmbeddings":
+            mock_google.assert_called_once_with(model=model_name)
+            mock_huggingface.assert_not_called()
+        else:
+            mock_huggingface.assert_called_once_with(model_name=model_name)
+            mock_google.assert_not_called()

@@ -86,10 +86,9 @@ class ClassificationLLM:
             self.llm = llm
         elif model_name.startswith("text-") or model_name.startswith("gemini"):
             self.llm = ChatGoogleGenerativeAI(
-                model_name=model_name,
-                max_output_tokens=max_tokens,
+                model=model_name,
+                max_tokens=max_tokens,
                 temperature=temperature,
-                # location="europe-west2",
             )
         elif model_name.startswith("gpt"):
             if openai_api_key is None:
