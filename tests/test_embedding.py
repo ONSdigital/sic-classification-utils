@@ -78,6 +78,11 @@ def test_search_index_multi(embedding_handler):
 
 @pytest.fixture
 def embedding_handler_sic():
+    """Fixture to initialize an EmbeddingHandler instance with mock nodes.
+
+    Returns:
+        EmbeddingHandler: An instance of EmbeddingHandler with mock index embedded.
+    """
     embedding_handler_sic = EmbeddingHandler(db_dir=None)
     nodes = [
         SicNode(sic_code=SicCode("A0111x"), description="Bird watching"),
@@ -101,6 +106,11 @@ def embedding_handler_sic():
 
 @pytest.mark.embed
 def test_embed_index_with_sic_object(embedding_handler_sic):
+    """Test embedding an index without a file object.
+
+    Args:
+        embedding_handler_sic  (EmbeddingHandler): The fixture providing the handler.
+    """
     assert embedding_handler_sic._index_size == 2  # noqa: PLR2004
 
 
@@ -114,6 +124,12 @@ def test_embed_index_with_sic_object(embedding_handler_sic):
 )
 @pytest.mark.embed
 def test_embedding_handler_initialization(model_name, expected_class):
+    """Test embedding handles initialization.
+
+    Args:
+        model_name (str): name of embedding to be used in English.
+        expected_class (str): name of embedding.
+    """
     with patch(
         "industrial_classification_utils.embed.embedding.GoogleGenerativeAIEmbeddings"
     ) as mock_google, patch(
