@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ---
 ## [0.1.3] - 2025-06-30
 
+## Added
+- Tests for `industrail_classification.embed.embedding.py`
+
 ## Changed
 - Package versions in `pyproject.toml`:
     - Added langchain models to use the most recent versions (langchain-google-genai, langchain-core, langchain-community, langchain-huggingface, langchain-chroma)
