@@ -111,7 +111,10 @@ def test_embed_index_with_sic_object(embedding_handler_sic):
     Args:
         embedding_handler_sic  (EmbeddingHandler): The fixture providing the handler.
     """
-    assert embedding_handler_sic._index_size == 2  # noqa: PLR2004 # pylint: disable=protected-access
+    assert (
+        embedding_handler_sic._index_size  # pylint: disable=protected-access
+        == 2  # noqa: PLR2004
+    )
 
 
 @pytest.mark.parametrize(
