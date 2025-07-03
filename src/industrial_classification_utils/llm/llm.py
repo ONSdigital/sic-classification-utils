@@ -24,8 +24,9 @@ from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 from industrial_classification.meta import sic_meta
 from langchain.chains.llm import LLMChain
 from langchain.output_parsers import PydanticOutputParser
-from langchain_google_vertexai import VertexAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.llm.prompt import (
@@ -73,22 +74,21 @@ class ClassificationLLM:
     def __init__(  # noqa: PLR0913
         self,
         model_name: str = config["llm"]["llm_model_name"],
-        llm: Optional[Union[VertexAI, ChatOpenAI]] = None,
+        llm: Optional[Union[ChatGoogleGenerativeAI, ChatOpenAI]] = None,
         max_tokens: int = 1600,
         temperature: float = 0.0,
         verbose: bool = True,
-        openai_api_key: Optional[str] = None,
+        openai_api_key: Optional[SecretStr] = None,
     ):
         """Initialises the ClassificationLLM object."""
         print(f"model_name: {model_name}")
         if llm is not None:
             self.llm = llm
         elif model_name.startswith("text-") or model_name.startswith("gemini"):
-            self.llm = VertexAI(
-                model_name=model_name,
-                max_output_tokens=max_tokens,
+            self.llm = ChatGoogleGenerativeAI(
+                model=model_name,
+                max_tokens=max_tokens,
                 temperature=temperature,
-                location="europe-west2",
             )
         elif model_name.startswith("gpt"):
             if openai_api_key is None:
@@ -97,7 +97,7 @@ class ClassificationLLM:
                 model=model_name,
                 api_key=openai_api_key,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                model_kwargs={"max_tokens": max_tokens},
             )
         else:
             raise NotImplementedError("Unsupported model family")

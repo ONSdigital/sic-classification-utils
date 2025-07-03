@@ -19,9 +19,10 @@ from typing import Any, Optional, Union
 
 from autocorrect import Speller
 from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarchy
-from langchain.docstore.document import Document
-from langchain_community.embeddings import HuggingFaceEmbeddings, VertexAIEmbeddings
-from langchain_community.vectorstores import Chroma  # pylint: disable=no-name-in-module
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 from industrial_classification_utils.models.config_model import (
     FullConfig,
@@ -112,7 +113,7 @@ class EmbeddingHandler:
         if embedding_model_name.startswith(
             "textembedding-"
         ) or embedding_model_name.startswith("text-embedding-"):
-            self.embeddings = VertexAIEmbeddings(model_name=embedding_model_name)
+            self.embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model_name)
         else:
             self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
 
