@@ -9,6 +9,7 @@ and performing similarity searches.
 
 # Optional but doesn't hurt
 import logging
+import os
 import sqlite3  # noqa: F401 # pylint: disable=unused-import
 
 # Docker Image may have old sqlite3 version for ChromaDB
@@ -18,15 +19,20 @@ from typing import Any, Optional, Union
 
 from autocorrect import Speller
 from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarchy
-from langchain.docstore.document import Document
-from langchain_community.embeddings import HuggingFaceEmbeddings, VertexAIEmbeddings
-from langchain_community.vectorstores import Chroma  # pylint: disable=no-name-in-module
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
+from industrial_classification_utils.models.config_model import (
+    FullConfig,
+)
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
 )
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Share configuration with other modules
@@ -42,7 +48,7 @@ embedding_config = {
 }
 
 
-def get_config() -> dict[str, dict[str, str]]:
+def get_config() -> FullConfig:
     """Returns the configuration dictionary for the LLM.
 
     Returns:
@@ -57,16 +63,16 @@ def get_config() -> dict[str, dict[str, str]]:
         },
         "lookups": {
             "sic_index": (
-                "src/industrial_classification_utils/data/sic_index/"
-                "uksic2007indexeswithaddendumdecember2022.xlsx"
+                "industrial_classification_utils.data.sic_index",
+                "uksic2007indexeswithaddendumdecember2022.xlsx",
             ),
             "sic_structure": (
-                "src/industrial_classification_utils/data/sic_index/"
-                "publisheduksicsummaryofstructureworksheet.xlsx"
+                "industrial_classification_utils.data.sic_index",
+                "publisheduksicsummaryofstructureworksheet.xlsx",
             ),
             "sic_condensed": (
-                "src/industrial_classification_utils/data/example/"
-                "sic_2d_condensed.txt"
+                "industrial_classification_utils.data.example",
+                "sic_2d_condensed.txt",
             ),
         },
     }
@@ -107,14 +113,24 @@ class EmbeddingHandler:
         if embedding_model_name.startswith(
             "textembedding-"
         ) or embedding_model_name.startswith("text-embedding-"):
-            self.embeddings = VertexAIEmbeddings(model_name=embedding_model_name)
+            self.embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model_name)
         else:
             self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
+
+        logger.info("Using embedding model: %s", embedding_model_name)
+
         self.db_dir = db_dir
         self.vector_store = self._create_vector_store()
+
         self.k_matches = k_matches
         self.spell = Speller()
         self._index_size = self.vector_store._client.get_collection("langchain").count()
+
+        logger.info(
+            "Vector store created in: %s containing %s entries.",
+            self.db_dir,
+            self._index_size,
+        )
 
         # 🔄 Update shared config
         embedding_config["embedding_model_name"] = embedding_model_name
@@ -124,6 +140,7 @@ class EmbeddingHandler:
         embedding_config["db_dir"] = db_dir
         embedding_config["matches"] = self.k_matches
         embedding_config["index_size"] = self._index_size
+        logger.debug("EmbeddingHandler initialised with config: %s", embedding_config)
 
     def _create_vector_store(self) -> Chroma:
         """Initializes the Chroma vector store.
@@ -132,13 +149,28 @@ class EmbeddingHandler:
             Chroma: The LangChain vector store object for Chroma.
         """
         if self.db_dir is None:
+            logger.warning("No db_dir provided; using in-memory vector store.")
             return Chroma(  # pylint: disable=not-callable
                 embedding_function=self.embeddings
             )
         # else
-        return Chroma(  # pylint: disable=not-callable
-            embedding_function=self.embeddings, persist_directory=self.db_dir
-        )
+
+        if not os.path.exists(self.db_dir):
+            logger.warning("Persist directory does not exist: %s", self.db_dir)
+        else:
+            logger.debug("Persist directory exists: %s", self.db_dir)
+            logger.debug("Readable: %s", os.access(self.db_dir, os.R_OK))
+            logger.debug("Writable: %s", os.access(self.db_dir, os.W_OK))
+
+        try:
+            chroma = Chroma(  # pylint: disable=not-callable
+                embedding_function=self.embeddings, persist_directory=self.db_dir
+            )
+            logger.info("Vector store created successfully.")
+            return chroma
+        except Exception as e:
+            logger.exception("Failed to create vector store: %s", e)
+            raise
 
     def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
@@ -163,7 +195,18 @@ class EmbeddingHandler:
             sic_structure_file (optional): Custom path or file-like object to override
                 default SIC structure source.
         """
+        # Log parameters
+        logger.info(
+            "Embedding index: from_empty=%s, sic=%s, file_object=%s, "
+            "sic_index_file=%s, sic_structure_file=%s",
+            from_empty,
+            sic,
+            file_object,
+            sic_index_file,
+            sic_structure_file,
+        )
         if from_empty:
+            logger.info("Dropping existing vector store content.")
             self.vector_store._client.delete_collection(  # pylint: disable=protected-access
                 "langchain"
             )
@@ -189,15 +232,21 @@ class EmbeddingHandler:
 
         else:
             if sic is None:
-                sic_index_df = load_sic_index(
-                    sic_index_file or config["lookups"]["sic_index"]
+                logger.info(
+                    "Loading SIC hierarchy from files: %s, %s",
+                    sic_index_file,
+                    sic_structure_file,
                 )
-                sic_df = load_sic_structure(
-                    sic_structure_file or config["lookups"]["sic_structure"]
-                )
+
+                if sic_index_file is None:
+                    sic_index_file = config["lookups"]["sic_index"]
+                sic_index_df = load_sic_index(sic_index_file)
+
+                if sic_structure_file is None:
+                    sic_structure_file = config["lookups"]["sic_structure"]
+                sic_df = load_sic_structure(sic_structure_file)
                 sic = load_hierarchy(sic_df, sic_index_df)
 
-            logger.debug("Loading entries from SIC hierarchy for embedding.")
             for _, row in sic.all_leaf_text().iterrows():
                 code = (row["code"].replace(".", "").replace("/", "") + "0")[:5]
                 docs.append(
@@ -216,6 +265,7 @@ class EmbeddingHandler:
         self._index_size = self.vector_store._client.get_collection(  # pylint: disable=protected-access
             "langchain"
         ).count()
+
         logger.debug(
             "Inserted %s entries into vector embedding database.", f"{len(docs):,}"
         )
@@ -226,15 +276,14 @@ class EmbeddingHandler:
         embedding_config["sic_structure"] = (
             sic_structure_file or config["lookups"]["sic_structure"]
         )
-        embedding_config["sic_condensed"] = (
-            sic_index_file or config["lookups"]["sic_condensed"]
-        )
+        embedding_config["sic_condensed"] = config["lookups"]["sic_condensed"]
         embedding_config["matches"] = self.k_matches
         embedding_config["db_dir"] = self.db_dir
         embedding_config["embedding_model_name"] = self.embeddings.model_name
         embedding_config["llm_model_name"] = config["llm"].get(
             "llm_model_name", "unknown"
         )
+        logger.info("Embedding config updated: %s", embedding_config)
 
     def search_index(
         self, query: str, return_dicts: bool = True

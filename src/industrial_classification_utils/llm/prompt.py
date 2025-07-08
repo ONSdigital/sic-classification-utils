@@ -33,11 +33,12 @@ from langchain.prompts.prompt import PromptTemplate
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.models.response_model import (
-    RagResponse,
     RerankingResponse,
     SicResponse,
-    SurveyAssistSicResponse,
     UnambiguousResponse,
+)
+from industrial_classification_utils.utils.sic_data_access import (
+    load_text_from_config,
 )
 
 config = get_config()
@@ -65,9 +66,8 @@ Make sure to use the provided 2007 SIC Index.
 {sic_index}
 """
 
-with open(config["lookups"]["sic_condensed"], encoding="utf-8") as f:
-    sic_index = f.read()
-
+# Load the SIC index from the configuration and convert to file path string
+sic_index = load_text_from_config(config["lookups"]["sic_condensed"])
 
 parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
     pydantic_object=SicResponse
@@ -183,7 +183,7 @@ on the list you respond with.
 """
 
 parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
-    pydantic_object=SurveyAssistSicResponse
+    pydantic_object=SicResponse
 )
 
 SA_SIC_PROMPT_RAG = PromptTemplate.from_template(
@@ -213,7 +213,7 @@ to determine the correct code and suggest few most likely codes.
 ===Output===
 """
 parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
-    pydantic_object=RagResponse
+    pydantic_object=SicResponse
 )
 
 GENERAL_PROMPT_RAG = PromptTemplate.from_template(
