@@ -236,8 +236,8 @@ Approach the task in the following order:
     a) fundamental alignment between the query and the code's main business activity
     b) matches between query and specific example activities listed under the code
 3. For each SIC code candidate provide a confidence score between 0 and 1 where 0.1 is least likely and 0.9 is most likely.
-4. Decide if response can be codeded to a single 5-digit SIC code with 90 per cent confidence.
-4. Provide reasoning for your decision.
+4. Decide if response can be codeded unambiguously to a single 5-digit SIC code with 95 per cent confidence.
+5. Provide reasoning for your decision.
 
 ===Respondent Data===
 - Company's main activity: {industry_descr}
