@@ -376,7 +376,7 @@ class ClassificationLLM:
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        shortlist: Optional[list[Any]] = None,
+        sic_candidates: Optional[list[Any]] = None,
     ) -> tuple[UnambiguousResponse, Optional[Any]]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
@@ -384,7 +384,7 @@ class ClassificationLLM:
             industry_descr (str): The description of the industry.
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
-            shortlist (list, optional): The response from the reranker.
+            sic_candidates (list, optional): The response from the reranker.
 
         Returns:
             UnambiguousResponse: The generated response to the query.
@@ -396,7 +396,7 @@ class ClassificationLLM:
 
         """
 
-        def prep_call_dict(industry_descr, job_title, job_description, shortlist):
+        def prep_call_dict(industry_descr, job_title, job_description, sic_candidates):
             # Helper function to prepare the call dictionary
             is_job_title_present = job_title is None or job_title in {"", " "}
             job_title = "Unknown" if is_job_title_present else job_title
@@ -413,7 +413,7 @@ class ClassificationLLM:
                 "industry_descr": industry_descr,
                 "job_title": job_title,
                 "job_description": job_description,
-                "shortlist": str(shortlist),
+                "sic_candidates": str(sic_candidates),
             }
             return call_dict
 
@@ -421,7 +421,7 @@ class ClassificationLLM:
             industry_descr=industry_descr,
             job_title=job_title,
             job_description=job_description,
-            shortlist=shortlist,
+            sic_candidates=sic_candidates,
         )
 
         if self.verbose:
