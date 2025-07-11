@@ -14,7 +14,8 @@ EXAMPLE_QUERY = "school teacher primary education"
 print("Creating embeddings index...")
 # Create the embeddings index
 embed = EmbeddingHandler()
-embed.embed_index(from_empty=False)
+sic_index = ["industrial_classification_utils.data.sic_index", "sic_index_sample.xlsx"]
+embed.embed_index(from_empty=False, sic_index_file=sic_index)
 print(
     f"Embeddings index created with {embed._index_size} entries."  # pylint: disable=protected-access
 )

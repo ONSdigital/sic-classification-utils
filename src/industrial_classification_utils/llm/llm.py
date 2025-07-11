@@ -24,7 +24,8 @@ from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 from industrial_classification.meta import sic_meta
 from langchain.chains.llm import LLMChain
 from langchain.output_parsers import PydanticOutputParser
-from langchain_google_genai import ChatGoogleGenerativeAI
+# from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
@@ -74,7 +75,7 @@ class ClassificationLLM:
     def __init__(  # noqa: PLR0913
         self,
         model_name: str = config["llm"]["llm_model_name"],
-        llm: Optional[Union[ChatGoogleGenerativeAI, ChatOpenAI]] = None,
+        llm: Optional[Union[ChatVertexAI, ChatOpenAI]] = None,
         max_tokens: int = 1600,
         temperature: float = 0.0,
         verbose: bool = True,
@@ -85,9 +86,9 @@ class ClassificationLLM:
         if llm is not None:
             self.llm = llm
         elif model_name.startswith("text-") or model_name.startswith("gemini"):
-            self.llm = ChatGoogleGenerativeAI(
-                model=model_name,
-                max_tokens=max_tokens,
+            self.llm = ChatVertexAI(
+                model_name=model_name,
+                max_output_tokens=max_tokens,
                 temperature=temperature,
             )
         elif model_name.startswith("gpt"):
