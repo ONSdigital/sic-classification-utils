@@ -330,7 +330,7 @@ class ClassificationLLM:
             final_prompt = self.sa_sic_prompt_rag.format(**call_dict)
             logger.debug("%s", final_prompt)
 
-        chain = LLMChain(llm=self.llm, prompt=self.sa_sic_prompt_rag)
+        chain = self.sa_sic_prompt_rag | self.llm
 
         try:
             response = chain.invoke(call_dict, return_only_outputs=True)
@@ -345,7 +345,7 @@ class ClassificationLLM:
                 reasoning="Error from LLMChain, exit early",
             )
             return validated_answer, short_list, call_dict
-
+        print(type(response))
         if self.verbose:
             logger.debug("%s", response)
 
@@ -354,7 +354,7 @@ class ClassificationLLM:
             pydantic_object=SurveyAssistSicResponse
         )
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(response.content)
         except ValueError as parse_error:
             logger.exception(parse_error)
             logger.warning("Failed to parse response:\n%s", response["text"])
