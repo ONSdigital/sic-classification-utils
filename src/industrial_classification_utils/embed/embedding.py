@@ -174,7 +174,7 @@ class EmbeddingHandler:
             logger.exception("Failed to create vector store: %s", e)
             raise
 
-    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments # noqa: C901
         self,
         from_empty: bool = True,
         sic: Optional[SIC] = None,
@@ -262,8 +262,17 @@ class EmbeddingHandler:
                     )
                 )
                 ids.append(str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])))
+        max_batch_size = 5400
 
-        self.vector_store.add_documents(docs, ids=ids)
+        def split_into_batches(data, batch_size):
+            for i in range(0, len(data), batch_size):
+                yield data[i : i + batch_size]
+
+        for batch_docs, batch_ids in zip(
+            split_into_batches(docs, max_batch_size),
+            split_into_batches(ids, max_batch_size),
+        ):
+            self.vector_store.add_documents(batch_docs, ids=batch_ids)
         self._index_size = self.vector_store._client.get_collection(  # pylint: disable=protected-access
             "langchain"
         ).count()
