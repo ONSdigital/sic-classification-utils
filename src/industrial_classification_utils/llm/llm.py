@@ -24,6 +24,7 @@ from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 from industrial_classification.meta import sic_meta
 from langchain.chains.llm import LLMChain
 from langchain.output_parsers import PydanticOutputParser
+
 # from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import ChatOpenAI
@@ -345,7 +346,6 @@ class ClassificationLLM:
                 reasoning="Error from LLMChain, exit early",
             )
             return validated_answer, short_list, call_dict
-        print(type(response))
         if self.verbose:
             logger.debug("%s", response)
 
@@ -354,13 +354,15 @@ class ClassificationLLM:
             pydantic_object=SurveyAssistSicResponse
         )
         try:
-            validated_answer = parser.parse(response.content)
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response["text"])
+            # logger.warning("Failed to parse response:\n%s", response["text"])
+            logger.warning("Failed to parse response:\n%s", response.content)
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                # f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = SurveyAssistSicResponse(
                 followup="Follow-up question not available due to error.",
