@@ -3,6 +3,7 @@
 from pprint import pprint
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
+
 # pylint: disable=duplicate-code
 
 LLM_MODEL = "gemini-1.5-flash"
@@ -45,7 +46,7 @@ EXAMPLE_EMBED_SHORT_LIST = [
 
 uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
 
-SIC_CANDIDATES = uni_chat._prompt_candidate_list(   # pylint: disable=protected-access
+SIC_CANDIDATES = uni_chat._prompt_candidate_list(  # pylint: disable=protected-access
     EXAMPLE_EMBED_SHORT_LIST, code_digits=5, candidates_limit=7
 )
 

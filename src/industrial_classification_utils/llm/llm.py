@@ -371,7 +371,7 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    def unambiguous_sic_code(  # noqa PLR0913
+    def unambiguous_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
         job_title: Optional[str] = None,

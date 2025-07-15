@@ -12,6 +12,8 @@ package to perform a lookup using the embeddings index.
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
 
+# pylint: disable=duplicate-code
+
 EXAMPLE_QUERY = "school teacher primary education"
 LLM_MODEL = "gemini-1.5-flash"
 JOB_TITLE = "school teacher"
