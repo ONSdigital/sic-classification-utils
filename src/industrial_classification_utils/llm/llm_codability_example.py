@@ -2,32 +2,57 @@
 
 from pprint import pprint
 
-from industrial_classification_utils.embed.embedding import EmbeddingHandler
 from industrial_classification_utils.llm.llm import ClassificationLLM
 
-embed = EmbeddingHandler()
-uni_chat = ClassificationLLM("gemini-1.5-flash", embedding_handler=embed, verbose=True)
+LLM_MODEL = "gemini-1.5-flash"
+JOB_TITLE = "school teacher"
+JOB_DESCRIPTION = "teach maths"
+ORG_DESCRIPTION = "school"
 
-# Check if index was embedded
-print(f"Size of the vector store is {uni_chat.embed._index_size}")
 
-industry_descr = "education"
-job_title = "teach"
-job_description = "teach eglish"
+# The following is a mock response for the embedding search
+EXAMPLE_EMBED_SHORT_LIST = [
+    {
+        "distance": 0.6347243785858154,
+        "title": "Education agent",
+        "code": "85600",
+        "four_digit_code": "8560",
+        "two_digit_code": "85",
+    },
+    {
+        "distance": 0.6422433257102966,
+        "title": "Teacher n.e.c.",
+        "code": "85590",
+        "four_digit_code": "8559",
+        "two_digit_code": "85",
+    },
+    {
+        "distance": 0.7757259607315063,
+        "title": "Teachers of sport",
+        "code": "85510",
+        "four_digit_code": "8551",
+        "two_digit_code": "85",
+    },
+    {
+        "distance": 0.8803297281265259,
+        "title": "Kindergartens",
+        "code": "85100",
+        "four_digit_code": "8510",
+        "two_digit_code": "85",
+    },
+]
 
-search_results = uni_chat.embed.search_index_multi(
-    [industry_descr, job_title, job_description]
-)
+uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
 
-short_list = uni_chat._prompt_candidate_list(
-    search_results, code_digits=5, candidates_limit=7
+sic_candidates = uni_chat._prompt_candidate_list(
+    EXAMPLE_EMBED_SHORT_LIST, code_digits=5, candidates_limit=7
 )
 
 sa_response = uni_chat.unambiguous_sic_code(
-    industry_descr=industry_descr,
-    job_title=job_title,
-    job_description=job_description,
-    shortlist=short_list,
+    industry_descr=ORG_DESCRIPTION,
+    job_title=JOB_TITLE,
+    job_description=JOB_DESCRIPTION,
+    sic_candidates=sic_candidates,
 )
 
 pprint(sa_response[0].model_dump(), indent=2, width=80)
