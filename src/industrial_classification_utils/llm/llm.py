@@ -376,7 +376,7 @@ class ClassificationLLM:
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        sic_candidates: Optional[list[Any]] = None,
+        sic_candidates: Optional[str] = None,
         code_digits: int = 5,
         candidates_limit: int = 7,
     ) -> tuple[UnambiguousResponse, Optional[Any]]:
@@ -386,7 +386,7 @@ class ClassificationLLM:
             industry_descr (str): The description of the industry.
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
-            sic_candidates (list, optional): Short list of SIC candidates to pass to LLM.
+            sic_candidates (list, str): Short list of SIC candidates to pass to LLM.
                 Defaults to None.
             code_digits (int, optional): The number of digits in the generated
                 SIC code. Defaults to 5.
@@ -433,7 +433,7 @@ class ClassificationLLM:
             industry_descr=industry_descr,
             job_title=job_title,
             job_description=job_description,
-            sic_candidates=[sic_candidates],
+            sic_candidates=sic_candidates,
         )
 
         if self.verbose:
