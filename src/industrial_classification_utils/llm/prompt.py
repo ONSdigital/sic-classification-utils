@@ -245,7 +245,7 @@ Approach the task in the following order:
 - Job Description: {job_description}
 
 ===Shortlist===
-{shortlist}
+{sic_candidates}
 
 ===Output Format===
 {format_instructions}
