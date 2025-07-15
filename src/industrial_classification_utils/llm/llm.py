@@ -377,8 +377,6 @@ class ClassificationLLM:
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
         sic_candidates: Optional[str] = None,
-        code_digits: int = 5,
-        candidates_limit: int = 7,
     ) -> tuple[UnambiguousResponse, Optional[Any]]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
@@ -388,10 +386,6 @@ class ClassificationLLM:
             job_description (str, optional): The job description. Defaults to None.
             sic_candidates (list, str): Short list of SIC candidates to pass to LLM.
                 Defaults to None.
-            code_digits (int, optional): The number of digits in the generated
-                SIC code. Defaults to 5.
-            candidates_limit (int): The maximum number of SIC code candidates to consider.
-                Defaults to 7.
 
         Returns:
             UnambiguousResponse: The generated response to the query.

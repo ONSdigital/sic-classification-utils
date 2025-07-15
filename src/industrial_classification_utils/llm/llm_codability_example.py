@@ -3,6 +3,7 @@
 from pprint import pprint
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
+# pylint: disable=duplicate-code
 
 LLM_MODEL = "gemini-1.5-flash"
 JOB_TITLE = "school teacher"
@@ -44,7 +45,7 @@ EXAMPLE_EMBED_SHORT_LIST = [
 
 uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
 
-sic_candidates = uni_chat._prompt_candidate_list(
+SIC_CANDIDATES = uni_chat._prompt_candidate_list(   # pylint: disable=protected-access
     EXAMPLE_EMBED_SHORT_LIST, code_digits=5, candidates_limit=7
 )
 
@@ -52,7 +53,7 @@ sa_response = uni_chat.unambiguous_sic_code(
     industry_descr=ORG_DESCRIPTION,
     job_title=JOB_TITLE,
     job_description=JOB_DESCRIPTION,
-    sic_candidates=sic_candidates,
+    sic_candidates=SIC_CANDIDATES,
 )
 
 pprint(sa_response[0].model_dump(), indent=2, width=80)
