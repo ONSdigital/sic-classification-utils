@@ -377,6 +377,8 @@ class ClassificationLLM:
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
         sic_candidates: Optional[list[Any]] = None,
+        code_digits: int = 5,
+        candidates_limit: int = 7,
     ) -> tuple[UnambiguousResponse, Optional[Any]]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
@@ -384,7 +386,12 @@ class ClassificationLLM:
             industry_descr (str): The description of the industry.
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
-            sic_candidates (list, optional): The response from the reranker.
+            sic_candidates (list, optional): Short list of SIC candidates to pass to LLM. 
+                Defaults to None.
+            code_digits (int, optional): The number of digits in the generated
+                SIC code. Defaults to 5.
+            candidates_limit (int): The maximum number of SIC code candidates to consider.
+                Defaults to 7.
 
         Returns:
             UnambiguousResponse: The generated response to the query.
@@ -413,15 +420,20 @@ class ClassificationLLM:
                 "industry_descr": industry_descr,
                 "job_title": job_title,
                 "job_description": job_description,
-                "sic_candidates": str(sic_candidates),
+                "sic_candidates": sic_candidates,
             }
             return call_dict
+        
+        if sic_candidates is None:
+            raise ValueError(
+                "Short list is None - list provided from embedding search."
+            )
 
         call_dict = prep_call_dict(
             industry_descr=industry_descr,
             job_title=job_title,
             job_description=job_description,
-            sic_candidates=sic_candidates,
+            sic_candidates=[sic_candidates],
         )
 
         if self.verbose:
