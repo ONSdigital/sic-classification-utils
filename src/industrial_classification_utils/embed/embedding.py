@@ -174,7 +174,7 @@ class EmbeddingHandler:
             logger.exception("Failed to create vector store: %s", e)
             raise
 
-    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments # noqa: C901
+    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals # noqa: C901
         self,
         from_empty: bool = True,
         sic: Optional[SIC] = None,
