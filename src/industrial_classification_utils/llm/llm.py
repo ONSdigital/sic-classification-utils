@@ -371,7 +371,7 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    def unambiguous_sic_code(
+    def unambiguous_sic_code(  # noqa PLR0913
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
@@ -386,7 +386,7 @@ class ClassificationLLM:
             industry_descr (str): The description of the industry.
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
-            sic_candidates (list, optional): Short list of SIC candidates to pass to LLM. 
+            sic_candidates (list, optional): Short list of SIC candidates to pass to LLM.
                 Defaults to None.
             code_digits (int, optional): The number of digits in the generated
                 SIC code. Defaults to 5.
@@ -423,7 +423,7 @@ class ClassificationLLM:
                 "sic_candidates": sic_candidates,
             }
             return call_dict
-        
+
         if sic_candidates is None:
             raise ValueError(
                 "Short list is None - list provided from embedding search."
