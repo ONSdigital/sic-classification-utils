@@ -58,11 +58,7 @@ EXAMPLE_EMBED_SHORT_LIST = [
 # This example uses mocked data for the embedding search.
 gemini_llm = ClassificationLLM(model_name=LLM_MODEL)
 
-response_sic_code = gemini_llm.get_sic_code(
-    ORG_DESCRIPTION,
-    JOB_TITLE,
-    JOB_DESCRIPTION
-)
+response_sic_code = gemini_llm.get_sic_code(ORG_DESCRIPTION, JOB_TITLE, JOB_DESCRIPTION)
 
 print(response_sic_code)
 
@@ -79,11 +75,8 @@ print(response)
 # print(prompt)
 
 query_response, call_dict = gemini_llm.unambiguous_sic_code(
-    ORG_DESCRIPTION,
-    JOB_TITLE,
-    JOB_DESCRIPTION
+    ORG_DESCRIPTION, JOB_TITLE, JOB_DESCRIPTION
 )
 
 # Print the response
 print(query_response)
-
