@@ -22,7 +22,6 @@ from typing import Any, Optional, Union
 import numpy as np
 from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 from industrial_classification.meta import sic_meta
-from langchain.chains.llm import LLMChain
 from langchain.output_parsers import PydanticOutputParser
 
 # from langchain_google_genai import ChatGoogleGenerativeAI
@@ -132,7 +131,7 @@ class ClassificationLLM:
         Returns:
             SicResponse: Generated response to the query.
         """
-        chain = LLMChain(llm=self.llm, prompt=self.sic_prompt)
+        chain = self.sic_prompt | self.llm
         response = chain.invoke(
             {
                 "industry_descr": industry_descr,
@@ -148,7 +147,7 @@ class ClassificationLLM:
             pydantic_object=SicResponse
         )
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.debug(
                 "Retrying llm response parsing due to an error: %s", parse_error
@@ -156,7 +155,7 @@ class ClassificationLLM:
             logger.error("Unable to parse llm response: %s", parse_error)
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = SicResponse(
                 codable=False,
@@ -357,11 +356,9 @@ class ClassificationLLM:
             validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            # logger.warning("Failed to parse response:\n%s", response["text"])
             logger.warning("Failed to parse response:\n%s", response.content)
 
             reasoning = (
-                # f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = SurveyAssistSicResponse(
@@ -437,7 +434,7 @@ class ClassificationLLM:
             final_prompt = self.sic_prompt_unambiguous.format(**call_dict)
             logger.debug("%s", final_prompt)
 
-        chain = LLMChain(llm=self.llm, prompt=self.sic_prompt_unambiguous)
+        chain = self.sic_prompt_unambiguous | self.llm
 
         try:
             response = chain.invoke(call_dict, return_only_outputs=True)
@@ -459,13 +456,13 @@ class ClassificationLLM:
             pydantic_object=UnambiguousResponse
         )
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response["text"])
+            logger.warning("Failed to parse response:\n%s", response.content)
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = UnambiguousResponse(
                 codable=False,
@@ -555,7 +552,7 @@ class ClassificationLLM:
             final_prompt = self.sic_prompt_reranker.format(**call_dict)
             logger.debug("%s", final_prompt)
 
-        chain = LLMChain(llm=self.llm, prompt=self.sic_prompt_reranker)
+        chain = self.sic_prompt_reranker | self.llm
 
         try:
             response = chain.invoke(call_dict, return_only_outputs=True)
@@ -578,13 +575,13 @@ class ClassificationLLM:
             pydantic_object=RerankingResponse
         )
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response["text"])
+            logger.warning("Failed to parse response:\n%s", response.content)
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = RerankingResponse(
                 selected_codes=[],
