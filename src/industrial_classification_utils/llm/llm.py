@@ -334,13 +334,13 @@ class ClassificationLLM:
             response = chain.invoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.warning("Error from chain, exit early")
             validated_answer = SurveyAssistSicResponse(
                 followup="Follow-up question not available due to error.",
                 sic_code="N/A",
                 sic_descriptive="N/A",
                 sic_candidates=[],
-                reasoning="Error from LLMChain, exit early",
+                reasoning="Error from chain, exit early",
             )
             return validated_answer, short_list, call_dict
         if self.verbose:
@@ -438,11 +438,11 @@ class ClassificationLLM:
             response = chain.invoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.warning("Error from chain, exit early")
             validated_answer = UnambiguousResponse(
                 codable=False,
                 alt_candidates=[],
-                reasoning="Error from LLMChain, exit early",
+                reasoning="Error from chain, exit early",
             )
             return validated_answer, call_dict
 
@@ -556,11 +556,11 @@ class ClassificationLLM:
             response = chain.invoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.warning("Error from chain, exit early")
             validated_answer = RerankingResponse(
                 selected_codes=[],
                 excluded_codes=[],
-                status="Error from LLMChain, exit early",
+                status="Error from chain, exit early",
                 n_requested=output_limit,
             )
             return validated_answer, short_list, call_dict
