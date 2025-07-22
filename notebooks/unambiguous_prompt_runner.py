@@ -17,7 +17,7 @@ from industrial_classification_utils.llm.llm import ClassificationLLM
 
 
 @dataclass
-class Config:
+class Config:  # pylint: disable=too-many-instance-attributes
     """Configuration for processing parameters."""
 
     input_file: str
@@ -145,7 +145,7 @@ def process_batch(
     return results
 
 
-def main_processing(
+def main_processing(  # pylint: disable=too-many-locals
     config: Config, resume_from_checkpoint: bool = True
 ) -> pd.DataFrame:
     """Main processing function."""
