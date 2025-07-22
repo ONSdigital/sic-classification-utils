@@ -81,7 +81,7 @@ def get_config() -> FullConfig:
 
 
 config = get_config()
-max_batch_size = 5400
+MAX_BATCH_SIZE = 5400
 
 
 class EmbeddingHandler:
@@ -269,8 +269,8 @@ class EmbeddingHandler:
                 yield data[i : i + batch_size]
 
         for batch_docs, batch_ids in zip(
-            split_into_batches(docs, max_batch_size),
-            split_into_batches(ids, max_batch_size),
+            split_into_batches(docs, MAX_BATCH_SIZE),
+            split_into_batches(ids, MAX_BATCH_SIZE),
         ):
             self.vector_store.add_documents(batch_docs, ids=batch_ids)
         self._index_size = self.vector_store._client.get_collection(  # pylint: disable=protected-access
