@@ -21,7 +21,9 @@ from autocorrect import Speller
 from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarchy
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+# from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_google_vertexai import VertexAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from industrial_classification_utils.models.config_model import (
@@ -79,6 +81,7 @@ def get_config() -> FullConfig:
 
 
 config = get_config()
+MAX_BATCH_SIZE = 5400
 
 
 class EmbeddingHandler:
@@ -113,7 +116,7 @@ class EmbeddingHandler:
         if embedding_model_name.startswith(
             "textembedding-"
         ) or embedding_model_name.startswith("text-embedding-"):
-            self.embeddings = GoogleGenerativeAIEmbeddings(model=embedding_model_name)
+            self.embeddings = VertexAIEmbeddings(model=embedding_model_name)
         else:
             self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
 
@@ -172,7 +175,7 @@ class EmbeddingHandler:
             logger.exception("Failed to create vector store: %s", e)
             raise
 
-    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals # noqa: C901
         self,
         from_empty: bool = True,
         sic: Optional[SIC] = None,
@@ -261,7 +264,15 @@ class EmbeddingHandler:
                 )
                 ids.append(str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])))
 
-        self.vector_store.add_documents(docs, ids=ids)
+        def split_into_batches(data, batch_size):
+            for i in range(0, len(data), batch_size):
+                yield data[i : i + batch_size]
+
+        for batch_docs, batch_ids in zip(
+            split_into_batches(docs, MAX_BATCH_SIZE),
+            split_into_batches(ids, MAX_BATCH_SIZE),
+        ):
+            self.vector_store.add_documents(batch_docs, ids=batch_ids)
         self._index_size = self.vector_store._client.get_collection(  # pylint: disable=protected-access
             "langchain"
         ).count()

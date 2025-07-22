@@ -250,13 +250,15 @@ class SurveyAssistSicResponse(BaseModel):
         description="""Question to ask user in order to collect additional information
         to enable reliable classification assignment.""",
     )
-    sic_code: str = Field(
+    sic_code: Optional[str] = Field(
         description="""Full classification code (to the required number of digits)
         of the most likely canddate assigned based on provided respondent's data.""",
+        default="",
     )
-    sic_descriptive: str = Field(
+    sic_descriptive: Optional[str] = Field(
         description="""Descriptive label of the most likely classification category
         associated with sic_code.""",
+        default="",
     )
     sic_candidates: list[SicCandidate] = Field(
         description="""Short list of less than ten possible or alternative SIC codes
