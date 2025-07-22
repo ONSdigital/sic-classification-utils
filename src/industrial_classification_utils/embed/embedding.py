@@ -81,6 +81,7 @@ def get_config() -> FullConfig:
 
 
 config = get_config()
+max_batch_size = 5400
 
 
 class EmbeddingHandler:
@@ -262,7 +263,6 @@ class EmbeddingHandler:
                     )
                 )
                 ids.append(str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])))
-        max_batch_size = 5400
 
         def split_into_batches(data, batch_size):
             for i in range(0, len(data), batch_size):
