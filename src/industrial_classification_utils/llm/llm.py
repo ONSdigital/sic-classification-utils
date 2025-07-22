@@ -22,9 +22,8 @@ from typing import Any, Optional, Union
 import numpy as np
 from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 from industrial_classification.meta import sic_meta
-from langchain.chains.llm import LLMChain
 from langchain.output_parsers import PydanticOutputParser
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
@@ -74,7 +73,7 @@ class ClassificationLLM:
     def __init__(  # noqa: PLR0913
         self,
         model_name: str = config["llm"]["llm_model_name"],
-        llm: Optional[Union[ChatGoogleGenerativeAI, ChatOpenAI]] = None,
+        llm: Optional[Union[ChatVertexAI, ChatOpenAI]] = None,
         max_tokens: int = 1600,
         temperature: float = 0.0,
         verbose: bool = True,
@@ -85,9 +84,9 @@ class ClassificationLLM:
         if llm is not None:
             self.llm = llm
         elif model_name.startswith("text-") or model_name.startswith("gemini"):
-            self.llm = ChatGoogleGenerativeAI(
-                model=model_name,
-                max_tokens=max_tokens,
+            self.llm = ChatVertexAI(
+                model_name=model_name,
+                max_output_tokens=max_tokens,
                 temperature=temperature,
             )
         elif model_name.startswith("gpt"):
@@ -130,7 +129,7 @@ class ClassificationLLM:
         Returns:
             SicResponse: Generated response to the query.
         """
-        chain = LLMChain(llm=self.llm, prompt=self.sic_prompt)
+        chain = self.sic_prompt | self.llm
         response = chain.invoke(
             {
                 "industry_descr": industry_descr,
@@ -146,7 +145,7 @@ class ClassificationLLM:
             pydantic_object=SicResponse
         )
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.debug(
                 "Retrying llm response parsing due to an error: %s", parse_error
@@ -154,7 +153,7 @@ class ClassificationLLM:
             logger.error("Unable to parse llm response: %s", parse_error)
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = SicResponse(
                 codable=False,
@@ -329,22 +328,21 @@ class ClassificationLLM:
             final_prompt = self.sa_sic_prompt_rag.format(**call_dict)
             logger.debug("%s", final_prompt)
 
-        chain = LLMChain(llm=self.llm, prompt=self.sa_sic_prompt_rag)
+        chain = self.sa_sic_prompt_rag | self.llm
 
         try:
             response = chain.invoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.warning("Error from chain, exit early")
             validated_answer = SurveyAssistSicResponse(
                 followup="Follow-up question not available due to error.",
                 sic_code="N/A",
                 sic_descriptive="N/A",
                 sic_candidates=[],
-                reasoning="Error from LLMChain, exit early",
+                reasoning="Error from chain, exit early",
             )
             return validated_answer, short_list, call_dict
-
         if self.verbose:
             logger.debug("%s", response)
 
@@ -353,13 +351,13 @@ class ClassificationLLM:
             pydantic_object=SurveyAssistSicResponse
         )
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response["text"])
+            logger.warning("Failed to parse response:\n%s", response.content)
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = SurveyAssistSicResponse(
                 followup="Follow-up question not available due to error.",
@@ -434,17 +432,17 @@ class ClassificationLLM:
             final_prompt = self.sic_prompt_unambiguous.format(**call_dict)
             logger.debug("%s", final_prompt)
 
-        chain = LLMChain(llm=self.llm, prompt=self.sic_prompt_unambiguous)
+        chain = self.sic_prompt_unambiguous | self.llm
 
         try:
             response = chain.invoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.warning("Error from chain, exit early")
             validated_answer = UnambiguousResponse(
                 codable=False,
                 alt_candidates=[],
-                reasoning="Error from LLMChain, exit early",
+                reasoning="Error from chain, exit early",
             )
             return validated_answer, call_dict
 
@@ -456,13 +454,13 @@ class ClassificationLLM:
             pydantic_object=UnambiguousResponse
         )
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response["text"])
+            logger.warning("Failed to parse response:\n%s", response.content)
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = UnambiguousResponse(
                 codable=False,
@@ -552,17 +550,17 @@ class ClassificationLLM:
             final_prompt = self.sic_prompt_reranker.format(**call_dict)
             logger.debug("%s", final_prompt)
 
-        chain = LLMChain(llm=self.llm, prompt=self.sic_prompt_reranker)
+        chain = self.sic_prompt_reranker | self.llm
 
         try:
             response = chain.invoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.warning("Error from chain, exit early")
             validated_answer = RerankingResponse(
                 selected_codes=[],
                 excluded_codes=[],
-                status="Error from LLMChain, exit early",
+                status="Error from chain, exit early",
                 n_requested=output_limit,
             )
             return validated_answer, short_list, call_dict
@@ -575,13 +573,13 @@ class ClassificationLLM:
             pydantic_object=RerankingResponse
         )
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response["text"])
+            logger.warning("Failed to parse response:\n%s", response.content)
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = RerankingResponse(
                 selected_codes=[],
