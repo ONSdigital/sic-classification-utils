@@ -18,7 +18,7 @@ from industrial_classification_utils.llm.llm import ClassificationLLM
 
 @dataclass
 class Config:
-    """Configuration for processing parameters."""
+    """Configuration for processing parameters.""" #noqa R0902
 
     input_file: str
     output_file: str
@@ -145,7 +145,7 @@ def process_batch(
     return results
 
 
-def main_processing(
+def main_processing( #noqa R0914
     config: Config, resume_from_checkpoint: bool = True
 ) -> pd.DataFrame:
     """Main processing function."""
