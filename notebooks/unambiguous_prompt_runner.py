@@ -7,6 +7,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from tqdm import tqdm
@@ -27,47 +28,50 @@ class Config:
     sleep_between_batches: float = 5.0
     code_digits: int = 5
     candidates_limit: int = 7
-    resume_from_checkpoint: bool = True
 
 
-def setup_logging():
+def setup_logging() -> logging.Logger:
     """Setup logging configuration."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[
-            logging.FileHandler("classification_processing.log"),
+            logging.FileHandler("classification_processing.log", encoding="utf-8"),
             logging.StreamHandler(),
         ],
     )
     return logging.getLogger(__name__)
 
 
-def load_checkpoint(config: Config, logger) -> list[dict]:
+def load_checkpoint(config: Config, logger: logging.Logger) -> list[dict[str, Any]]:
     """Load existing results from checkpoint file."""
-    if not config.resume_from_checkpoint or not Path(config.checkpoint_file).exists():
+    if not Path(config.checkpoint_file).exists():
         return []
 
     try:
-        with open(config.checkpoint_file) as f:
+        with open(config.checkpoint_file, encoding="utf-8") as f:
             results = [json.loads(line) for line in f]
-        logger.info(f"Loaded {len(results)} existing results from checkpoint")
+        logger.info("Loaded %d existing results from checkpoint", len(results))
         return results
-    except Exception as e:
-        logger.error(f"Error loading checkpoint: {e}")
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error("Error loading checkpoint: %s", e)
         return []
 
 
-def save_result_to_checkpoint(result: dict, checkpoint_file: str, logger):
+def save_result_to_checkpoint(
+    result: dict[str, Any], checkpoint_file: str, logger: logging.Logger
+) -> None:
     """Save a single result to checkpoint file (append mode)."""
     try:
-        with open(checkpoint_file, "a") as f:
+        with open(checkpoint_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(result) + "\n")
-    except Exception as e:
-        logger.error(f"Error saving checkpoint: {e}")
+    except OSError as e:
+        logger.error("Error saving checkpoint: %s", e)
 
 
-def process_single_row(row: pd.Series, uni_chat, config: Config, logger) -> dict:
+def process_single_row(
+    row: pd.Series, uni_chat: ClassificationLLM, config: Config, logger: logging.Logger
+) -> dict[str, Any]:
     """Process a single row with error handling and rate limiting."""
     try:
         # Add delay for rate limiting
@@ -82,11 +86,14 @@ def process_single_row(row: pd.Series, uni_chat, config: Config, logger) -> dict
             ]
         )
 
+        # Access protected method with pylint disable comment
+        # pylint: disable=protected-access
         short_list = uni_chat._prompt_candidate_list(
             search_results,
             code_digits=config.code_digits,
             candidates_limit=config.candidates_limit,
         )
+        # pylint: enable=protected-access
 
         sa_response = uni_chat.unambiguous_sic_code(
             industry_descr=row["sic2007_employee"],
@@ -105,8 +112,8 @@ def process_single_row(row: pd.Series, uni_chat, config: Config, logger) -> dict
 
         return result
 
-    except Exception as e:
-        logger.error(f"Error processing row {row['unique_id']}: {e}")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Error processing row %s: %s", row["unique_id"], e)
         return {
             "unique_id": row["unique_id"],
             "codable": None,
@@ -118,8 +125,11 @@ def process_single_row(row: pd.Series, uni_chat, config: Config, logger) -> dict
 
 
 def process_batch(
-    batch_df: pd.DataFrame, uni_chat, config: Config, logger
-) -> list[dict]:
+    batch_df: pd.DataFrame,
+    uni_chat: ClassificationLLM,
+    config: Config,
+    logger: logging.Logger,
+) -> list[dict[str, Any]]:
     """Process a batch of rows."""
     results = []
 
@@ -135,19 +145,22 @@ def process_batch(
     return results
 
 
-def main_processing(config: Config):
+def main_processing(
+    config: Config, resume_from_checkpoint: bool = True
+) -> pd.DataFrame:
     """Main processing function."""
     logger = setup_logging()
 
     # Initialize models
     logger.info("Initializing models...")
     embed = EmbeddingHandler()
-    uni_chat = ClassificationLLM(
-        "gemini-2.0-flash", embedding_handler=embed, verbose=False
-    )
+
+    # Create ClassificationLLM - adjust parameters as needed for your implementation
+    # uni_chat = ClassificationLLM("gemini-2.0-flash", embeddin_handler=embed, verbose=False)
+    uni_chat = ClassificationLLM("gemini-2.0-flash", embed, verbose=False)
 
     # Load data
-    logger.info(f"Loading data from {config.input_file}")
+    logger.info("Loading data from %s", config.input_file)
     test_set = pd.read_csv(config.input_file)
     test_subset = test_set[
         [
@@ -158,14 +171,18 @@ def main_processing(config: Config):
         ]
     ]
 
-    # Load existing results
-    existing_results = load_checkpoint(config, logger)
-    processed_ids = {r["unique_id"] for r in existing_results}
+    # Load existing results if resuming
+    existing_results = []
+    processed_ids = set()
+
+    if resume_from_checkpoint:
+        existing_results = load_checkpoint(config, logger)
+        processed_ids = {r["unique_id"] for r in existing_results}
 
     # Filter out already processed rows
     unprocessed_df = test_subset[~test_subset["unique_id"].isin(processed_ids)]
     logger.info(
-        f"Processing {len(unprocessed_df)} rows (out of {len(test_subset)} total)"
+        "Processing %d rows (out of %d total)", len(unprocessed_df), len(test_subset)
     )
 
     if len(unprocessed_df) == 0:
@@ -177,40 +194,52 @@ def main_processing(config: Config):
     # Process in batches
     all_results = existing_results.copy()
 
+    batch_count = (len(unprocessed_df) + config.batch_size - 1) // config.batch_size
+
     for i in tqdm(
         range(0, len(unprocessed_df), config.batch_size), desc="Processing batches"
     ):
         batch_df = unprocessed_df.iloc[i : i + config.batch_size].copy()
         batch_num = i // config.batch_size + 1
-        logger.info(f"Processing batch {batch_num} ({len(batch_df)} rows)")
+        logger.info(
+            "Processing batch %d/%d (%d rows)", batch_num, batch_count, len(batch_df)
+        )
 
         batch_results = process_batch(batch_df, uni_chat, config, logger)
         all_results.extend(batch_results)
 
         # Sleep between batches (except for the last batch)
         if i + config.batch_size < len(unprocessed_df):
-            logger.info(f"Sleeping {config.sleep_between_batches}s between batches")
+            logger.info(
+                "Sleeping %s seconds between batches", config.sleep_between_batches
+            )
             time.sleep(config.sleep_between_batches)
 
     # Convert to DataFrame and save final results
     results_df = pd.DataFrame(all_results)
     results_df.to_csv(config.output_file, index=False)
-    logger.info(f"Results saved to {config.output_file}")
+    logger.info("Results saved to %s", config.output_file)
 
     # Print summary statistics
     total = len(results_df)
-    successful = (results_df["codable"]).sum()
-    failed = (not results_df["codable"]).sum()
-    errors = results_df["codable"].isna().sum()
+    successful = results_df["codable"].sum() if "codable" in results_df.columns else 0
+    failed = (~results_df["codable"]).sum() if "codable" in results_df.columns else 0
+    errors = (
+        results_df["codable"].isna().sum() if "codable" in results_df.columns else 0
+    )
 
     logger.info(
-        f"Processing complete! Total: {total}, Successful: {successful}, Failed: {failed}, Errors: {errors}"
+        "Processing complete! Total: %d, Successful: %d, Failed: %d, Errors: %d",
+        total,
+        successful,
+        failed,
+        errors,
     )
 
     return results_df
 
 
-def main():
+def main() -> None:
     """Main entry point with command line arguments."""
     parser = argparse.ArgumentParser(description="Industrial Classification Processing")
     parser.add_argument("--input-file", required=True, help="Input CSV file path")
@@ -248,19 +277,18 @@ def main():
         batch_size=args.batch_size,
         sleep_between_requests=args.sleep_between_requests,
         sleep_between_batches=args.sleep_between_batches,
-        resume_from_checkpoint=not args.no_resume,
     )
 
-    results_df = main_processing(config)
+    results_df = main_processing(config, resume_from_checkpoint=not args.no_resume)
 
     print("\nProcessing complete!")
     print(f"Total results: {len(results_df)}")
-    print(f"Successful classifications: {(results_df['codable']).sum()}")
+    if "codable" in results_df.columns:
+        print(f"Successful classifications: {results_df['codable'].sum()}")
     print(f"Results saved to: {config.output_file}")
 
 
-# Alternative: Use directly as a module
-def run_classification(input_file: str, output_file: str, **kwargs):
+def run_classification(input_file: str, output_file: str, **kwargs) -> pd.DataFrame:
     """Convenience function to run classification programmatically."""
     config = Config(
         input_file=input_file,
@@ -271,10 +299,10 @@ def run_classification(input_file: str, output_file: str, **kwargs):
         batch_size=kwargs.get("batch_size", 50),
         sleep_between_requests=kwargs.get("sleep_between_requests", 1.0),
         sleep_between_batches=kwargs.get("sleep_between_batches", 5.0),
-        resume_from_checkpoint=kwargs.get("resume_from_checkpoint", True),
     )
 
-    return main_processing(config)
+    resume = kwargs.get("resume_from_checkpoint", True)
+    return main_processing(config, resume_from_checkpoint=resume)
 
 
 if __name__ == "__main__":
