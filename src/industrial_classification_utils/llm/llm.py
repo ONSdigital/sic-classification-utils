@@ -88,7 +88,7 @@ class ClassificationLLM:
                 model_name=model_name,
                 max_output_tokens=max_tokens,
                 temperature=temperature,
-                location = "europe-west2",
+                location="europe-west2",
             )
         elif model_name.startswith("gpt"):
             if openai_api_key is None:
