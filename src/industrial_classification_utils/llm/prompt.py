@@ -225,20 +225,27 @@ GENERAL_PROMPT_RAG = PromptTemplate.from_template(
 
 _sic_template_unambiguous = """"Given:
 1. Respondent data (job_title, job_description, industry_descr)
-2. LLM Reranker output with selected and excluded SIC codes, including
-relevance scores and reasoning
+2. Shortlist of UK Standard Industrial Classification (SIC) codes
 
-Evaluate whether a 5-digit UK SIC code can be assigned with 95 per cent
-confidence. If in doubt, lean towards more cautious approach, code as ambiguous
-and provide disambiguation followup question.
+Your task is to evaluate whether response can be assigned to a single 5-digit SIC code.
+
+===Steps to take===
+Approach the task in the following order:
+1. Review the shortlist and evaluate each candidate SIC code.
+2. Assess the relevance of each candidate SIC code to survey respondent based on semantic similarity and business context alignment. Specifically, this includes:
+    a) fundamental alignment between the query and the code's main business activity
+    b) matches between query and specific example activities listed under the code
+3. For each SIC code candidate provide a confidence score between 0 and 1 where 0.1 is least likely and 0.9 is most likely.
+4. Decide if response can be codeded unambiguously to a single 5-digit SIC code with 95 per cent confidence.
+5. Provide reasoning for your decision.
 
 ===Respondent Data===
 - Company's main activity: {industry_descr}
 - Job Title: {job_title}
 - Job Description: {job_description}
 
-===LLM reranker output===
-{reranker_response}
+===Shortlist===
+{sic_candidates}
 
 ===Output Format===
 {format_instructions}

@@ -374,22 +374,19 @@ class ClassificationLLM:
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        reranker_response: Optional[RerankingResponse] = None,
-    ) -> tuple[UnambiguousResponse, dict[str, Any]]:
-        """Evaluates codability to a 5-digit SIC code based on respondent's
-            data and reranker output.
+        sic_candidates: Optional[str] = None,
+    ) -> tuple[UnambiguousResponse, Optional[Any]]:
+        """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
         Args:
             industry_descr (str): The description of the industry.
             job_title (str, optional): The job title. Defaults to None.
-            job_description (str, optional): The job description.
+            job_description (str, optional): The job description. Defaults to None.
+            sic_candidates (list, str): Short list of SIC candidates to pass to LLM.
                 Defaults to None.
-            reranker_response (RerankingResponse, optional): The response
-                from the reranker.
 
         Returns:
-            Tuple[UnambiguousResponse, Dict[str, Any]]: The generated response
-                to the query and the call dictionary.
+            UnambiguousResponse: The generated response to the query.
 
         Raises:
             ValueError: If there is an error during the parsing of the response.
@@ -398,9 +395,7 @@ class ClassificationLLM:
 
         """
 
-        def prep_call_dict(
-            industry_descr, job_title, job_description, reranker_response
-        ):
+        def prep_call_dict(industry_descr, job_title, job_description, sic_candidates):
             # Helper function to prepare the call dictionary
             is_job_title_present = job_title is None or job_title in {"", " "}
             job_title = "Unknown" if is_job_title_present else job_title
@@ -417,20 +412,25 @@ class ClassificationLLM:
                 "industry_descr": industry_descr,
                 "job_title": job_title,
                 "job_description": job_description,
-                "reranker_response": str(reranker_response),
+                "sic_candidates": sic_candidates,
             }
             return call_dict
+
+        if sic_candidates is None:
+            raise ValueError(
+                "Short list is None - list provided from embedding search."
+            )
 
         call_dict = prep_call_dict(
             industry_descr=industry_descr,
             job_title=job_title,
             job_description=job_description,
-            reranker_response=reranker_response,
+            sic_candidates=sic_candidates,
         )
 
         if self.verbose:
             final_prompt = self.sic_prompt_unambiguous.format(**call_dict)
-            logger.debug("%s", final_prompt)
+            logger.debug(final_prompt)
 
         chain = self.sic_prompt_unambiguous | self.llm
 
@@ -447,12 +447,10 @@ class ClassificationLLM:
             return validated_answer, call_dict
 
         if self.verbose:
-            logger.debug("%s", response)
+            logger.debug("llm_response=%s", response)
 
         # Parse the output to the desired format
-        parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
-            pydantic_object=UnambiguousResponse
-        )
+        parser = PydanticOutputParser(pydantic_object=UnambiguousResponse)  # type: ignore
         try:
             validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
