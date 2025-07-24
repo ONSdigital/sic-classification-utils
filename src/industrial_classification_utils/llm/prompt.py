@@ -224,21 +224,29 @@ GENERAL_PROMPT_RAG = PromptTemplate.from_template(
     },
 )
 
-_sic_template_unambiguous = """"Given:
-1. Respondent data (job_title, job_description, industry_descr)
-2. Shortlist of UK Standard Industrial Classification (SIC) codes
+_sic_template_unambiguous = """"You are an expert in industrial classifications.
+You are tasked with determining whether a survey response can be assigned to a
+single 5-digit UK Standard Industrial Classification (SIC) code based on initial respondent data alone.
 
-Your task is to evaluate whether response can be assigned to a single 5-digit SIC code.
+Key objective:  Determine if the response can be coded unambiguously to a single 5-digit SIC code.
 
-===Steps to take===
-Approach the task in the following order:
-1. Review the shortlist and evaluate each candidate SIC code.
-2. Assess the relevance of each candidate SIC code to survey respondent based on semantic similarity and business context alignment. Specifically, this includes:
-    a) fundamental alignment between the query and the code's main business activity
-    b) matches between query and specific example activities listed under the code
-3. For each SIC code candidate provide a confidence score between 0 and 1 where 0.1 is least likely and 0.9 is most likely.
-4. Decide if response can be codeded unambiguously to a single 5-digit SIC code with 95 per cent confidence.
-5. Provide reasoning for your decision.
+Assignment logic:
+1. Code as unambiguous when response can be coded to a single 5-digit SIC code with 99
+per cent confidence based on available evidence.
+2. Code as uncodable to 5-digit when multiple candidates are plausible and
+additional information is needed to distinguish between them.
+
+===Analysis steps===
+Follow these steps in order
+1. Review each candidate from the shortlist of relevant SIC codes against the respondent data
+2. Assess alignment - Consider:
+   - Semantic similarity between respondent descriptions and SIC code descriptions
+   - Job role compatibility with typical activities in each SIC code
+   - Industry context alignment
+   - Matches with specific examples listed under each code
+3. Assign confidence scores - Rate each candidate from 0.1 (least likely) to 0.9 (most likely)
+4. Decide if response can be codeded unambiguously to a single 5-digit SIC code with 99 per cent confidence
+5. Provide reasoning for your decision
 
 ===Respondent Data===
 - Company's main activity: {industry_descr}
