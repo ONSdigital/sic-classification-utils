@@ -52,7 +52,6 @@ Typical usage example:
 """
 
 import json
-
 import logging
 from typing import Callable, Optional
 
