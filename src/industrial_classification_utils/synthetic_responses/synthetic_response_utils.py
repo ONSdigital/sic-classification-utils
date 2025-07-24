@@ -115,7 +115,7 @@ class SyntheticResponder:
                 location="europe-west2",
             )
         except Exception as e:
-            logger.error(f"{e}")
+            logger.error("%s"%e)
             logger.warning("connection to LLM failed")
             raise
 
@@ -165,6 +165,6 @@ class SyntheticResponder:
             validated_answer = parser.parse(str(response)).answer
             logger.debug("Answer received from LLM, and successfully parsed")
         except ValueError as parse_error:
-            logger.error(f"{parse_error}")
-            logger.warning(f"Failed to parse response:\n{response}")
+            logger.error("%s"%parse_error)
+            logger.warning("Failed to parse response:\n%s"%response)
         return validated_answer
