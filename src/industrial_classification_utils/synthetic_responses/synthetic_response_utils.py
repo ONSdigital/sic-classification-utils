@@ -50,26 +50,23 @@ Typical usage example:
 
 
 """
-from industrial_classification_utils.embed.embedding import get_config
 
 import json
+
+import logging
 from typing import Callable, Optional
 
-from langchain.chains.llm import LLMChain
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts.prompt import PromptTemplate
 from langchain_google_vertexai import VertexAI
 
-#from survey_assist_utils.logging import get_logger
-import logging
+from industrial_classification_utils.embed.embedding import get_config
 
 from .prompts import make_followup_answer_prompt_pydantic
 from .response_models import FollowupAnswerResponse
 
-#logger = get_logger(__name__)
 logger = logging.getLogger(__name__)
 config = get_config()
-
 
 
 class SyntheticResponder:
@@ -107,9 +104,7 @@ class SyntheticResponder:
         self.get_question_function = get_question_function
         self.model_name = model_name
         self.instantiate_llm(model_name=self.model_name)
-        logger.debug(
-            "SyntheticResponder initialised, connection to LLM established."
-        )
+        logger.debug("SyntheticResponder initialised, connection to LLM established.")
 
     def instantiate_llm(self, model_name: str = "gemini-1.5-flash"):
         """Initialises a VertexAI instance."""
@@ -162,16 +157,14 @@ class SyntheticResponder:
             body = json.load(body)  # type: ignore[arg-type]
         call_dict = body.copy()  # type: ignore
         call_dict["followup_question"] = prompt.partial_variables["followup_question"]
-        chain = prompt | self.llm #LLMChain(llm=self.llm, prompt=prompt)
+        chain = prompt | self.llm  # LLMChain(llm=self.llm, prompt=prompt)
         response = chain.invoke(call_dict, return_only_outputs=True)
         parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
             pydantic_object=FollowupAnswerResponse
         )
         try:
             validated_answer = parser.parse(str(response)).answer
-            logger.debug(
-                "Answer received from LLM, and successfully parsed"
-            )
+            logger.debug("Answer received from LLM, and successfully parsed")
         except ValueError as parse_error:
             logger.error(f"{parse_error}")
             logger.warning(f"Failed to parse response:\n{response}")
