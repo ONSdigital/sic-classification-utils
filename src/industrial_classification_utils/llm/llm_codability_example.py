@@ -275,7 +275,8 @@ EXAMPLE_EMBED_SHORT_LIST = [
     },
     {
         "distance": 0.8145434260368347,
-        "title": "Counselling services for adults children and young people training for those working with children",
+        "title": "Counselling services for adults children and young people training" 
+        "for those working with children",
         "code": "88990",
         "four_digit_code": "8899",
         "two_digit_code": "88",
