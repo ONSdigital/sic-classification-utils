@@ -26,7 +26,8 @@ SIC_CANDIDATES = [
     },
     {
         "class_code": "88100",
-        "class_descriptive": "Social work activities without accommodation for the elderly and disabled",
+        "class_descriptive": "Social work activities without accommodation for the"
+        "elderly and disabled",
         "likelihood": 0.6,
     },
     {
