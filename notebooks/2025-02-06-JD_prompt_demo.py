@@ -1,5 +1,6 @@
 # %%
-# flake8: noqa: E402, B018, W0104, C0301, C0103
+# flake8: noqa: E402, B018
+# pylint: disable=invalid-name, protected-access, pointless-statement, wrong-import-position, line-too-long, missing-module-docstring
 
 # %%
 from pprint import pprint

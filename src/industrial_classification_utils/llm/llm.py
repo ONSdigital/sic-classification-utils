@@ -1,3 +1,4 @@
+# pylint: disable=logging-not-lazy,logging-fstring-interpolation
 """This module provides utilities for leveraging Large Language Models (LLMs)
 to classify respondent data into Standard Industrial Classification (SIC) codes.
 
@@ -317,9 +318,9 @@ class ClassificationLLM:
 
         if chars_limit:
             chars_count = np.cumsum([len(x) for x in sic_candidates])
-            nn = sum([x <= chars_limit for x in chars_count])
+            nn = sum(x <= chars_limit for x in chars_count)
             if nn < len(sic_candidates):
-                logger.warning(
+                logger.warning(  # pylint: disable=logging-not-lazy
                     "Shortening list of candidates to fit token limit "
                     + f"from {len(sic_candidates)} to {nn}"
                 )
