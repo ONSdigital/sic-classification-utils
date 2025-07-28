@@ -33,14 +33,14 @@ from langchain.prompts.prompt import PromptTemplate
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.models.response_model import (
+    ClosedFollowUp,
+    OpenFollowUp,
     RerankingResponse,
     SicResponse,
     UnambiguousResponse,
-    OpenFollowUp,
-    ClosedFollowUp,
 )
 from industrial_classification_utils.utils.sic_data_access import (
-    load_text_from_config,
+    load_sic_index,
 )
 
 config = get_config()
@@ -69,7 +69,8 @@ Make sure to use the provided 2007 SIC Index.
 """
 
 # Load the SIC index from the configuration and convert to file path string
-sic_index = load_text_from_config(config["lookups"]["sic_condensed"])
+# sic_index = load_text_from_config(config["lookups"]["sic_condensed"])
+sic_index = load_sic_index(config["lookups"]["sic_index"])
 
 parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
     pydantic_object=SicResponse
@@ -407,7 +408,7 @@ class PromptTemplates:
         ]
 
 
-_open_follow_up = """"You are an expert survey methodologist tasked with generating 
+_open_follow_up = """"You are an expert survey methodologist tasked with generating
 high-quality questions for an online labour market survey. Your goal is to create an
 open-ended question that will help to assign most relevant UK SIC (Standard Industry
 Classification) code to a given survey response.
@@ -469,18 +470,18 @@ If suggesting response categories, ensure they are:
 ===Output Format===
 {format_instructions}
 """
-parser_followup = PydanticOutputParser(pydantic_object=OpenFollowUp)
+parser_followup_open = PydanticOutputParser(pydantic_object=OpenFollowUp)
 
 SIC_PROMPT_OPENFOLLOWUP = PromptTemplate.from_template(
     template=_core_prompt + _open_follow_up,
     partial_variables={
-        "format_instructions": parser_followup.get_format_instructions(),
+        "format_instructions": parser_followup_open.get_format_instructions(),
     },
 )
 
-_closed_follow_up = """"You are an expert survey methodologist tasked with generating a 
-high-quality closed follow-up question for a labour market survey. Your goal is to create 
-a question that presents simplified versions of UK 2007 5-digit SIC (Standard Industrial 
+_closed_follow_up = """"You are an expert survey methodologist tasked with generating a
+high-quality closed follow-up question for a labour market survey. Your goal is to create
+a question that presents simplified versions of UK 2007 5-digit SIC (Standard Industrial
 Classification) codes for respondents to choose from.
 
 Given:
@@ -539,11 +540,11 @@ Neutrality and Bias
 ===Output Format===
 {format_instructions}
 """
-parser_followup = PydanticOutputParser(pydantic_object=ClosedFollowUp)
+parser_followup_closed = PydanticOutputParser(pydantic_object=ClosedFollowUp)
 
 SIC_PROMPT_CLOSEDFOLLOWUP = PromptTemplate.from_template(
     template=_core_prompt + _closed_follow_up,
     partial_variables={
-        "format_instructions": parser_followup.get_format_instructions(),
+        "format_instructions": parser_followup_closed.get_format_instructions(),
     },
 )

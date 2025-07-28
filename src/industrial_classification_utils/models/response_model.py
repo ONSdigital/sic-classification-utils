@@ -448,6 +448,7 @@ class RerankingResponse(BaseModel):
                 )
         return self
 
+
 class OpenFollowUp(BaseModel):
     """Represents a response model for open ended follow-up question.
 
@@ -457,15 +458,16 @@ class OpenFollowUp(BaseModel):
         reasoning (str): Reasoning explaining how follow-up question will help
             assign classification code.
     """
-    followup: str = Field(
+
+    followup: Optional[str] = Field(
         description="""Question to ask user in order to collect additional information
         to enable reliable classification assignment.""",
-        default=None,
+        default="",
     )
     reasoning: str = Field(
         description="""Reasoning explaining how follow-up question will help
             assign classification code.""",
-        default=None,
+        default="",
     )
 
 
@@ -474,16 +476,16 @@ class ClosedFollowUpCandidate(BaseModel):
 
     Attributes:
         class_code (str): Standard Industrical Classification (SIC) code.
-        class_descriptive (str): Simplified description of a SIC code that reflects 
+        class_descriptive (str): Simplified description of a SIC code that reflects
             respondent answers and context.
-        class_example (str): Example of a business activity illustrating a SIC code.   
+        class_example (str): Example of a business activity illustrating a SIC code.
     """
 
     class_code: str = Field(
         description="Standard Industrical Classification (SIC) code"
     )
     class_descriptive: str = Field(
-        description="""Simplified description of a SIC code that reflects 
+        description="""Simplified description of a SIC code that reflects
             respondent answers and context."""
     )
     class_example: str = Field(
@@ -502,18 +504,19 @@ class ClosedFollowUp(BaseModel):
         reasoning (str): Reasoning explaining how follow-up question will help
             assign classification code.
     """
-    followup: str = Field(
+
+    followup: Optional[str] = Field(
         description="""Question to ask user in order to collect additional information
         to enable reliable classification assignment.""",
-        default=None,
+        default="",
     )
-    sic_options: List[ClosedFollowUpCandidate]= Field(
+    sic_options: list[ClosedFollowUpCandidate] = Field(
         description="""List of simplified options
             for respondent to choose from.""",
-        default_factory=list
+        default_factory=list,
     )
     reasoning: str = Field(
         description="""Reasoning explaining how official SIC code descriptions were
         simplified.""",
-        default=None,
+        default="",
     )

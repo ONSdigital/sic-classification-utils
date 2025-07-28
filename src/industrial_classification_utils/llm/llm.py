@@ -31,20 +31,20 @@ from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.llm.prompt import (
     GENERAL_PROMPT_RAG,
     SA_SIC_PROMPT_RAG,
+    SIC_PROMPT_CLOSEDFOLLOWUP,
+    SIC_PROMPT_OPENFOLLOWUP,
     SIC_PROMPT_PYDANTIC,
     SIC_PROMPT_RAG,
     SIC_PROMPT_RERANKER,
     SIC_PROMPT_UNAMBIGUOUS,
-    SIC_PROMPT_OPENFOLLOWUP,
-    SIC_PROMPT_CLOSEDFOLLOWUP,
 )
 from industrial_classification_utils.models.response_model import (
+    ClosedFollowUp,
+    OpenFollowUp,
     RerankingResponse,
     SicResponse,
     SurveyAssistSicResponse,
     UnambiguousResponse,
-    OpenFollowUp,
-    ClosedFollowUp,
 )
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
@@ -263,14 +263,14 @@ class ClassificationLLM:
 
         return "\n".join(sic_candidates)
 
-    def _prompt_candidate_list_filtered(
+    def _prompt_candidate_list_filtered(  # noqa: PLR0913
         self,
         short_list: list[dict],
         chars_limit: int = 14000,
         candidates_limit: int = 5,
         activities_limit: int = 3,
         code_digits: int = 5,
-        filtered_list: list[str] = None,
+        filtered_list: Optional[list[str]] = None,
     ) -> str:
         """Create candidate list for the prompt based on the given parameters.
 
@@ -289,21 +289,23 @@ class ClassificationLLM:
                 to include for each code. Defaults to 3.
             code_digits (int, optional): The number of digits to consider from
                 the code for filtering candidates. Defaults to 5.
+            filtered_list (list[str], optional): A list of alternative
+                candidates.
 
         Returns:
             str: The generated candidate list for the prompt.
         """
         if not filtered_list:
-            logger.warning(
-                "Empty list"
-            )
+            logger.warning("Empty list")
             return ""
-            
-        a = defaultdict(list)
+
+        a: defaultdict[Any, list] = defaultdict(list)
         for item in short_list:
-            if item["code"] in filtered_list:
-                if item["title"] not in a[item["code"][:code_digits]]:
-                    a[item["code"][:code_digits]].append(item["title"])
+            if (
+                item["code"] in filtered_list
+                and item["title"] not in a[item["code"][:code_digits]]
+            ):
+                a[item["code"][:code_digits]].append(item["title"])
 
             sic_candidates = [
                 self._prompt_candidate(code, activities[:activities_limit])
@@ -654,16 +656,14 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-
     def formulate_open_question(
         self,
         industry_descr: str,
-        job_title: str = None,
-        job_description: str = None,
-        llm_output: UnambiguousResponse = None,
-    ) -> OpenFollowUp:
-        """
-        Formulates an open-ended question using respondent data and survey design guidelines.
+        job_title: Optional[str] = None,
+        job_description: Optional[str] = None,
+        llm_output: Optional[UnambiguousResponse] = None,
+    ) -> tuple[OpenFollowUp, Any]:
+        """Formulates an open-ended question using respondent data and survey design guidelines.
 
         Args:
             industry_descr (str): The description of the industry.
@@ -713,7 +713,7 @@ class ClassificationLLM:
             final_prompt = self.sic_prompt_openfollowup.format(**call_dict)
             logger.debug(final_prompt)
 
-        chain = LLMChain(llm=self.llm, prompt=self.sic_prompt_openfollowup)
+        chain = self.sic_prompt_openfollowup | self.llm
 
         try:
             response = chain.invoke(call_dict, return_only_outputs=True)
@@ -732,13 +732,13 @@ class ClassificationLLM:
         # Parse the output to the desired format
         parser = PydanticOutputParser(pydantic_object=OpenFollowUp)
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning(f"Failed to parse response:\n{response['text']}")
+            logger.warning(f"Failed to parse response:\n{response.content}")
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = OpenFollowUp(
                 followup=None,
@@ -747,16 +747,15 @@ class ClassificationLLM:
 
         return validated_answer, call_dict
 
-
     def formulate_closed_question(
         self,
         industry_descr: str,
-        job_title: str = None,
-        job_description: str = None,
-        llm_output: UnambiguousResponse = None,
-    ) -> ClosedFollowUp:
-        """
-        Formulates a closed follow-up question using respondent data and survey design guidelines.
+        job_title: Optional[str] = None,
+        job_description: Optional[str] = None,
+        llm_output: Optional[UnambiguousResponse] = None,
+    ) -> tuple[ClosedFollowUp, Any]:
+        """Formulates a closed follow-up question using respondent data
+            and survey design guidelines.
 
         Args:
             industry_descr (str): The description of the industry.
@@ -806,7 +805,7 @@ class ClassificationLLM:
             final_prompt = self.sic_prompt_closedfollowup.format(**call_dict)
             logger.debug(final_prompt)
 
-        chain = LLMChain(llm=self.llm, prompt=self.sic_prompt_closedfollowup)
+        chain = self.sic_prompt_closedfollowup | self.llm
 
         try:
             response = chain.invoke(call_dict, return_only_outputs=True)
@@ -815,7 +814,7 @@ class ClassificationLLM:
             logger.warning("Error from LLMChain, exit early")
             validated_answer = ClosedFollowUp(
                 followup=None,
-                sic_candidates=[],
+                sic_options=[],
                 reasoning="Error from LLMChain, exit early",
             )
             return validated_answer, call_dict
@@ -826,17 +825,17 @@ class ClassificationLLM:
         # Parse the output to the desired format
         parser = PydanticOutputParser(pydantic_object=ClosedFollowUp)
         try:
-            validated_answer = parser.parse(response["text"])
+            validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning(f"Failed to parse response:\n{response['text']}")
+            logger.warning(f"Failed to parse response:\n{response.content}")
 
             reasoning = (
-                f'ERROR parse_error=<{parse_error}>, response=<{response["text"]}>'
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
             validated_answer = ClosedFollowUp(
                 followup=None,
-                sic_candidates=[],
+                sic_options=[],
                 reasoning=reasoning,
             )
 
