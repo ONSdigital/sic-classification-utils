@@ -33,8 +33,8 @@ from langchain.prompts.prompt import PromptTemplate
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.models.response_model import (
-    FinalSICAssignment,
     ClosedFollowUp,
+    FinalSICAssignment,
     OpenFollowUp,
     RerankingResponse,
     SicResponse,

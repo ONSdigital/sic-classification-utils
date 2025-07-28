@@ -32,8 +32,8 @@ from industrial_classification_utils.llm.prompt import (
     GENERAL_PROMPT_RAG,
     SA_SIC_PROMPT_RAG,
     SIC_PROMPT_CLOSEDFOLLOWUP,
-    SIC_PROMPT_OPENFOLLOWUP,
     SIC_PROMPT_FINAL_ASSIGNMENT,
+    SIC_PROMPT_OPENFOLLOWUP,
     SIC_PROMPT_PYDANTIC,
     SIC_PROMPT_RAG,
     SIC_PROMPT_RERANKER,
@@ -41,8 +41,8 @@ from industrial_classification_utils.llm.prompt import (
 )
 from industrial_classification_utils.models.response_model import (
     ClosedFollowUp,
-    OpenFollowUp,
     FinalSICAssignment,
+    OpenFollowUp,
     RerankingResponse,
     SicResponse,
     SurveyAssistSicResponse,
