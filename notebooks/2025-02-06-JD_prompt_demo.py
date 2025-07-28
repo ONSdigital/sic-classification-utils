@@ -1,4 +1,5 @@
-# flake8: noqa: E402, B018
+# %%
+# flake8: noqa: E402, B018, W0104, C0301, C0103
 
 # %%
 from pprint import pprint
@@ -6,9 +7,6 @@ from pprint import pprint
 from industrial_classification_utils.embed.embedding import get_config
 
 # from sic_soc_llm.data_models.sicDB import sicDB
-
-
-# %%
 
 
 # %%
@@ -43,39 +41,6 @@ config
 # source_blob_name = "soc2020volume2thecodingindexexcel16102024.xlsx"
 # destination_file_name = "soc2020volume2thecodingindexexcel16102024.xlsx"
 # download_from_gcs(project_id,bucket_name, source_blob_name, destination_file_name)
-
-import os
-from importlib.resources import files
-
-# %%
-from pathlib import Path
-
-print(os.getcwd())
-
-# %%
-folder_dir = Path(str(os.getcwd())).parent
-
-# %%
-folder_dir
-
-# %%
-# pkg = str(folder_dir) + "/src/industrial_classification_utils/data/sic_index/"
-pkg = "industrial_classification_utils.data.sic_index"
-
-# %%
-pkg
-
-# %%
-filename = "uksic2007indexeswithaddendumdecember2022.xlsx"
-
-# %%
-filename
-
-# %%
-print(pkg + filename)
-
-# %%
-file_path = files(pkg).joinpath(filename)
 
 # %%
 from industrial_classification_utils.embed.embedding import EmbeddingHandler
@@ -223,5 +188,3 @@ pprint(sic_closed_followup[0].model_dump(), indent=2, width=80)
 
 # %%
 pprint(filtered_candidates, indent=2, width=80)
-
-# %%
