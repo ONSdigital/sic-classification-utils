@@ -237,16 +237,16 @@ per cent confidence based on available evidence.
 additional information is needed to distinguish between them.
 
 ===Analysis steps===
-Follow these steps in order
-1. Review each candidate from the shortlist of relevant SIC codes against the respondent data
+Follow these steps in order:
+1. Review each candidate from the shortlist of relevant SIC codes against the respondent data.
 2. Assess alignment - Consider:
    - Semantic similarity between respondent descriptions and SIC code descriptions
    - Job role compatibility with typical activities in each SIC code
    - Industry context alignment
    - Matches with specific examples listed under each code
-3. Assign confidence scores - Rate each candidate from 0.1 (least likely) to 0.9 (most likely)
-4. Decide if response can be codeded unambiguously to a single 5-digit SIC code with 99 per cent confidence
-5. Provide reasoning for your decision
+3. Assign confidence scores - Rate each candidate from 0.1 (least likely) to 0.9 (most likely).
+4. Decide if response can be codeded unambiguously to a single 5-digit SIC code with 99 per cent confidence.
+5. Provide reasoning for your decision.
 
 ===Respondent Data===
 - Company's main activity: {industry_descr}
