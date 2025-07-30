@@ -1,15 +1,15 @@
-"""
-Tests for industrial_classification_utils.llm.llm.py
-"""
+# pylint: disable=C0116
+"""Tests for industrial_classification_utils.llm.llm.py."""
+
 import pytest
 from industrial_classification.hierarchy.sic_hierarchy import SIC, SicCode, SicNode
 from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import ChatOpenAI
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
-from industrial_classification_utils.models.response_model import (  # RerankingResponse,; SurveyAssistSicResponse,; UnambiguousResponse,
-    SicResponse,
-)
+from industrial_classification_utils.models.response_model import SicResponse
+
+MODEL_NAME = "gemini-1.5-flash"
 
 
 @pytest.mark.parametrize(
@@ -40,7 +40,7 @@ def test_model_name():
 
 @pytest.mark.utils
 def test_sic_get_code_initialise():
-    llm_sic_code = ClassificationLLM(model_name="gemini-1.5-flash").get_sic_code(
+    llm_sic_code = ClassificationLLM(model_name=MODEL_NAME).get_sic_code(
         industry_descr="", job_description="", job_title=""
     )
     assert isinstance(llm_sic_code, SicResponse)
@@ -65,7 +65,7 @@ def prompt_candidate_sic():
             key = node.sic_code.alpha_code[1:5] + "0"
             lookup[key] = node
     sic = SIC(nodes=nodes, code_lookup=lookup)
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class = ClassificationLLM(model_name=MODEL_NAME)
     llm_class.sic = sic
     print(llm_class.sic.all_leaf_text())
     return llm_class
@@ -79,12 +79,139 @@ def prompt_candidate_sic():
     ],
 )
 @pytest.mark.utils
-def test_prompt_candidate(
+def test_prompt_candidate_output(
     prompt_candidate_sic,
     code,
     activities,
     expected_output_code,
     expected_output_activities,
 ):
-    result = prompt_candidate_sic._prompt_candidate(code=code, activities=activities)
+    result = prompt_candidate_sic._prompt_candidate(  # pylint: disable=W0212
+        code=code, activities=activities
+    )
     assert all(x in result for x in [expected_output_code, expected_output_activities])
+
+
+@pytest.mark.parametrize(
+    "industry, title, job_description, short_list, expected_job_title",
+    [
+        (
+            "school",
+            "",
+            "educate kids",
+            [{"title": "Education", "code": "01"}],
+            "Unknown",
+        ),
+        (
+            "school",
+            " ",
+            "educate kids",
+            [{"title": "Education", "code": "01"}],
+            "Unknown",
+        ),
+        (
+            "school",
+            None,
+            "educate kids",
+            [{"title": "Education", "code": "01"}],
+            "Unknown",
+        ),
+        (
+            "school",
+            "teacher",
+            "educate kids",
+            [{"title": "Education", "code": "01"}],
+            "teacher",
+        ),
+    ],
+)
+@pytest.mark.utils
+def test_sa_rag_sic_code_prep_call_dict_job_title_correct(
+    industry, title, job_description, short_list, expected_job_title
+):
+    result = ClassificationLLM(model_name=MODEL_NAME).sa_rag_sic_code(
+        industry, title, job_description, short_list=short_list
+    )[2]["job_title"]
+    assert result == expected_job_title
+
+
+@pytest.mark.parametrize(
+    "industry, title, job_description, short_list",
+    [
+        ("school", "teacher", "educate kids", [{"title": "Education", "code": "01"}]),
+    ],
+)
+@pytest.mark.utils
+def test_sa_rag_sic_code_prep_followup_is_str(
+    industry, title, job_description, short_list
+):
+    result = (
+        ClassificationLLM(model_name=MODEL_NAME)
+        .sa_rag_sic_code(industry, title, job_description, short_list=short_list)[0]
+        .followup
+    )
+    assert isinstance(result, str)
+
+
+@pytest.mark.parametrize(
+    "industry, title, job_description, expected_job_title",
+    [
+        ("school", "", "educate kids", "Unknown"),
+        ("school", " ", "educate kids", "Unknown"),
+        ("school", None, "educate kids", "Unknown"),
+        ("school", "teacher", "educate kids", "teacher"),
+    ],
+)
+@pytest.mark.utils
+def test_unambiguous_sic_code_call_dict_job_title_correct(
+    industry, title, job_description, expected_job_title
+):
+    result = ClassificationLLM(model_name=MODEL_NAME).unambiguous_sic_code(
+        industry, title, job_description
+    )[1]["job_title"]
+    assert result == expected_job_title
+
+
+@pytest.mark.utils
+def test_unambiguous_sic_code_followup_is_str():
+    result = (
+        ClassificationLLM(model_name=MODEL_NAME)
+        .unambiguous_sic_code("school", "teacher", "educate kids")[0]
+        .disambiguation_followup
+    )
+    assert isinstance(result, str)
+
+
+@pytest.mark.parametrize(
+    "industry, title, short_list, expected_job_title",
+    [
+        ("school", None, [{"title": "Education", "code": "01"}], "Unknown"),
+        ("school", "", [{"title": "Education", "code": "01"}], "Unknown"),
+        ("school", " ", [{"title": "Education", "code": "01"}], "Unknown"),
+        ("school", "teacher", [{"title": "Education", "code": "01"}], "teacher"),
+    ],
+)
+@pytest.mark.utils
+def test_reranker_sic_call_dict_job_title_correct(
+    industry, title, short_list, expected_job_title
+):
+    result = ClassificationLLM(model_name=MODEL_NAME).reranker_sic(
+        industry, title, short_list=short_list
+    )[2]["job_title"]
+    assert result == expected_job_title
+
+
+@pytest.mark.parametrize(
+    "industry, short_list",
+    [
+        ("school", [{"title": "Education", "code": "01"}]),
+    ],
+)
+@pytest.mark.utils
+def test_reranker_sic_response_is_str(industry, short_list):
+    result = (
+        ClassificationLLM(model_name=MODEL_NAME)
+        .reranker_sic(industry, short_list=short_list)[0]
+        .model_dump()["selected_codes"][0]["reasoning"]
+    )
+    assert isinstance(result, str)
