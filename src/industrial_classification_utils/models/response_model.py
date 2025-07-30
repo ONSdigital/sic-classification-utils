@@ -186,7 +186,7 @@ class RagResponse(BaseModel):
         class_descriptive (Optional[str]): Descriptive label of the classification
             category associated with class_code if provided.
             Empty if codable=False.
-        alt_candidates (List[RagCandidate]): Short list of less than ten possible
+        alt_candidates (list[RagCandidate]): Short list of less than ten possible
             or alternative classification codes that may be applicable with their
             descriptive label and estimated likelihood.
         reasoning (str): Step by step reasoning behind the classification selected.
@@ -237,7 +237,7 @@ class SurveyAssistSicResponse(BaseModel):
         sic_descriptive (str): Descriptive label of the classification
             category associated with class_code if provided.
             This is the most likely coding.
-        sic_candidates (List[RagCandidate]): Short list of less than ten possible
+        sic_candidates (list[RagCandidate]): Short list of less than ten possible
             or alternative classification codes that may be applicable with their
             descriptive label and estimated likelihood.
         reasoning (str): Step by step reasoning for the most likely classification
@@ -277,47 +277,40 @@ class UnambiguousResponse(BaseModel):
     Attributes:
         codable (bool): True only if enough information is provided to assign
             an unambiguous single classification code, False otherwise.
-        disambiguation_followup (Optional[str]): Question to ask user in order to
-            disambiguate between possible codes. Must be present if codable=False,
-            must be None if codable=True.
-        class_code (Optional[str]): Full classification code (to the required number
-            of digits) assigned based on provided respondent's data. Must be present
-            if codable=True, must be None if codable=False.
-        class_descriptive (Optional[str]): Descriptive label of the classification
-            category. Must be present if codable=True, must be None if codable=False.
-        alt_candidates (List[RagCandidate]): Short list of possible classification codes
-            with their descriptive labels and estimated likelihoods.
+        class_code (Optional[str]): Full classification code (to the required number of digits)
+            assigned based on provided respondent's data. Must be present if codable=True,
+            must be None if codable=False.
+        class_descriptive (Optional[str]): Descriptive label of the classification category.
+            Must be present if codable=True, must be None if codable=False.
+        alt_candidates (list[RagCandidate]): Short list of possible classification codes with their
+            descriptive labels and estimated likelihoods.
         reasoning (str): Step by step reasoning behind the classification selected.
     """
 
     codable: bool = Field(
-        description="True only if enough information is provided to decide an "
-        "unambiguous classification code, False otherwise."
-    )
-
-    disambiguation_followup: Optional[str] = Field(
-        description="Question to ask user in order to disambiguate between possible "
-        "codes. Must be present if codable=False, must be None if codable=True.",
-        default=None,
+        description="True only if enough information is provided to decide an unambiguous "
+        "classification code, False otherwise."
     )
 
     class_code: Optional[str] = Field(
-        description="Full classification code (to the required number of digits) "
-        "assigned based on provided respondent's data. Must be present if codable=True,"
-        "must be None if codable=False.",
         default=None,
+        description="Full classification code (to the required number of digits) "
+        "assigned based on provided respondent's data. Must be present if codable=True, "
+        "must be None if codable=False.",
     )
 
     class_descriptive: Optional[str] = Field(
+        default=None,
         description="Descriptive label of the classification category. "
         "Must be present if codable=True, must be None if codable=False.",
-        default=None,
     )
 
     alt_candidates: list[RagCandidate] = Field(
         default_factory=list,
         description="Short list of possible classification codes with their "
         "descriptive labels and estimated likelihoods.",
+        min_length=1,  # Ensure there's always at least one candidate
+        max_length=10,  # Limit to less than 10 candidates
     )
 
     reasoning: str = Field(
@@ -454,3 +447,42 @@ class RerankingResponse(BaseModel):
                     f"must not exceed n_requested ({self.n_requested})"
                 )
         return self
+
+
+class FinalSICAssignment(BaseModel):
+    """Response model for final assignment of a SIC code.
+
+    Attributes:
+        codable (bool): True if enough information is provided to assign
+            an unambiguous single 5-digit classification code, False otherwise.
+        unambiguous_code (Optional[str]): Full 5-digit classification code
+            assigned based on provided respondent's data. Must be present if codable=True,
+            must be None if codable=False.
+        unambiguous_code_descriptive (Optional[str]): Descriptive label of the classification
+            category. Must be present if codable=True, must be None if codable=False.
+        higher_level_code (Optional[str]): Classification code with X notation to pad to 5 digits.
+            Must be present if codable=False, must be None if codable=True.
+        reasoning (str): Step by step reasoning behind the classification selected.
+    """
+
+    codable: bool = Field(
+        description="True only if enough information is provided to decide an unambiguous "
+        "classification code, False otherwise."
+    )
+    unambiguous_code: Optional[str] = Field(
+        description="Full 5-digit classification code "
+        "assigned based on provided respondent's data. Must be present if codable=True, "
+        "must be None if codable=False."
+    )
+    unambiguous_code_descriptive: Optional[str] = Field(
+        description="Descriptive label of the classification category. "
+        "Must be present if codable=True, must be None if codable=False."
+    )
+    higher_level_code: Optional[str] = Field(
+        description="Classification code with X notation to pad to 5 digits. "
+        "Must be present if codable=False, must be None if codable=True."
+    )
+    reasoning: str = Field(
+        description="Step by step reasoning behind the classification selected.",
+        min_length=50,
+    )
