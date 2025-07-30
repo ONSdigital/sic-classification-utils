@@ -2,6 +2,7 @@
 """Tests for industrial_classification_utils.llm.llm.py."""
 
 import pytest
+import vertexai
 from industrial_classification.hierarchy.sic_hierarchy import SIC, SicCode, SicNode
 from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import ChatOpenAI
@@ -10,6 +11,10 @@ from industrial_classification_utils.llm.llm import ClassificationLLM
 from industrial_classification_utils.models.response_model import SicResponse
 
 MODEL_NAME = "gemini-1.5-flash"
+
+
+def test_setup():
+    vertexai.init(project="classifai-sandbox", location="europe-west2")
 
 
 @pytest.mark.parametrize(
