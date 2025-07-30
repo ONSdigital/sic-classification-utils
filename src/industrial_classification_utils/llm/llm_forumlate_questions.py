@@ -55,7 +55,7 @@ sic_closed_followup = uni_chat.formulate_closed_question(
     industry_descr=industry_descr,
     job_title=job_title,
     job_description=job_description,
-    llm_output=filtered_candidates,
+    llm_output=filtered_candidates,  # type: ignore
 )
 print(
     """\nClosed Quesiton answer: Follow-up, Reasoning, and List of simplified SIC options to choose from"""
