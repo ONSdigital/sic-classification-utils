@@ -50,17 +50,17 @@ filtered_candidates = uni_chat._prompt_candidate_list_filtered(
     sa_soc_rag[1], filtered_list=filtered_list, activities_limit=5  # type: ignore
 )
 
-# # Formulate Closed Quesiton
-# sic_closed_followup = uni_chat.formulate_closed_question(
-#     industry_descr=industry_descr,
-#     job_title=job_title,
-#     job_description=job_description,
-#     llm_output=filtered_candidates,
-# )
-# print(
-#     """\nClosed Quesiton answer: Follow-up, Reasoning, and List of simplified SIC options to choose from"""
-# )
-# pprint(sic_closed_followup[0].model_dump(), indent=2, width=80)
+# Formulate Closed Quesiton
+sic_closed_followup = uni_chat.formulate_closed_question(
+    industry_descr=industry_descr,
+    job_title=job_title,
+    job_description=job_description,
+    llm_output=filtered_candidates,
+)
+print(
+    """\nClosed Quesiton answer: Follow-up, Reasoning, and List of simplified SIC options to choose from"""
+)
+pprint(sic_closed_followup[0].model_dump(), indent=2, width=80)
 
-# print("\nCandidate list for the prompt")
-# pprint(filtered_candidates, indent=2, width=80)
+print("\nCandidate list for the prompt")
+pprint(filtered_candidates, indent=2, width=80)
