@@ -45,6 +45,7 @@ from industrial_classification_utils.models.response_model import (
     FinalSICAssignment,
     OpenFollowUp,
     RerankingResponse,
+    SicCandidate,
     SicResponse,
     SurveyAssistSicResponse,
     UnambiguousResponse,
@@ -790,7 +791,7 @@ class ClassificationLLM:
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        llm_output: Optional[UnambiguousResponse] = None,
+        llm_output: Optional[SicCandidate] = None,
     ) -> tuple[OpenFollowUp, Any]:
         """Formulates an open-ended question using respondent data and survey design guidelines.
 
@@ -798,7 +799,7 @@ class ClassificationLLM:
             industry_descr (str): The description of the industry.
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
-            llm_output (UnambiguousResponse, optional): The response from the LLM model.
+            llm_output (SicCandidate, optional): The response from the LLM model.
 
         Returns:
             OpenFollowUp: The generated response to the query.
