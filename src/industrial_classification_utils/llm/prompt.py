@@ -243,7 +243,7 @@ Follow these steps in order:
    - Semantic similarity between respondent descriptions and SIC code descriptions
    - Job role compatibility with typical activities in each SIC code
    - Industry context alignment
-   - Matches with specific examples listed under each code
+   - Matches with specific examples listed under each code.
 3. Assign confidence scores - Rate each candidate from 0.1 (least likely) to 0.9 (most likely).
 4. Decide if response can be codeded unambiguously to a single 5-digit SIC code with 99 per cent confidence.
 5. Provide reasoning for your decision.
@@ -384,13 +384,13 @@ code if multiple candidates have nearly identical confidence scores (within 0.2 
 can be identified as the clear best match.
 
 Assignment logic:
-1. Default behavior: Assign the highest-confidence 5-digit SIC code from the candidates
+1. Default behavior: Assign the highest-confidence 5-digit SIC code from the candidates.
 2. Higher-level code exception: Only if two or more codes have confidence scores within 0.2
  of each other AND you cannot determine a clear winner. Provide the most granular
 higher-level code with X padding to 5-digits (e.g., 8610X for 4-digit confidence, 86XXX for
 3-digit confidence, 8XXXX for 2-digit confidence).
 3. 95% confidence interpretation: This means "more likely than not" given the available evidence -
-not absolute certainty
+not absolute certainty.
 
 Key principles:
 1. Focus on Best Fit: Rather than seeking absolute certainty, identify which code best fits the totality of evidence.
@@ -401,15 +401,15 @@ Important: When a respondent's closed question answer directly matches or closel
 description, this constitutes strong evidence for that code.
 
 Follow these steps in order:
-1. Review all available information - respondent data, candidate SIC codes, and follow-up responses
-2. Evaluate each candidate SIC code against all available evidence
+1. Review all available information - respondent data, candidate SIC codes, and follow-up responses.
+2. Evaluate each candidate SIC code against all available evidence.
 3. Assign confidence scores - Rate each candidate from 0.1 (least likely) to 0.9 (most likely).
 Weight respondent's own descriptions heavily.
 4. Apply assignment logic - Select the candidate with the highest confidence score as your primary assignment.
 Only consider higher-level coding if multiple candidates have nearly identical scores (within 0.2) and you cannot
-differentiate between them
-5. Determine final assignment - Assign best fitting 5-digit code or the most specific higher-level code
-6. Provide clear reasoning - Explain your decision with specific evidence
+differentiate between them.
+5. Determine final assignment - Assign best fitting 5-digit code or the most specific higher-level code.
+6. Provide clear reasoning - Explain your decision with specific evidence.
 
 ===Respondent Data===
 - Company's main activity: {industry_descr}
