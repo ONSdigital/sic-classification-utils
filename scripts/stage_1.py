@@ -149,7 +149,7 @@ def persist_results(
     print("Saving results to pickle...")
     df_with_search.to_pickle(f"{output_folder}/{output_shortname}.gz")
     print("Saving setup metadata to JSON...")
-    with open(f"{output_folder}/{output_shortname}_metadata.json", "w") as f:
+    with open(f"{output_folder}/{output_shortname}_metadata.json", "w", encoding="utf8") as f:
         json.dump(METADATA, f)
 
 
