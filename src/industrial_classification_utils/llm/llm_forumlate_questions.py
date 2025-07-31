@@ -6,6 +6,7 @@ from industrial_classification_utils.embed.embedding import EmbeddingHandler
 from industrial_classification_utils.llm.llm import ClassificationLLM
 
 embed = EmbeddingHandler()
+embed.embed_index(from_empty=True)
 uni_chat = ClassificationLLM(model_name="gemini-2.0-flash", verbose=True)
 
 # Inputs for ClassificationLLM methods
