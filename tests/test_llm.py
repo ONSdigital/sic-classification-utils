@@ -19,11 +19,14 @@ def test_setup():
     vertexai.init(project="classifai-sandbox", location="europe-west2")
 
 
+
 @pytest.fixture(autouse=True)
-def mock_gcp_auth():
-    with mock.patch("google.auth.default") as mock_auth:
-        mock_auth.return_value = (mock.Mock(), "classifai-sandbox")
+def mock_vertex_ai():
+    with mock.patch('google.cloud.aiplatform.gapic.PredictionServiceClient') as mock_client:
+        mock_instance = mock_client.return_value
+        mock_instance.generate_content.return_value = mock.Mock()
         yield
+
 
 
 @pytest.mark.parametrize(
