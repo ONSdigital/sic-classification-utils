@@ -37,14 +37,26 @@ Example Usage:
 import json
 import os
 from argparse import ArgumentParser as AP
+from datetime import UTC, datetime
 
 import pandas as pd
 import requests
 from requests.exceptions import HTTPError, RequestException
+from tqdm import tqdm
 
 #####################################################
 # Constants:
-METADATA: dict = {}
+METADATA: dict = {
+    "original_dataset_name": "DSC_Rep_Sample.csv",
+    "embedding_model_name": "all-MiniLM-L6-v2",
+    "llm_model_name": "gemini-1.0-pro",
+    "sic_index_file": "uksic2007indexeswithaddendumdecember2022.xlsx",
+    "sic_structure_file": "publisheduksicsummaryofstructureworksheet.xlsx",
+    "sic_condensed_file": "sic_2d_condensed.txt",
+    "matches": 20,
+    "sic_index_size": 34663,
+    "start_unix_timestamp": datetime.now(UTC).timestamp(),
+}
 
 VECTOR_STORE_URL_BASE = "http://0.0.0.0:8088"
 STATUS_ENDPOINT = "/v1/sic-vector-store/status"
@@ -54,6 +66,9 @@ INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 #####################################################
+
+# Enable progress bar for semantic-search
+tqdm.pandas()
 
 
 def parse_args():
@@ -117,7 +132,7 @@ def get_semantic_search_results(row: pd.Series) -> list[dict]:
             payload[k] = ""
 
     response = requests.post(
-        f"{VECTOR_STORE_URL_BASE}{SEARCH_ENDPOINT}", json=payload, timeout=10
+        f"{VECTOR_STORE_URL_BASE}{SEARCH_ENDPOINT}", json=payload, timeout=25
     )
     response.raise_for_status()
     response_json = response.json()
@@ -165,7 +180,9 @@ if __name__ == "__main__":
     print("Input loaded")
 
     print("running semantic search...")
-    df["semantic_search_results"] = df.apply(get_semantic_search_results, axis=1)
+    df["semantic_search_results"] = df.progress_apply(
+        get_semantic_search_results, axis=1
+    )
     print("semantic search complete")
 
     print("persisting results...")
