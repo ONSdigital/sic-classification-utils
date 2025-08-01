@@ -1,6 +1,8 @@
 # pylint: disable=C0116
 """Tests for industrial_classification_utils.llm.llm.py."""
 
+from unittest import mock
+
 import pytest
 import vertexai
 from industrial_classification.hierarchy.sic_hierarchy import SIC, SicCode, SicNode
@@ -15,6 +17,13 @@ MODEL_NAME = "gemini-1.5-flash"
 
 def test_setup():
     vertexai.init(project="classifai-sandbox", location="europe-west2")
+
+
+@pytest.fixture(autouse=True)
+def mock_gcp_auth():
+    with mock.patch("google.auth.default") as mock_auth:
+        mock_auth.return_value = (mock.Mock(), "classifai-sandbox")
+        yield
 
 
 @pytest.mark.parametrize(
@@ -159,20 +168,44 @@ def test_sa_rag_sic_code_prep_followup_is_str(
 
 
 @pytest.mark.parametrize(
-    "industry, title, job_description, expected_job_title",
+    "industry, title, job_description, sic_candidates, expected_job_title",
     [
-        ("school", "", "educate kids", "Unknown"),
-        ("school", " ", "educate kids", "Unknown"),
-        ("school", None, "educate kids", "Unknown"),
-        ("school", "teacher", "educate kids", "teacher"),
+        (
+            "school",
+            "",
+            "educate kids",
+            [{"title": "Education", "code": "01"}],
+            "Unknown",
+        ),
+        (
+            "school",
+            " ",
+            "educate kids",
+            [{"title": "Education", "code": "01"}],
+            "Unknown",
+        ),
+        (
+            "school",
+            None,
+            "educate kids",
+            [{"title": "Education", "code": "01"}],
+            "Unknown",
+        ),
+        (
+            "school",
+            "teacher",
+            "educate kids",
+            [{"title": "Education", "code": "01"}],
+            "teacher",
+        ),
     ],
 )
 @pytest.mark.utils
 def test_unambiguous_sic_code_call_dict_job_title_correct(
-    industry, title, job_description, expected_job_title
+    industry, title, job_description, sic_candidates, expected_job_title
 ):
     result = ClassificationLLM(model_name=MODEL_NAME).unambiguous_sic_code(
-        industry, title, job_description
+        industry, title, job_description, sic_candidates=sic_candidates
     )[1]["job_title"]
     assert result == expected_job_title
 
@@ -181,8 +214,13 @@ def test_unambiguous_sic_code_call_dict_job_title_correct(
 def test_unambiguous_sic_code_followup_is_str():
     result = (
         ClassificationLLM(model_name=MODEL_NAME)
-        .unambiguous_sic_code("school", "teacher", "educate kids")[0]
-        .disambiguation_followup
+        .unambiguous_sic_code(
+            "school",
+            "teacher",
+            "educate kids",
+            sic_candidates=[{"title": "Education", "code": "01"}],
+        )[0]
+        .reasoning
     )
     assert isinstance(result, str)
 
