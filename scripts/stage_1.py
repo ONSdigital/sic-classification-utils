@@ -50,12 +50,14 @@ METADATA: dict = {
     "original_dataset_name": "DSC_Rep_Sample.csv",
     "embedding_model_name": "all-MiniLM-L6-v2",
     "llm_model_name": "gemini-1.0-pro",
+    "llm_location": "eu-west2",
     "sic_index_file": "uksic2007indexeswithaddendumdecember2022.xlsx",
     "sic_structure_file": "publisheduksicsummaryofstructureworksheet.xlsx",
     "sic_condensed_file": "sic_2d_condensed.txt",
     "matches": 20,
     "sic_index_size": 34663,
     "start_unix_timestamp": datetime.now(UTC).timestamp(),
+    "runner_initials": "LR",
 }
 
 VECTOR_STORE_URL_BASE = "http://0.0.0.0:8088"
@@ -142,7 +144,10 @@ def get_semantic_search_results(row: pd.Series) -> list[dict]:
         print("results key missing from JSON response from vector store", response_json)
         raise
 
-    reduced_results = [{"code": r["code"], "distance": r["distance"]} for r in results]
+    reduced_results = [
+        {"title": r["title"], "code": r["code"], "distance": r["distance"]}
+        for r in results
+    ]
     return reduced_results
 
 
