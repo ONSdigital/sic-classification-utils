@@ -486,3 +486,76 @@ class FinalSICAssignment(BaseModel):
         description="Step by step reasoning behind the classification selected.",
         min_length=50,
     )
+
+
+class OpenFollowUp(BaseModel):
+    """Represents a response model for open ended follow-up question.
+
+    Attributes:
+        followup (str): Question to ask user in order to collect
+            additional information to enable reliable classification assignment.
+        reasoning (str): Reasoning explaining how follow-up question will help
+            assign classification code.
+    """
+
+    followup: Optional[str] = Field(
+        description="""Question to ask user in order to collect additional information
+        to enable reliable classification assignment.""",
+        default="",
+    )
+    reasoning: str = Field(
+        description="""Reasoning explaining how follow-up question will help
+            assign classification code.""",
+        default="",
+    )
+
+
+class ClosedFollowUpCandidate(BaseModel):
+    """Represents a candidate classification code with associated information.
+
+    Attributes:
+        class_code (str): Standard Industrical Classification (SIC) code.
+        class_descriptive (str): Simplified description of a SIC code that reflects
+            respondent answers and context.
+        class_example (str): Example of a business activity illustrating a SIC code.
+    """
+
+    class_code: str = Field(
+        description="Standard Industrical Classification (SIC) code"
+    )
+    class_descriptive: str = Field(
+        description="""Simplified description of a SIC code that reflects
+            respondent answers and context."""
+    )
+    class_example: str = Field(
+        description="""Example of a business activity illustrating a SIC code."""
+    )
+
+
+class ClosedFollowUp(BaseModel):
+    """Represents a response model for open ended follow-up question.
+
+    Attributes:
+        followup (str): Question to ask user to choose from the provided options
+            to enable reliable classification assignment.
+        sic_options list[ClosedFollowUpCandidate]: List of simplified options
+            for respondent to choose from.
+        reasoning (str): Reasoning explaining how follow-up question will help
+            assign classification code.
+    """
+
+    followup: Optional[str] = Field(
+        description="""Question to ask user in order to collect additional information
+        to enable reliable classification assignment.""",
+        default="",
+    )
+    sic_options: list[ClosedFollowUpCandidate] = Field(
+        description="""List of simplified options
+            for respondent to choose from.""",
+        default_factory=list,
+    )
+    reasoning: str = Field(
+        description="""Reasoning explaining how official SIC code descriptions were
+        simplified.""",
+        default="",
+    )

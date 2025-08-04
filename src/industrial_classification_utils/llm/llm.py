@@ -1,3 +1,4 @@
+# pylint: disable=logging-not-lazy,logging-fstring-interpolation
 """This module provides utilities for leveraging Large Language Models (LLMs)
 to classify respondent data into Standard Industrial Classification (SIC) codes.
 
@@ -31,15 +32,20 @@ from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.llm.prompt import (
     GENERAL_PROMPT_RAG,
     SA_SIC_PROMPT_RAG,
+    SIC_PROMPT_CLOSEDFOLLOWUP,
     SIC_PROMPT_FINAL_ASSIGNMENT,
+    SIC_PROMPT_OPENFOLLOWUP,
     SIC_PROMPT_PYDANTIC,
     SIC_PROMPT_RAG,
     SIC_PROMPT_RERANKER,
     SIC_PROMPT_UNAMBIGUOUS,
 )
 from industrial_classification_utils.models.response_model import (
+    ClosedFollowUp,
     FinalSICAssignment,
+    OpenFollowUp,
     RerankingResponse,
+    SicCandidate,
     SicResponse,
     SurveyAssistSicResponse,
     UnambiguousResponse,
@@ -90,6 +96,7 @@ class ClassificationLLM:
                 model_name=model_name,
                 max_output_tokens=max_tokens,
                 temperature=temperature,
+                location="europe-west2",
             )
         elif model_name.startswith("gpt"):
             if openai_api_key is None:
@@ -110,6 +117,8 @@ class ClassificationLLM:
         self.general_prompt_rag = GENERAL_PROMPT_RAG
         self.sic_prompt_unambiguous = SIC_PROMPT_UNAMBIGUOUS
         self.sic_prompt_reranker = SIC_PROMPT_RERANKER
+        self.sic_prompt_openfollowup = SIC_PROMPT_OPENFOLLOWUP
+        self.sic_prompt_closedfollowup = SIC_PROMPT_CLOSEDFOLLOWUP
         self.sic_prompt_final = SIC_PROMPT_FINAL_ASSIGNMENT
         self.sic = None
         self.verbose = verbose
@@ -254,6 +263,67 @@ class ClassificationLLM:
                     "Shortening list of candidates to fit token limit from %d to %d",
                     len(sic_candidates),
                     nn,
+                )
+                sic_candidates = sic_candidates[:nn]
+
+        return "\n".join(sic_candidates)
+
+    def _prompt_candidate_list_filtered(  # noqa: PLR0913
+        self,
+        short_list: list[dict],
+        chars_limit: int = 14000,
+        candidates_limit: int = 5,
+        activities_limit: int = 3,
+        code_digits: int = 5,
+        filtered_list: Optional[list[str]] = None,
+    ) -> str:
+        """Create candidate list for the prompt based on the given parameters.
+
+        This method takes a structured list of candidates and generates a short
+        string list based on the provided parameters. It filters the candidates
+        based on the code digits and activities limit, and shortens the list to
+        fit the character limit.
+
+        Args:
+            short_list (list[dict]): A list of candidate dictionaries.
+            chars_limit (int, optional): The character limit for the generated
+                prompt. Defaults to 14000.
+            candidates_limit (int, optional): The maximum number of candidates
+                to include in the prompt. Defaults to 5.
+            activities_limit (int, optional): The maximum number of activities
+                to include for each code. Defaults to 3.
+            code_digits (int, optional): The number of digits to consider from
+                the code for filtering candidates. Defaults to 5.
+            filtered_list (list[str], optional): A list of alternative
+                candidates.
+
+        Returns:
+            str: The generated candidate list for the prompt.
+        """
+        if not filtered_list:
+            logger.warning("Empty list")
+            return ""
+
+        a: defaultdict[Any, list] = defaultdict(list)
+        for item in short_list:
+            if (
+                item["code"] in filtered_list
+                and item["title"] not in a[item["code"][:code_digits]]
+            ):
+                a[item["code"][:code_digits]].append(item["title"])
+
+            sic_candidates = [
+                self._prompt_candidate(code, activities[:activities_limit])
+                for code, activities in a.items()
+            ][:candidates_limit]
+
+        if chars_limit:
+            chars_count = np.cumsum([len(x) for x in sic_candidates])
+            nn = sum(x <= chars_limit for x in chars_count)
+            if nn < len(sic_candidates):
+                logger.warning(  # pylint: disable=logging-not-lazy
+                    "Shortening list of candidates to fit token limit "
+                    + f"from {len(sic_candidates)} to {nn}"
                 )
                 sic_candidates = sic_candidates[:nn]
 
@@ -711,6 +781,191 @@ class ClassificationLLM:
                 unambiguous_code="N/A",
                 unambiguous_code_descriptive="N/A",
                 higher_level_code="N/A",
+                reasoning=reasoning,
+            )
+
+        return validated_answer, call_dict
+
+    def formulate_open_question(
+        self,
+        industry_descr: str,
+        job_title: Optional[str] = None,
+        job_description: Optional[str] = None,
+        llm_output: Optional[SicCandidate] = None,
+    ) -> tuple[OpenFollowUp, Any]:
+        """Formulates an open-ended question using respondent data and survey design guidelines.
+
+        Args:
+            industry_descr (str): The description of the industry.
+            job_title (str, optional): The job title. Defaults to None.
+            job_description (str, optional): The job description. Defaults to None.
+            llm_output (SicCandidate, optional): The response from the LLM model.
+
+        Returns:
+            OpenFollowUp: The generated response to the query.
+
+        Raises:
+            ValueError: If there is an error during the parsing of the response.
+            ValueError: If the default embedding handler is required but
+                not loaded correctly.
+
+        """
+
+        def prep_call_dict(industry_descr, job_title, job_description, llm_output):
+            # Helper function to prepare the call dictionary
+            is_job_title_present = job_title is None or job_title in {"", " "}
+            job_title = "Unknown" if is_job_title_present else job_title
+
+            is_job_description_present = job_description is None or job_description in {
+                "",
+                " ",
+            }
+            job_description = (
+                "Unknown" if is_job_description_present else job_description
+            )
+
+            call_dict = {
+                "industry_descr": industry_descr,
+                "job_title": job_title,
+                "job_description": job_description,
+                "llm_output": str(llm_output),
+            }
+            return call_dict
+
+        call_dict = prep_call_dict(
+            industry_descr=industry_descr,
+            job_title=job_title,
+            job_description=job_description,
+            llm_output=llm_output,
+        )
+
+        if self.verbose:
+            final_prompt = self.sic_prompt_openfollowup.format(**call_dict)
+            logger.debug(final_prompt)
+
+        chain = self.sic_prompt_openfollowup | self.llm
+
+        try:
+            response = chain.invoke(call_dict, return_only_outputs=True)
+        except ValueError as err:
+            logger.exception(err)
+            logger.warning("Error from LLMChain, exit early")
+            validated_answer = OpenFollowUp(
+                followup=None,
+                reasoning="Error from LLMChain, exit early",
+            )
+            return validated_answer, call_dict
+
+        if self.verbose:
+            logger.debug(f"{response=}")
+
+        # Parse the output to the desired format
+        parser = PydanticOutputParser(pydantic_object=OpenFollowUp)
+        try:
+            validated_answer = parser.parse(str(response.content))
+        except ValueError as parse_error:
+            logger.exception(parse_error)
+            logger.warning(f"Failed to parse response:\n{response.content}")
+
+            reasoning = (
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
+            )
+            validated_answer = OpenFollowUp(
+                followup=None,
+                reasoning=reasoning,
+            )
+
+        return validated_answer, call_dict
+
+    def formulate_closed_question(
+        self,
+        industry_descr: str,
+        job_title: Optional[str] = None,
+        job_description: Optional[str] = None,
+        llm_output: Optional[UnambiguousResponse] = None,
+    ) -> tuple[ClosedFollowUp, Any]:
+        """Formulates a closed follow-up question using respondent data
+            and survey design guidelines.
+
+        Args:
+            industry_descr (str): The description of the industry.
+            job_title (str, optional): The job title. Defaults to None.
+            job_description (str, optional): The job description. Defaults to None.
+            llm_output (UnambiguousResponse, optional): The response from the LLM model.
+
+        Returns:
+            ClosedFollowUp: The generated response to the query.
+
+        Raises:
+            ValueError: If there is an error during the parsing of the response.
+            ValueError: If the default embedding handler is required but
+                not loaded correctly.
+
+        """
+
+        def prep_call_dict(industry_descr, job_title, job_description, llm_output):
+            # Helper function to prepare the call dictionary
+            is_job_title_present = job_title is None or job_title in {"", " "}
+            job_title = "Unknown" if is_job_title_present else job_title
+
+            is_job_description_present = job_description is None or job_description in {
+                "",
+                " ",
+            }
+            job_description = (
+                "Unknown" if is_job_description_present else job_description
+            )
+
+            call_dict = {
+                "industry_descr": industry_descr,
+                "job_title": job_title,
+                "job_description": job_description,
+                "llm_output": str(llm_output),
+            }
+            return call_dict
+
+        call_dict = prep_call_dict(
+            industry_descr=industry_descr,
+            job_title=job_title,
+            job_description=job_description,
+            llm_output=llm_output,
+        )
+
+        if self.verbose:
+            final_prompt = self.sic_prompt_closedfollowup.format(**call_dict)
+            logger.debug(final_prompt)
+
+        chain = self.sic_prompt_closedfollowup | self.llm
+
+        try:
+            response = chain.invoke(call_dict, return_only_outputs=True)
+        except ValueError as err:
+            logger.exception(err)
+            logger.warning("Error from LLMChain, exit early")
+            validated_answer = ClosedFollowUp(
+                followup=None,
+                sic_options=[],
+                reasoning="Error from LLMChain, exit early",
+            )
+            return validated_answer, call_dict
+
+        if self.verbose:
+            logger.debug(f"{response=}")
+
+        # Parse the output to the desired format
+        parser = PydanticOutputParser(pydantic_object=ClosedFollowUp)
+        try:
+            validated_answer = parser.parse(str(response.content))
+        except ValueError as parse_error:
+            logger.exception(parse_error)
+            logger.warning(f"Failed to parse response:\n{response.content}")
+
+            reasoning = (
+                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
+            )
+            validated_answer = ClosedFollowUp(
+                followup=None,
+                sic_options=[],
                 reasoning=reasoning,
             )
 

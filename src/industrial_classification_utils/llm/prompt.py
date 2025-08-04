@@ -33,13 +33,15 @@ from langchain.prompts.prompt import PromptTemplate
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.models.response_model import (
+    ClosedFollowUp,
     FinalSICAssignment,
+    OpenFollowUp,
     RerankingResponse,
     SicResponse,
     UnambiguousResponse,
 )
 from industrial_classification_utils.utils.sic_data_access import (
-    load_text_from_config,
+    load_sic_index,
 )
 
 config = get_config()
@@ -68,7 +70,8 @@ Make sure to use the provided 2007 SIC Index.
 """
 
 # Load the SIC index from the configuration and convert to file path string
-sic_index = load_text_from_config(config["lookups"]["sic_condensed"])
+# sic_index = load_text_from_config(config["lookups"]["sic_condensed"])
+sic_index = load_sic_index(config["lookups"]["sic_index"])
 
 parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
     pydantic_object=SicResponse
@@ -479,3 +482,145 @@ class PromptTemplates:
             self.SIC_PROMPT_UNAMBIGUOUS,
             self.SIC_PROMPT_RERANKER,
         ]
+
+
+_open_follow_up = """"You are an expert survey methodologist tasked with generating
+high-quality questions for an online labour market survey. Your goal is to create an
+open-ended question that will help to assign most relevant UK SIC (Standard Industry
+Classification) code to a given survey response.
+
+Given:
+1. Respondent data (job_title, job_description, industry_descr)
+2. Large Language Model (LLM) output shortlisting potential occupational or industrial codes
+that respondent can be assigned to.
+
+Your task is to generate a single, well-crafted follow-up question that:
+
+1. Uses clear, simple language.
+2. Makes it possible to disambiguate between SIC code candidates.
+3. Is specific enough to enable assignment of the SIC code with
+a high degree of confidence.
+4. Considers what the respondent would reasonably know.
+5. Follows the quality standards below.
+
+===Respondent Data===
+- Company's main activity: {industry_descr}
+- Job Title: {job_title}
+- Job Description: {job_description}
+
+===LLM output===
+{llm_output}
+
+===Quality standards===
+Language and Clarity
+- Use simple, natural language that is easy to understand
+- Use plain English - define or avoid technical jargon
+- Be specific about what information is sought - avoid vague terms
+- Use concise, grammatically correct phrasing
+- Specify time frames clearly when relevant (e.g., "currently," "in your main job")
+
+Question Structure
+- Ask only one thing at a time - avoid double-barreled questions
+- Provide sufficient context for understanding the question
+- Focus on factual information rather than hypothetical situations
+
+Respondent Considerations
+- Only ask for information the respondent would reasonably know
+- Don't assume knowledge or circumstances that may not apply
+- Focus on current or recent work situations they can recall
+- Consider diverse work arrangements and industries
+- Avoid requiring complex mental calculations
+
+Neutrality and Bias
+- Use neutral wording that doesn't suggest a "correct" answer
+- Avoid leading the respondent toward particular responses
+- Keep phrasing positive and straightforward - don't use double negatives
+
+Response Design
+If suggesting response categories, ensure they are:
+- Mutually exclusive (no overlap between options)
+- Comprehensive (covering all likely responses)
+- Logically ordered
+- Clearly defined
+
+===Output Format===
+{format_instructions}
+"""
+parser_followup_open = PydanticOutputParser(pydantic_object=OpenFollowUp)
+
+SIC_PROMPT_OPENFOLLOWUP = PromptTemplate.from_template(
+    template=_core_prompt + _open_follow_up,
+    partial_variables={
+        "format_instructions": parser_followup_open.get_format_instructions(),
+    },
+)
+
+_closed_follow_up = """"You are an expert survey methodologist tasked with generating a
+high-quality closed follow-up question for a labour market survey. Your goal is to create
+a question that presents simplified versions of UK 2007 5-digit SIC (Standard Industrial
+Classification) codes for respondents to choose from.
+
+Given:
+1. Respondent data (job_title, job_description, industry_descr)
+2. Large Language Model (LLM) output shortlisting potential occupational or industrial codes
+that respondent can be assigned to.
+
+Your task is to generate a single, well-crafted closed follow-up question that:
+
+1. Simplifies official SIC code descriptions into a phrase with 3-5 words focusing
+on the primary business activity and in line with example activities provided
+2. Generates an example to illustrate what each code represents
+3. Presents 3-5 most relevant options
+4. Uses natural language that respondents can easily understand
+5. Maintains the essence of what each code represents while making it accessible
+6. Follows the quality standards below.
+
+===Respondent Data===
+- Company's main activity: {industry_descr}
+- Job Title: {job_title}
+- Job Description: {job_description}
+
+===LLM output===
+{llm_output}
+
+===Quality standards===
+Language and Clarity
+- Use simple, natural language that is easy to understand
+- Use plain English - define or avoid technical jargon
+- Keep descriptions concise but specific enough to be meaningful
+- Ensure simplified descriptions are aligned with provided example activities
+- Focus on what the organisation actually does rather than regulatory language
+
+Response Design
+- Select 3-5 most likely options based on relevance
+- Rephrase official name of the code by creating a phrase with 3-5 words
+- Generate an example to illustrate the using provided example activities
+- Ensure options are mutually exclusive with clear distinctions
+- Order in order of likelihood (e.g., most likely first)
+- Make each option self-contained and understandable on its own
+
+Question Structure
+- Use consistent phrasing across all response options
+- Ask about current situation unless otherwise specified
+- Frame question positively and avoid double negatives
+
+Respondent Considerations
+- Focus on what respondents would observe about their workplace
+- Use language they would use to describe their organisation
+- Consider the respondent's perspective and level of organisational knowledge
+- Avoid requiring detailed knowledge of organisational structure
+
+Neutrality and Bias
+- Use neutral wording that doesn't suggest a "correct" answer
+
+===Output Format===
+{format_instructions}
+"""
+parser_followup_closed = PydanticOutputParser(pydantic_object=ClosedFollowUp)
+
+SIC_PROMPT_CLOSEDFOLLOWUP = PromptTemplate.from_template(
+    template=_core_prompt + _closed_follow_up,
+    partial_variables={
+        "format_instructions": parser_followup_closed.get_format_instructions(),
+    },
+)
