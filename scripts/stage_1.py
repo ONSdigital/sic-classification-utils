@@ -119,7 +119,8 @@ def get_semantic_search_results(row: pd.Series) -> list[dict]:
     Args:
         row (pd.Series): A row from the input DataFrame containing industry description,
                          job title, and job description.
-    Returns: A list of dictionaries containing the code and distance for each search result.
+    Returns: A list of dictionaries containing the title, code and distance for each search 
+    result.
     """
     payload = {
         "industry_descr": row[INDUSTRY_DESCR_COL],
