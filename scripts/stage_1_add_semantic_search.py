@@ -48,19 +48,6 @@ from tqdm import tqdm
 
 #####################################################
 # Constants:
-METADATA: dict = {
-    "original_dataset_name": "test_sample_20_rows.csv",
-    "embedding_model_name": "all-MiniLM-L6-v2",
-    "llm_model_name": "gemini-1.0-pro",
-    "llm_location": "eu-west2",
-    "sic_index_file": "uksic2007indexeswithaddendumdecember2022.xlsx",
-    "sic_structure_file": "publisheduksicsummaryofstructureworksheet.xlsx",
-    "sic_condensed_file": "sic_2d_condensed.txt",
-    "matches": 20,
-    "sic_index_size": 34663,
-    "runner_initials": "LR",
-}
-
 VECTOR_STORE_URL_BASE = "http://0.0.0.0:8088"
 STATUS_ENDPOINT = "/v1/sic-vector-store/status"
 SEARCH_ENDPOINT = "/v1/sic-vector-store/search-index"
@@ -78,7 +65,12 @@ def parse_args():
     """Parses command line arguments for the script."""
     parser = AP()
     parser.add_argument(
-        "input_file", type=str, help="relative path to the input CSV dataset"
+        "input_data_file", type=str, help="relative path to the input CSV dataset"
+    )
+    parser.add_argument(
+        "input_metadata_json",
+        type=str,
+        help="relative path to the initial JSON metadata",
     )
     parser.add_argument(
         "output_folder",
@@ -110,22 +102,24 @@ def parse_args():
     return parser.parse_args()
 
 
-def try_to_restart(output_folder, output_shortname, input_file, batch_size):
+def try_to_restart(
+    output_folder, output_shortname, input_data_file, input_metadata_json, batch_size
+):
     """TODO."""
     try:
         df_persisted = pd.read_pickle(  # noqa: S301
             f"{output_folder}/intermediate_outputs/{output_shortname}.gz"
         )
         with open(
-            f"{output_folder}/intermediate_outputs/checkpoint_info.json",
+            f"{output_folder}/intermediate_outputs/{output_shortname}_checkpoint_info.json",
             encoding="utf8",
-        ) as f:
-            checkpoint_info_persisted = json.load(f)
+        ) as checkpoint:
+            checkpoint_info_persisted = json.load(checkpoint)
         with open(
             f"{output_folder}/intermediate_outputs/{output_shortname}_metadata.json",
             encoding="utf8",
-        ) as f:
-            metadata_persisted = json.load(f)
+        ) as meta:
+            metadata_persisted = json.load(meta)
         restart_successful = True
         print("Partially-processed data re-loaded succesfully")
         return (
@@ -137,10 +131,15 @@ def try_to_restart(output_folder, output_shortname, input_file, batch_size):
     except (FileNotFoundError, Exception):
         print("Could not re-load checkpointed results, restarting from scratch...")
         restart_successful = False
-        metadata_persisted = METADATA.copy()
+        try:
+            with open(input_metadata_json, encoding="utf-8") as input_meta:
+                metadata_persisted = json.load(input_meta)
+        except FileNotFoundError:
+            print(f"Could not find metadata file {input_metadata_json}")
+            raise
         metadata_persisted["start_unix_timestamp"] = datetime.now(UTC).timestamp()
         metadata_persisted["batch_size"] = batch_size
-        df_persisted = pd.read_csv(input_file)
+        df_persisted = pd.read_csv(input_data_file)
         checkpoint_info_persisted = {
             "completed_batches": 0,
             "batch_size": batch_size,
@@ -211,8 +210,9 @@ def get_semantic_search_results(row: pd.Series) -> list[dict]:
     return reduced_results
 
 
-def persist_results(
+def persist_results(  # noqa: PLR0913 # pylint disable=R0913, R0917
     df_with_search: pd.DataFrame,
+    metadata: dict,
     output_folder: str,
     output_shortname: str,
     is_final: Optional[bool] = False,
@@ -222,6 +222,7 @@ def persist_results(
 
     Args:
         df_with_search (pd.DataFrame): The DataFrame containing the results to be persisted.
+        metadata (dict): The additional metadata surrounding this processing job.
         output_folder (str): The path to the output folder where the files will be saved.
         output_shortname (str): The prefix given to each file to be saved.
         is_final (bool): Mark the output as the final output and timestamp filenames.
@@ -244,8 +245,8 @@ def persist_results(
             f"{output_folder}/{output_shortname}_metadata_{time_suffix}.json",
             "w",
             encoding="utf8",
-        ) as f:
-            json.dump(METADATA, f)
+        ) as output_meta:
+            json.dump(metadata, output_meta)
 
     else:
         output_folder = f"{output_folder}/intermediate_outputs"
@@ -254,15 +255,19 @@ def persist_results(
         df_with_search.to_pickle(f"{output_folder}/{output_shortname}.gz")
         with open(
             f"{output_folder}/{output_shortname}_metadata.json", "w", encoding="utf8"
-        ) as f:
-            json.dump(METADATA, f)
-        with open(f"{output_folder}/checkpoint_info.json", "w", encoding="utf8") as f:
+        ) as temp_meta:
+            json.dump(metadata, temp_meta)
+        with open(
+            f"{output_folder}/{output_shortname}_checkpoint_info.json",
+            "w",
+            encoding="utf8",
+        ) as checkpoint:
             json.dump(
                 {
                     "completed_batches": completed_batches,
-                    "batch_size": METADATA["batch_size"],
+                    "batch_size": metadata["batch_size"],
                 },
-                f,
+                checkpoint,
             )
 
 
@@ -271,13 +276,15 @@ if __name__ == "__main__":
 
     check_vector_store_ready()
     print("Vector store is ready")
-    restart_success = True
+    RESTART_SUCCESS = True
+
     if args.restart:
         try:
-            df, METADATA, checkpoint_info, restart_success = try_to_restart(
+            df, METADATA, checkpoint_info, RESTART_SUCCESS = try_to_restart(
                 args.output_folder,
                 args.output_shortname,
-                args.input_file,
+                args.input_data_file,
+                args.input_metadata_json,
                 args.batch_size,
             )
         except Exception:
@@ -286,24 +293,30 @@ if __name__ == "__main__":
             )
             raise
     else:
+        try:
+            with open(args.input_metadata_json, encoding="utf-8") as f:
+                METADATA = json.load(f)
+        except FileNotFoundError:
+            print(f"Could not find metadata file {args.input_metadata_json}")
+            raise
         METADATA["start_unix_timestamp"] = datetime.now(UTC).timestamp()
         METADATA["batch_size"] = args.batch_size
-        df = pd.read_csv(args.input_file)
+        df = pd.read_csv(args.input_data_file)
         print("Input loaded")
 
     print("running semantic search...")
-    if (not args.restart) or (not restart_success):
+    if (not args.restart) or (not RESTART_SUCCESS):
         df["semantic_search_results"] = np.empty((len(df), 0)).tolist()
         print(df["semantic_search_results"].dtype)
-        start_batch_id = 0
+        START_BATCH_ID = 0
     else:
-        start_batch_id = checkpoint_info["completed_batches"]
+        START_BATCH_ID = checkpoint_info["completed_batches"]
 
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
                 df,
-                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+                np.arange(START_BATCH_ID * args.batch_size, len(df), args.batch_size),
             )
         )
     ):
@@ -317,6 +330,7 @@ if __name__ == "__main__":
             )
             persist_results(
                 df,
+                METADATA,
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
@@ -326,5 +340,7 @@ if __name__ == "__main__":
     print("semantic search complete")
 
     print("persisting results...")
-    persist_results(df, args.output_folder, args.output_shortname, is_final=True)
+    persist_results(
+        df, METADATA, args.output_folder, args.output_shortname, is_final=True
+    )
     print("Done!")
