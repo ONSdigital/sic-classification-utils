@@ -20,7 +20,7 @@ Example Usage:
 
 2. Run the script:
    ```bash
-   python stage_1.py input.csv output_folder -n my_output
+   python stage_1.py input.csv initial_metadata.json output_folder -n my_output
    ```
    where:
      - `input.csv` is the input CSV file.
@@ -128,7 +128,7 @@ def try_to_restart(
             checkpoint_info_persisted,
             restart_successful,
         )
-    except (FileNotFoundError, Exception):
+    except (FileNotFoundError, Exception):  # pylint: disable=W0718:
         print("Could not re-load checkpointed results, restarting from scratch...")
         restart_successful = False
         try:
@@ -210,7 +210,7 @@ def get_semantic_search_results(row: pd.Series) -> list[dict]:
     return reduced_results
 
 
-def persist_results(  # noqa: PLR0913 # pylint disable=R0913, R0917
+def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     df_with_search: pd.DataFrame,
     metadata: dict,
     output_folder: str,
@@ -307,7 +307,6 @@ if __name__ == "__main__":
     print("running semantic search...")
     if (not args.restart) or (not RESTART_SUCCESS):
         df["semantic_search_results"] = np.empty((len(df), 0)).tolist()
-        print(df["semantic_search_results"].dtype)
         START_BATCH_ID = 0
     else:
         START_BATCH_ID = checkpoint_info["completed_batches"]
