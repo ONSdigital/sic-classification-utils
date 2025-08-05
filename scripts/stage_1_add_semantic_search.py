@@ -20,18 +20,41 @@ Example Usage:
 
 2. Run the script:
    ```bash
-   python stage_1.py input.csv initial_metadata.json output_folder -n my_output
+   python stage_1_add_semantic_search.py \
+        -n my_output \
+        -b 200 \
+        input.csv \
+        initial_metadata.json \
+        output_folder
    ```
    where:
-     - `input.csv` is the input CSV file.
-     - `output_folder` is the directory where results will be saved.
      - `-n my_output` sets the output filename prefix to "my_output".
+     - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
+     - `input.csv` is the input CSV file.
+     - `initial_metadata.json` is the JSON file containing the initial processing metadata.
+       An example is shown below.
+     - `output_folder` is the directory where results will be saved.
 
 3. Verify outputs exist as expected:
     ```bash
    ls output_folder
    ```
    (expect to see my_output.csv, my_output.gz, and my_output_metadata.json)
+
+--------------
+Example expected Contents of initial_metadata.json:
+{
+    "original_dataset_name": "DSC_Rep_Sample.csv",
+    "embedding_model_name": "all-MiniLM-L6-v2",
+    "llm_model_name": "gemini-1.0-pro",
+    "llm_location": "eu-west2",
+    "sic_index_file": "uksic2007indexeswithaddendumdecember2022.xlsx",
+    "sic_structure_file": "publisheduksicsummaryofstructureworksheet.xlsx",
+    "sic_condensed_file": "sic_2d_condensed.txt",
+    "matches": 20,
+    "sic_index_size": 34663,
+    "runner_initials": "LR"
+}
 
 """
 import json
