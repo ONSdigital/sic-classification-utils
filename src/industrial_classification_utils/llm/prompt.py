@@ -483,7 +483,6 @@ class PromptTemplates:
             self.SIC_PROMPT_RERANKER,
         ]
 
-
 _open_follow_up = """"You are an expert survey methodologist tasked with generating
 high-quality questions for an online labour market survey. Your goal is to create an
 open-ended question that will help to assign most relevant UK SIC (Standard Industry
@@ -520,14 +519,18 @@ Language and Clarity
 - Specify time frames clearly when relevant (e.g., "currently," "in your main job")
 
 Question Structure
+- Limit question to one sentence
+- **REQUIRED: Start questions with open-ended phrases such as "Please explain," "Please describe," "What," "How," "Where," or "Which"**
+- **REQUIRED: Focus on the employer's main business activities, products, or services rather than the specific job role**
 - Ask only one thing at a time - avoid double-barreled questions
+- **AVOID binary A/B questions or "either/or" structures**
 - Provide sufficient context for understanding the question
 - Focus on factual information rather than hypothetical situations
 
 Respondent Considerations
+- Prioritise questions that are easy for respondent to answer right away in only a few words
 - Only ask for information the respondent would reasonably know
 - Don't assume knowledge or circumstances that may not apply
-- Focus on current or recent work situations they can recall
 - Consider diverse work arrangements and industries
 - Avoid requiring complex mental calculations
 
@@ -537,11 +540,7 @@ Neutrality and Bias
 - Keep phrasing positive and straightforward - don't use double negatives
 
 Response Design
-If suggesting response categories, ensure they are:
-- Mutually exclusive (no overlap between options)
-- Comprehensive (covering all likely responses)
-- Logically ordered
-- Clearly defined
+**For open-ended questions, do not provide response categories. Instead, invite descriptive responses that allow for nuanced answers about the employer's business.**
 
 ===Output Format===
 {format_instructions}
