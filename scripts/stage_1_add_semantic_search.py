@@ -11,7 +11,7 @@ The script requires a running vector store service.
 Clarification On Script Arguments:
 
 ```bash
-python stage_1.py --help
+python stage_1_add_semantic_search.py --help
 ```
 
 Example Usage:
@@ -128,7 +128,39 @@ def parse_args():
 def try_to_restart(
     output_folder, output_shortname, input_data_file, input_metadata_json, batch_size
 ):
-    """TODO."""
+    """Attempts to restart a processing job by loading checkpoint data.
+
+    This function tries to load a previously saved DataFrame, metadata, and
+    checkpoint information from an intermediate output directory. If these files
+    are found and loaded successfully, it indicates a successful restart.
+
+    If any file is not found or another exception occurs during loading, it
+    reverts to starting the process from scratch. In this case, it loads the
+    initial input data and metadata, and prepares new checkpoint information.
+
+    Args:
+        output_folder (str): The path to the specified output folder.
+        output_shortname (str): The prefix for the output filenames.
+        input_data_file (str): The path to the original input CSV file, used
+            only if starting from scratch after failure to restart.
+        input_metadata_json (str): The path to the initial metadata JSON file,
+            used only if starting from scratch after failure to restart.
+        batch_size (int): The size of processing batches, used only if starting
+            from scratch after failure to restart.
+
+    Returns:
+        tuple: A tuple containing:
+            - pd.DataFrame: The loaded or newly created DataFrame.
+            - dict: The loaded or newly created metadata dictionary.
+            - dict: The loaded or newly created checkpoint information.
+            - bool: True if the restart from a checkpoint was successful,
+              False otherwise.
+
+    Raises:
+        FileNotFoundError: If starting from scratch and the initial data
+            file (`input_data_file`) or metadata file (`input_metadata_json`)
+            cannot be found.
+    """
     try:
         df_persisted = pd.read_pickle(  # noqa: S301
             f"{output_folder}/intermediate_outputs/{output_shortname}.gz"
