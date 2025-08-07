@@ -66,6 +66,9 @@ from industrial_classification_utils.llm.llm import ClassificationLLM
 
 #####################################################
 # Constants:
+MODEL_NAME = "gemini-2.0-flash"
+MODEL_LOCATION = "eu-west9"
+
 CODE_DIGITS = 5
 CANDIDATES_LIMIT = 10
 
@@ -356,7 +359,7 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             )
 
 
-c_llm = ClassificationLLM("gemini-2.0-flash", verbose=False)
+c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
 
 if __name__ == "__main__":
     args = parse_args()
@@ -387,6 +390,8 @@ if __name__ == "__main__":
             raise
         METADATA["start_unix_timestamp"] = datetime.now(UTC).timestamp()
         METADATA["batch_size"] = args.batch_size
+        METADATA["stage2_classification_llm_model"] = MODEL_NAME
+        METADATA["stage2_classification_llm_location"] = MODEL_LOCATION
         df = pd.read_pickle(args.input_pickle_file)  # noqa: S301
         print("Input loaded")
 
