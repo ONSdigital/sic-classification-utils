@@ -397,7 +397,8 @@ not absolute certainty.
 
 Key principles:
 1. Focus on Best Fit: Rather than seeking absolute certainty, identify which code best fits the totality of evidence.
-2. Be Decisive: The goal is accurate classification, not perfect certainty. If evidence clearly points to one
+2. Prioritise information on employer of the respondent rather than their specific role.
+3. Be Decisive: The goal is accurate classification, not perfect certainty. If evidence clearly points to one
 code over others, assign it confidently.
 
 Important: When a respondent's closed question answer directly matches or closely aligns with a SIC code
@@ -483,6 +484,7 @@ class PromptTemplates:
             self.SIC_PROMPT_RERANKER,
         ]
 
+
 _open_follow_up = """"You are an expert survey methodologist tasked with generating
 high-quality questions for an online labour market survey. Your goal is to create an
 open-ended question that will help to assign most relevant UK SIC (Standard Industry
@@ -499,8 +501,7 @@ Your task is to generate a single, well-crafted follow-up question that:
 2. Makes it possible to disambiguate between SIC code candidates.
 3. Is specific enough to enable assignment of the SIC code with
 a high degree of confidence.
-4. Considers what the respondent would reasonably know.
-5. Follows the quality standards below.
+4. Follows the quality standards below.
 
 ===Respondent Data===
 - Company's main activity: {industry_descr}
@@ -517,30 +518,29 @@ Language and Clarity
 - Be specific about what information is sought - avoid vague terms
 - Use concise, grammatically correct phrasing
 - Specify time frames clearly when relevant (e.g., "currently," "in your main job")
+- Refer to employer as "employer" or "organisation" (e.g. "services your organisation offers")
 
 Question Structure
 - Limit question to one sentence
-- **REQUIRED: Start questions with open-ended phrases such as "Please explain," "Please describe," "What," "How," "Where," or "Which"**
-- **REQUIRED: Focus on the employer's main business activities, products, or services rather than the specific job role**
+- **REQUIRED: Start questions with open-ended phrases such as "Please explain," "Please describe,"
+"What," "How," "Where," or "Which"**
+- **REQUIRED: Focus on the employer's main business activities, products, or services rather
+than the specific job role**
 - Ask only one thing at a time - avoid double-barreled questions
 - **AVOID binary A/B questions or "either/or" structures**
 - Provide sufficient context for understanding the question
 - Focus on factual information rather than hypothetical situations
 
 Respondent Considerations
-- Prioritise questions that are easy for respondent to answer right away in only a few words
+- Formulate questions in such a way that a respondent can answer them easily in a few words
 - Only ask for information the respondent would reasonably know
 - Don't assume knowledge or circumstances that may not apply
-- Consider diverse work arrangements and industries
 - Avoid requiring complex mental calculations
 
 Neutrality and Bias
 - Use neutral wording that doesn't suggest a "correct" answer
 - Avoid leading the respondent toward particular responses
 - Keep phrasing positive and straightforward - don't use double negatives
-
-Response Design
-**For open-ended questions, do not provide response categories. Instead, invite descriptive responses that allow for nuanced answers about the employer's business.**
 
 ===Output Format===
 {format_instructions}
