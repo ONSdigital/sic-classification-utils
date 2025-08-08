@@ -1,26 +1,29 @@
 #!/usr/bin/env python3
 # pylint: disable=duplicate-code
-"""This script performs X on a dataset and persists the results.
-It reads reloads the output from the previous stage as a DataFrame object,
-performs X for each row, creates a new column in the DataFrame with this
-information, and then saves the results to CSV, pickle, and JSON metadata
-files in a user-specified output folder.
+"""This script analyzes a dataset to determine if each record is
+"unambiguously codable" for a Standard Industrial Classification (SIC) code.
 
-The script requires Y.
+It reloads the output from the previous stage as a DataFrame object, uses a
+Large Language Model (LLM) to assess codability for each row, and adds new
+columns for the codability status, an initial SIC code (if one can be
+assigned), and a list of alternative SIC candidates. The results are then saved
+to CSV, pickle, and JSON metadata files in a user-specified output folder.
+
+The script requires a configured connection to a compatible LLM.
 
 Clarification On Script Arguments:
 
 ```bash
-python stage_k_template.py --help
+python stage_2_add_unambiguously_codable_status.py --help
 ```
 
 Example Usage:
 
-1. Ensure the vector store is running at http://0.0.0.0:8088.
+1. Ensure you have run `gcloud` (re-)authentication for the current project.
 
 2. Run the script:
    ```bash
-   python stage_k_template.py \
+   python stage_2_add_unambiguously_codable_status.py \
         -n my_output \
         -b 200 \
         persisted_dataframe.gz \
@@ -41,16 +44,6 @@ Example Usage:
    (expect to see my_output_<timestamp>.csv, my_output_<timestamp>.gz,
     and my_output_metadata_<timestamp>.json)
 
------------------------------------------------------------------------------------------
-What to change, to adapt it to a given stage's requirements:
-
-* update `check_y` function to check whatever is required for your new stage.
-  (e.g. connection to LLM established, or Vector Store ready)
-* update `get_x()` function to achieve whatever is required for your new column.
-* create second `get_x2()` function if more than one new column is required.
-* update the `if __name__=="__main__" block to use the new function names, and
-  repeat the creation of the empty new column and batch.apply() if you are adding
-  more thn one new column.
 """
 import json
 import os
@@ -67,7 +60,7 @@ from industrial_classification_utils.llm.llm import ClassificationLLM
 #####################################################
 # Constants:
 MODEL_NAME = "gemini-2.0-flash"
-MODEL_LOCATION = "eu-west9"
+MODEL_LOCATION = "europe-west9"
 
 CODE_DIGITS = 5
 CANDIDATES_LIMIT = 10
@@ -204,18 +197,6 @@ def try_to_restart(
             checkpoint_info_persisted,
             restart_successful,
         )
-
-
-def check_y():
-    """Checks if Y.
-    Raises an exception if NOT Y.
-    Exits silently if Y.
-    """
-    try:
-        pass
-    except Exception:
-        print("Y was not met")
-        raise
 
 
 def get_unambiguous_sic(
@@ -360,11 +341,10 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
 
 
 c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
+print("Classification LLM loaded.")
 
 if __name__ == "__main__":
     args = parse_args()
-    # check_y()
-    # print("Requirement Y is met")
     RESTART_SUCCESS = True
 
     if args.restart:
