@@ -9,8 +9,10 @@ EXAMPLE_BODY = {
     "job_title": "baker",
     "job_description": "Bake bread, cakes, pastries",
 }
-EXAMPLE_FOLLOWUP = "Does your bakery primarily sell its products directly to"
-"consumers or to other businesses (e.g., cafes, restaurants)?"
+EXAMPLE_FOLLOWUP = (
+    "Does your bakery primarily sell its products directly to"
+    " consumers or to other businesses (e.g., cafes, restaurants)?"
+)
 
 SR = SyntheticResponder(
     persona=None, get_question_function=None, model_name="gemini-1.5-flash"
