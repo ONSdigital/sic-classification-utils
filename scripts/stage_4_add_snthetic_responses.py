@@ -43,7 +43,7 @@ import json
 import os
 from argparse import ArgumentParser as AP
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -52,6 +52,7 @@ from tqdm import tqdm
 from industrial_classification_utils.synthetic_responses.synthetic_response_utils import (
     SyntheticResponder,
 )
+
 #####################################################
 # Constants:
 MODEL_NAME = "gemini-2.0-flash"
@@ -270,9 +271,8 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
                 checkpoint,
             )
 
-SR = SyntheticResponder(
-    persona=None, get_question_function=None, model_name=MODEL_NAME
-)
+
+SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
 
 if __name__ == "__main__":
     args = parse_args()
@@ -327,7 +327,9 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, "followup_answer"] = batch.apply(get_followup_answer, axis=1)
+            df.loc[batch.index, "followup_answer"] = batch.apply(
+                get_followup_answer, axis=1
+            )
             persist_results(
                 df,
                 METADATA,
