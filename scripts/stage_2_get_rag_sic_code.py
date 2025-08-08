@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
 # pylint: disable=duplicate-code
-"""This script performs X on a dataset and persists the results.
-It reads reloads the output from the previous stage as a DataFrame object,
-performs X for each row, creates a new column in the DataFrame with this
-information, and then saves the results to CSV, pickle, and JSON metadata
-files in a user-specified output folder.
-
-The script requires Y.
+"""This script generates a SIC classification based on respondent's data
+using RAG approach and persists the results.
+It reloads the output from the previous stage as a DataFrame object,
+performs classification for each row of data passed using LLM and creates
+a new column in the DataFrame with this information, and then saves the results
+to CSV, pickle, and JSON metadata files in a user-specified output folder.
 
 Clarification On Script Arguments:
 
 ```bash
-python stage_k_template.py --help
+python stage_2_get_rag_sic_code.py --help
 ```
 
 Example Usage:
 
-1. Ensure the vector store is running at http://0.0.0.0:8088.
+1. Ensure the `gcloud` authentication ()
 
 2. Run the script:
    ```bash
-   python stage_k_template.py \
+   python stage_2_get_rag_sic_code.py \
         -n my_output \
         -b 200 \
         persisted_dataframe.gz \
@@ -40,17 +39,6 @@ Example Usage:
    ```
    (expect to see my_output_<timestamp>.csv, my_output_<timestamp>.gz,
     and my_output_metadata_<timestamp>.json)
-
------------------------------------------------------------------------------------------
-What to change, to adapt it to a given stage's requirements:
-
-* update `check_y` function to check whatever is required for your new stage.
-  (e.g. connection to LLM established, or Vector Store ready)
-* update `get_x()` function to achieve whatever is required for your new column.
-* create second `get_x2()` function if more than one new column is required.
-* update the `if __name__=="__main__" block to use the new function names, and
-  repeat the creation of the empty new column and batch.apply() if you are adding
-  more thn one new column.
 """
 import json
 import os
@@ -58,11 +46,11 @@ from argparse import ArgumentParser as AP
 from datetime import UTC, datetime
 from typing import Any, Optional
 
-from industrial_classification_utils.llm.llm import ClassificationLLM
-
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+
+from industrial_classification_utils.llm.llm import ClassificationLLM
 
 #####################################################
 # Constants:
@@ -207,12 +195,17 @@ def try_to_restart(
 
 
 def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103, W0613
-    """Performs X using the provided row data.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
+    """Generates sa_rag_response dictionary using the provided row data.
+    Intended for use as a `.apply()` operation to create a new colum in
+    a pd.DataFrame object.
 
     Args:
-        row (pd.Series): A row from the input DataFrame containing <required columns>.
-    Returns: X.
+        row (pd.Series): A row from the input DataFrame containing
+        semantic_search_results column.
+
+    Returns:
+        result (doct[str, Any]): a dictionary with sic_code and sic_candidates
+        for specified row.
     """
     payload = {
         "industry_descr": row[INDUSTRY_DESCR_COL],
@@ -224,15 +217,14 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
         if not isinstance(v, str):
             payload[k] = ""
 
-    
-    sa_rag_response = uni_chat.sa_rag_sic_code(
+    sa_rag_response = uni_chat.sa_rag_sic_code(  # pylint: disable=E0606
         job_title=payload["job_title"],
         job_description=payload["job_description"],
         industry_descr=payload["industry_descr"],
         candidates_limit=10,
         short_list=payload["short_list"],
-        )
-    
+    )
+
     result = {
         "sic_code": sa_rag_response[0].sic_code,
         "sic_candidates": sa_rag_response[0].sic_candidates,
@@ -240,10 +232,30 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
 
     return result
 
+
 def get_sic_code(row: pd.Series) -> str:
+    """Generator funciton to access sic_code for the specified row.
+
+    Args:
+        row (pd.Series): A row from the input DataFrame containing
+        semantic_search_results column.
+
+    Returns:
+        str: a sic_code for the row.
+    """
     return row["sa_rag_sic_response"]["sic_code"]
 
+
 def get_sic_candidates(row: pd.Series) -> str:
+    """Generator funciton to access sic_candidates for the specified row.
+
+    Args:
+        row (pd.Series): A row from the input DataFrame containing
+        semantic_search_results column.
+
+    Returns:
+        str: A list of possible sic_code alternatives.
+    """
     return row["sa_rag_sic_response"]["sic_candidates"]
 
 
@@ -342,8 +354,8 @@ if __name__ == "__main__":
     print("running X...")
     if (not args.restart) or (not RESTART_SUCCESS):
         df["sa_rag_sic_response"] = {
-            'sic_code': "",
-            'sic_candidates': [],
+            "sic_code": "",
+            "sic_candidates": [],
         }
         df["sic_code"] = ""
         df["sic_candidates"] = np.empty((len(df), 0)).tolist()
@@ -365,9 +377,13 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(get_rag_response, axis=1)
+            batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(
+                get_rag_response, axis=1
+            )
             df.loc[batch.index, "sic_code"] = batch.apply(get_sic_code, axis=1)
-            df.loc[batch.index, "sic_candidates"] = batch.apply(get_sic_candidates, axis=1)
+            df.loc[batch.index, "sic_candidates"] = batch.apply(
+                get_sic_candidates, axis=1
+            )
             persist_results(
                 df,
                 METADATA,
