@@ -206,19 +206,19 @@ def try_to_restart(
         )
 
 
-def check_y():
-    """Checks if Y.
-    Raises an exception if NOT Y.
-    Exits silently if Y.
-    """
-    try:
-        pass
-    except Exception:
-        print("Y was not met")
-        raise
+# def check_y():
+#     """Checks if Y.
+#     Raises an exception if NOT Y.
+#     Exits silently if Y.
+#     """
+#     try:
+#         pass
+#     except Exception:
+#         print("Y was not met")
+#         raise
 
 
-def get_x(row: pd.Series) -> Any:  # pylint: disable=C0103, W0613
+def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103, W0613
     """Performs X using the provided row data.
     Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
 
@@ -237,14 +237,48 @@ def get_x(row: pd.Series) -> Any:  # pylint: disable=C0103, W0613
             payload[k] = ""
 
     
-    result = uni_chat.sa_rag_sic_code(
+    sa_rag_response = uni_chat.sa_rag_sic_code(
         job_title=payload["job_title"],
         job_description=payload["job_description"],
         industry_descr=payload["industry_descr"],
         candidates_limit=10,
-        short_list=payload["short_list"],)[0]
+        short_list=payload["short_list"],
+        )
     
+    result = {
+        # "followup": sa_rag_response[0].followup,
+        "sic_code": sa_rag_response[0].sic_code,
+        "sic_descriptive": sa_rag_response[0].sic_descriptive,
+        "sic_candidates": sa_rag_response[0].sic_candidates,
+        "reasoning": sa_rag_response[0].reasoning,
+    }
+
     return result
+
+def get_followup(row: pd.Series) -> str:
+    # if row["sa_rag_sic_response"]["followup"] is not None:
+    return row["sa_rag_sic_response"]["followup"]
+    # return ""
+
+def get_sic_code(row: pd.Series) -> str:
+    # if row["sa_rag_sic_response"]["sic_code"] is not None:
+    return row["sa_rag_sic_response"]["sic_code"]
+    # return ""
+
+def get_sic_descriptive(row: pd.Series) -> str:
+    # if row["sa_rag_sic_response"]["sic_descriptive"] is not None:
+    return row["sa_rag_sic_response"]["sic_descriptive"]
+    # return ""
+
+def get_sic_candidates(row: pd.Series) -> str:
+    # if row["sa_rag_sic_response"]["sic_candidates"] != []:
+    return row["sa_rag_sic_response"]["sic_candidates"]
+    # return ""
+
+def get_reasoning(row: pd.Series) -> str:
+    # if row["sa_rag_sic_response"]["reasoning"] is not None:
+    return row["sa_rag_sic_response"]["reasoning"]
+    # return ""
 
 
 def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
@@ -311,8 +345,8 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
 if __name__ == "__main__":
     args = parse_args()
 
-    check_y()
-    print("Requirement Y is met")
+    # check_y()
+    # print("Requirement Y is met")
     RESTART_SUCCESS = True
 
     if args.restart:
@@ -343,11 +377,23 @@ if __name__ == "__main__":
 
     print("running X...")
     if (not args.restart) or (not RESTART_SUCCESS):
-        df["new_column"] = 0
+        df["sa_rag_sic_response"] = {
+            # 'followup': "",
+            'sic_code': "",
+            'sic_descriptive': "",
+            'sic_candidates': [],
+            'reasoning': "",
+        }
+        df["followup"] = ""
+        df["sic_code"] = ""
+        df["sic_descriptive"] = ""
+        df["sic_candidates"] = np.empty((len(df), 0)).tolist()
+        df["reasoning"] = ""
         START_BATCH_ID = 0
     else:
         START_BATCH_ID = checkpoint_info["completed_batches"]
 
+    uni_chat = ClassificationLLM(model_name=MODEL_NAME)
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
@@ -361,8 +407,13 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            uni_chat = ClassificationLLM(model_name=MODEL_NAME)
-            df.loc[batch.index, "new_column"] = batch.apply(get_x, axis=1)
+            batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(get_rag_response, axis=1)
+            # df.loc[batch.index, "followup"] = batch.apply(get_followup, axis=1)
+            # print(batch.loc[batch.index, "sa_rag_sic_response"])
+            df.loc[batch.index, "sic_code"] = batch.apply(get_sic_code, axis=1)
+            df.loc[batch.index, "sic_descriptive"] = batch.apply(get_sic_descriptive, axis=1)
+            df.loc[batch.index, "sic_candidates"] = batch.apply(get_sic_candidates, axis=1)
+            df.loc[batch.index, "reasoning"] = batch.apply(get_reasoning, axis=1)
             persist_results(
                 df,
                 METADATA,
