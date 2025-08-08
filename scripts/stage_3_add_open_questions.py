@@ -313,6 +313,8 @@ if __name__ == "__main__":
             raise
         METADATA["start_unix_timestamp"] = datetime.now(UTC).timestamp()
         METADATA["batch_size"] = args.batch_size
+        METADATA["stage3_classification_llm_model"] = MODEL_NAME
+        METADATA["stage3_classification_llm_location"] = MODEL_LOCATION
         df = pd.read_pickle(args.input_pickle_file)  # noqa: S301
         print("Input loaded")
 
