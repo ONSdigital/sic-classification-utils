@@ -44,7 +44,7 @@ import json
 import os
 from argparse import ArgumentParser as AP
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -194,7 +194,7 @@ def try_to_restart(
         )
 
 
-def get_open_question(row: pd.Series) -> Any:  # pylint: disable=C0103, W0613
+def get_open_question(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
     """Using the provided row data, call an LLM to generate an open follow-up question.
     Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
 
@@ -217,7 +217,8 @@ def get_open_question(row: pd.Series) -> Any:  # pylint: disable=C0103, W0613
         job_description=row[JOB_DESCRIPTION_COL],
         llm_output=sa_sic_rag[0].sic_candidates,  # type: ignore
     )
-
+    if sic_followup_object.followup is None:
+        return ""
     return sic_followup_object.followup
 
 
