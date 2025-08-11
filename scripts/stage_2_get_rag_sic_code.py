@@ -57,7 +57,7 @@ from industrial_classification_utils.llm.llm import ClassificationLLM
 VECTOR_STORE_URL_BASE = "http://0.0.0.0:8088"
 STATUS_ENDPOINT = "/v1/sic-vector-store/status"
 SEARCH_ENDPOINT = "/v1/sic-vector-store/search-index"
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.0-flash"
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
@@ -204,46 +204,36 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
         semantic_search_results column.
 
     Returns:
-        result (doct[str, Any]): a dictionary with sic_code and sic_candidates
-        for specified row.
+        result (doct[str, Any]): a dictionary with final_sic_code
+        and sic_candidates for specified row.
     """
-    payload = {
-        "industry_descr": row[INDUSTRY_DESCR_COL],
-        "job_title": row[JOB_TITLE_COL],
-        "job_description": row[JOB_DESCRIPTION_COL],
-        "short_list": row[SHORT_LIST],
-    }
-    for k, v in payload.items():
-        if not isinstance(v, str):
-            payload[k] = ""
-
     sa_rag_response = uni_chat.sa_rag_sic_code(  # pylint: disable=E0606
-        job_title=payload["job_title"],
-        job_description=payload["job_description"],
-        industry_descr=payload["industry_descr"],
+        job_title=row[JOB_TITLE_COL],
+        job_description=row[JOB_DESCRIPTION_COL],
+        industry_descr=row[INDUSTRY_DESCR_COL],
         candidates_limit=10,
-        short_list=payload["short_list"],
+        short_list=row[SHORT_LIST],
     )
 
     result = {
-        "sic_code": sa_rag_response[0].sic_code,
+        "final_sic_code": sa_rag_response[0].sic_code,
         "sic_candidates": sa_rag_response[0].sic_candidates,
     }
 
     return result
 
 
-def get_sic_code(row: pd.Series) -> str:
-    """Generator funciton to access sic_code for the specified row.
+def get_final_sic_code(row: pd.Series) -> str:
+    """Generator funciton to access final_sic_code for the specified row.
 
     Args:
         row (pd.Series): A row from the input DataFrame containing
         semantic_search_results column.
 
     Returns:
-        str: a sic_code for the row.
+        str: a final_sic_code for the row.
     """
-    return row["sa_rag_sic_response"]["sic_code"]
+    return row["sa_rag_sic_response"]["final_sic_code"]
 
 
 def get_sic_candidates(row: pd.Series) -> str:
@@ -351,13 +341,13 @@ if __name__ == "__main__":
         df = pd.read_pickle(args.input_pickle_file)  # noqa: S301
         print("Input loaded")
 
-    print("running X...")
+    print("Running RAG SIC allocation...")
     if (not args.restart) or (not RESTART_SUCCESS):
         df["sa_rag_sic_response"] = {
-            "sic_code": "",
+            "final_sic_code": "",
             "sic_candidates": [],
         }
-        df["sic_code"] = ""
+        df["final_sic_code"] = ""
         df["sic_candidates"] = np.empty((len(df), 0)).tolist()
         START_BATCH_ID = 0
     else:
@@ -380,7 +370,7 @@ if __name__ == "__main__":
             batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(
                 get_rag_response, axis=1
             )
-            df.loc[batch.index, "sic_code"] = batch.apply(get_sic_code, axis=1)
+            df.loc[batch.index, "final_sic_code"] = batch.apply(get_final_sic_code, axis=1)
             df.loc[batch.index, "sic_candidates"] = batch.apply(
                 get_sic_candidates, axis=1
             )
@@ -393,7 +383,7 @@ if __name__ == "__main__":
                 completed_batches=(batch_id + 1),
             )
 
-    print("X is complete")
+    print("RAG SIC allocation is complete")
 
     print("persisting results...")
     persist_results(
