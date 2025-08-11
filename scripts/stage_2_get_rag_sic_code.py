@@ -370,7 +370,9 @@ if __name__ == "__main__":
             batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(
                 get_rag_response, axis=1
             )
-            df.loc[batch.index, "final_sic_code"] = batch.apply(get_final_sic_code, axis=1)
+            df.loc[batch.index, "final_sic_code"] = batch.apply(
+                get_final_sic_code, axis=1
+            )
             df.loc[batch.index, "sic_candidates"] = batch.apply(
                 get_sic_candidates, axis=1
             )
