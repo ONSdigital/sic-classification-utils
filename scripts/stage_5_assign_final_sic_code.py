@@ -267,7 +267,8 @@ def get_higher_level_sic_code(row: pd.Series) -> str:
         row (pd.Series): A row from the input DataFrame containing "intermediate_unambig_results".
 
     Returns:
-        higher_level_code (str): the higher level SIC code if final code cannot be assigned unambiguously.
+        higher_level_code (str): the higher level SIC code if final code cannot be assigned
+            unambiguously.
     """
     if row["intermediate_unambig_results"]["higher_level_final_sic"] is not None:
         return row["intermediate_unambig_results"]["higher_level_final_sic"]
