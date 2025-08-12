@@ -521,13 +521,15 @@ Language and Clarity
 - Refer to employer as "employer" or "organisation" (e.g. "services your organisation offers")
 
 Question Structure
-- Limit question to one sentence
-- **REQUIRED: Start questions with open-ended phrases such as "Please explain," "Please describe,"
-"What," "How," "Where," or "Which"**
 - **REQUIRED: Focus on the employer's main business activities, products, or services rather
 than the specific job role**
+- **REQUIRED: Start questions with open-ended phrases such as "What," "How," "Which," "Where,"
+"Please explain," or "Please describe"**
+- Vary your question starters and actively choose from different opening phrases to create
+natural variation
+- Limit question to one sentence
 - Ask only one thing at a time - avoid double-barreled questions
-- **AVOID binary A/B questions or "either/or" structures**
+- AVOID binary A/B questions or "either/or" structures
 - Provide sufficient context for understanding the question
 - Focus on factual information rather than hypothetical situations
 
@@ -541,6 +543,12 @@ Neutrality and Bias
 - Use neutral wording that doesn't suggest a "correct" answer
 - Avoid leading the respondent toward particular responses
 - Keep phrasing positive and straightforward - don't use double negatives
+
+===Example Questions===
+- "What is the age range of the students that you teach?"
+- "How would you describe the main products your employer manufactures?"
+- "Which types of furniture does your organisation primarily sell?"
+- "Could you describe the main types of legal work your firm specialises in?"
 
 ===Output Format===
 {format_instructions}
