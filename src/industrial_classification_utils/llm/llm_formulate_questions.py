@@ -1,0 +1,477 @@
+# pylint: disable=invalid-name, protected-access, line-too-long, missing-module-docstring, duplicate-code
+
+from pprint import pprint
+
+from industrial_classification_utils.llm.llm import ClassificationLLM
+
+uni_chat = ClassificationLLM(model_name="gemini-1.5-flash", verbose=True)
+
+# Inputs for ClassificationLLM methods
+JOB_TITLE = "psychologist"
+JOB_DESCRIPTION = "I help adults who have mental health difficulties"
+ORG_DESCRIPTION = "adult mental health"
+
+# The following is a mock response for the embedding search
+EXAMPLE_EMBED_SHORT_LIST = [
+    {
+        "distance": 0.4664553105831146,
+        "title": "Mental health care",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.4906407594680786,
+        "title": "Psychologist",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.49568429589271545,
+        "title": "Scheme for adults with mental health problems",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.6071689128875732,
+        "title": "Counselling advice social work service for adults with mental health problems",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.6141889095306396,
+        "title": "Home support services for adults with mental health problems",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.6434402465820312,
+        "title": "Day care for adults with a mental illness",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.6469442248344421,
+        "title": "Mental health care",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.6646391749382019,
+        "title": "Community mental health",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.681310772895813,
+        "title": "Mental health trust",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.6829271912574768,
+        "title": "Scheme for adults with mental health problems",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.6851907968521118,
+        "title": "Scheme for adults with mental health problems",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.6876531839370728,
+        "title": "Day care for adults with a mental illness",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.7388272881507874,
+        "title": "Child and adolescent mental health unit",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7425264120101929,
+        "title": "Mental health care trust",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7481657862663269,
+        "title": "Psychologist",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7513266205787659,
+        "title": "Residential care home for adults with mental health problems",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.7550382614135742,
+        "title": "Community mental health work",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7656486630439758,
+        "title": "Chartered psychologist",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7671599388122559,
+        "title": "Community mental health service",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7684130668640137,
+        "title": "Counselling services for adults children and young people",
+        "code": "88990",
+        "four_digit_code": "8899",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.7692499160766602,
+        "title": "Mental health specialist (public sector)",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7707509994506836,
+        "title": "Child and family mental health services",
+        "code": "88910",
+        "four_digit_code": "8891",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.7749921679496765,
+        "title": "Registered independent hospital for adults with an enduring mental illness",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.7799525856971741,
+        "title": "Child and family mental health services",
+        "code": "88910",
+        "four_digit_code": "8891",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.7808285355567932,
+        "title": "Day care for adults with a mental illness",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.7808961272239685,
+        "title": "Counselling advice social work service for adults with mental health problems",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.7821006774902344,
+        "title": "Residential care home for adults with mental health problems",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.7824253439903259,
+        "title": "Psychiatric clinic",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7826693058013916,
+        "title": "Mental health care",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7856388688087463,
+        "title": "Mental health specialist (private practice)",
+        "code": "86220",
+        "four_digit_code": "8622",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7873983383178711,
+        "title": "Home support services for adults with mental health problems",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.7934449911117554,
+        "title": "Community mental health service",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.7967944741249084,
+        "title": "Residential mental health private practice",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.7994464039802551,
+        "title": "Psychological service clinic",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8040265440940857,
+        "title": "Home support services for adults with mental health problems",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.8066980838775635,
+        "title": "Mental health hostel",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.8081750273704529,
+        "title": "Mental health specialist (private practice)",
+        "code": "86220",
+        "four_digit_code": "8622",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8145434260368347,
+        "title": "Counselling services for adults children and young people training"
+        "for those working with children",
+        "code": "88990",
+        "four_digit_code": "8899",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.8170562982559204,
+        "title": "Child and family psychiatric services",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8173707723617554,
+        "title": "Provision of mental health care",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.8180251121520996,
+        "title": "Community psychiatric care",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8196816444396973,
+        "title": "Mental health specialist (public sector)",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8242653608322144,
+        "title": "Residential care for clients suffering from mental illness",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.8249601125717163,
+        "title": "Consultant psychiatrist",
+        "code": "86220",
+        "four_digit_code": "8622",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8252854347229004,
+        "title": "Psychological service clinic",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.82612144947052,
+        "title": "Day care for people with mental illness",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.8267965316772461,
+        "title": "Day care for people with mental illness",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.8280059695243835,
+        "title": "Community mental health service",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8286346197128296,
+        "title": "Registered charity mental health",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.8322045207023621,
+        "title": "Psychiatric clinic",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8325685858726501,
+        "title": "Residential care home for adults with a mental handicap",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.8432613611221313,
+        "title": "Community psychiatric care",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8471282720565796,
+        "title": "Child and adolescent mental health unit",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8509671092033386,
+        "title": "Charitable social work with adults mental health clinic providing accommodation",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.8588808178901672,
+        "title": "Counselling services for adults children and young people",
+        "code": "88990",
+        "four_digit_code": "8899",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.8599604368209839,
+        "title": "Charity providing a service to people with mental health problems",
+        "code": "88100",
+        "four_digit_code": "8810",
+        "two_digit_code": "88",
+    },
+    {
+        "distance": 0.8700287342071533,
+        "title": "Education psychology service",
+        "code": "86900",
+        "four_digit_code": "8690",
+        "two_digit_code": "86",
+    },
+    {
+        "distance": 0.8712033033370972,
+        "title": "Registered independent hospital for adults with an enduring mental illness",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.8779224753379822,
+        "title": "Residential care home for adults with mental health problems",
+        "code": "87200",
+        "four_digit_code": "8720",
+        "two_digit_code": "87",
+    },
+    {
+        "distance": 0.8796805739402771,
+        "title": "Mental health care trust",
+        "code": "86101",
+        "four_digit_code": "8610",
+        "two_digit_code": "86",
+    },
+]
+
+candidate_list = uni_chat._prompt_candidate_list(EXAMPLE_EMBED_SHORT_LIST)  # type: ignore
+
+sic_response_unambiguous = uni_chat.unambiguous_sic_code(
+    industry_descr=ORG_DESCRIPTION,
+    job_title=JOB_TITLE,
+    job_description=JOB_DESCRIPTION,
+    sic_candidates=candidate_list,
+)
+
+# Formulate Open Question
+sic_followup = uni_chat.formulate_open_question(
+    industry_descr=ORG_DESCRIPTION,
+    job_title=JOB_TITLE,
+    job_description=JOB_DESCRIPTION,
+    llm_output=sic_response_unambiguous[0].alt_candidates,  # type: ignore
+)
+
+print("Open Question answer: Follow-up and Reasoning")
+pprint(sic_followup[0].model_dump(), indent=2, width=80)
+
+filtered_list = [elem.class_code for elem in sic_response_unambiguous[0].alt_candidates]
+filtered_candidates = uni_chat._prompt_candidate_list_filtered(
+    EXAMPLE_EMBED_SHORT_LIST, filtered_list=filtered_list, activities_limit=5  # type: ignore
+)
+
+# Formulate Closed Quesiton
+sic_closed_followup = uni_chat.formulate_closed_question(
+    industry_descr=ORG_DESCRIPTION,
+    job_title=JOB_TITLE,
+    job_description=JOB_DESCRIPTION,
+    llm_output=filtered_candidates,  # type: ignore
+)
+print(
+    """\nClosed Quesiton answer: Follow-up, Reasoning, and List of simplified SIC options to choose from"""
+)
+pprint(sic_closed_followup[0].model_dump(), indent=2, width=80)
+
+print("\nCandidate list for the prompt")
+pprint(filtered_candidates, indent=2, width=80)
