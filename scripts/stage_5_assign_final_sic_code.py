@@ -198,7 +198,7 @@ def try_to_restart(
         )
 
 
-def assign_final_sic_code(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
+def assign_final_sic_code(row: pd.Series) -> dict:  # pylint: disable=C0103, W0613
     """Using the provided row data, call an LLM to assign a final SIC code.
     Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
 
@@ -367,8 +367,8 @@ if __name__ == "__main__":
             raise
         METADATA["start_unix_timestamp"] = datetime.now(UTC).timestamp()
         METADATA["batch_size"] = args.batch_size
-        METADATA["stage3_classification_llm_model"] = MODEL_NAME
-        METADATA["stage3_classification_llm_location"] = MODEL_LOCATION
+        METADATA["stage5_classification_llm_model"] = MODEL_NAME
+        METADATA["stage5_classification_llm_location"] = MODEL_LOCATION
         df = pd.read_pickle(args.input_pickle_file)  # noqa: S301
         print("Input loaded")
 
