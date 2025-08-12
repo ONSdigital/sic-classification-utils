@@ -61,6 +61,7 @@ import json
 import os
 from argparse import ArgumentParser as AP
 from datetime import UTC, datetime
+from re import sub as regex_sub
 from typing import Optional
 
 import numpy as np
@@ -123,6 +124,23 @@ def parse_args():
         help="try to restart a processing job (optional flag)",
     )
     return parser.parse_args()
+
+
+def clean_text(text: str) -> str:
+    """Cleans a text string by removing newlines, converting arbitrary
+    whitespace to a single space, and standardizing case.
+
+    Args:
+        text (str): The input string to clean.
+
+    Returns:
+        str: The cleaned string.
+    """
+    text = text.replace("\n", " ")
+    text = regex_sub(r"\s+", " ", text)
+    text = text.lower()
+    text = text.capitalize()
+    return text
 
 
 def try_to_restart(
@@ -357,6 +375,10 @@ if __name__ == "__main__":
         METADATA["start_unix_timestamp"] = datetime.now(UTC).timestamp()
         METADATA["batch_size"] = args.batch_size
         df = pd.read_csv(args.input_data_file)
+        # Clean the Survey Response columns:
+        df[INDUSTRY_DESCR_COL] = df[INDUSTRY_DESCR_COL].apply(clean_text)
+        df[JOB_DESCRIPTION_COL] = df[JOB_DESCRIPTION_COL].apply(clean_text)
+        df[JOB_TITLE_COL] = df[JOB_TITLE_COL].apply(clean_text)
         print("Input loaded")
 
     print("running semantic search...")
