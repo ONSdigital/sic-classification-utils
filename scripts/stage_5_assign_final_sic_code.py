@@ -272,7 +272,7 @@ def get_higher_level_sic_code(row: pd.Series) -> str:
     """
     if row["intermediate_unambig_results"]["higher_level_final_sic"] is not None:
         return row["intermediate_unambig_results"]["higher_level_final_sic"]
-    return []
+    return ""
 
 
 def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
@@ -419,6 +419,8 @@ if __name__ == "__main__":
             )
 
     print("Final SIC code assignment is complete")
+    print("deleting temporary DataFrame column...")
+    df = df.drop("intermediate_unambig_results", axis=1)
 
     print("persisting results...")
     persist_results(
