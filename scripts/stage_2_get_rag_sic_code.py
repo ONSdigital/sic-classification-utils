@@ -386,7 +386,7 @@ if __name__ == "__main__":
                 is_final=False,
                 completed_batches=(batch_id + 1),
             )
-
+    df.drop("sa_rag_sic_response", axis=1, inplace=True)
     print("RAG SIC allocation is complete")
 
     print("persisting results...")
