@@ -61,6 +61,7 @@ import json
 import os
 from argparse import ArgumentParser as AP
 from datetime import UTC, datetime
+from re import sub as regex_sub
 from typing import Optional
 
 import numpy as np
@@ -126,7 +127,8 @@ def parse_args():
 
 
 def clean_text(text: str) -> str:
-    """Cleans a text string by removing newlines and standardizing case.
+    """Cleans a text string by removing newlines, converting arbitrary
+    whitespace to a single space, and standardizing case.
 
     Args:
         text (str): The input string to clean.
@@ -135,6 +137,7 @@ def clean_text(text: str) -> str:
         str: The cleaned string.
     """
     text = text.replace("\n", " ")
+    text = regex_sub(r"\s+", " ", text)
     text = text.lower()
     text = text.capitalize()
     return text
