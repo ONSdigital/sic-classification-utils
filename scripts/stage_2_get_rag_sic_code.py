@@ -217,9 +217,11 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
 
     result = {
         "final_sic_code": sa_rag_response[0].sic_code,
-        "sic_candidates": sa_rag_response[0].sic_candidates,
+        "sic_candidates": [
+            {"sic_code": i.sic_code, "likelihood": i.likelihood}
+            for i in sa_rag_response[0].sic_candidates
+        ],
     }
-
     return result
 
 
@@ -384,7 +386,7 @@ if __name__ == "__main__":
                 is_final=False,
                 completed_batches=(batch_id + 1),
             )
-
+    df.drop("sa_rag_sic_response", axis=1, inplace=True)
     print("RAG SIC allocation is complete")
 
     print("persisting results...")
