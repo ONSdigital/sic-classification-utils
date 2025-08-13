@@ -162,7 +162,7 @@ def try_to_restart(
             cannot be found.
     """
     try:
-        df_persisted = pd.read_parquet(  # noqa: S301
+        df_persisted = pd.read_parquet(
             f"{output_folder}/intermediate_outputs/{output_shortname}.parquet"
         )
         with open(
@@ -291,9 +291,11 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
 
     if is_final:
         print("Saving results to CSV...")
-        df_with_search.to_csv(f"{output_folder}/{output_shortname}.csv")
+        df_with_search.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
         print("Saving results to parquet...")
-        df_with_search.to_parquet(f"{output_folder}/{output_shortname}.parquet")
+        df_with_search.to_parquet(
+            f"{output_folder}/{output_shortname}.parquet", index=False
+        )
         print("Saving setup metadata to JSON...")
         with open(
             f"{output_folder}/{output_shortname}_metadata.json",
@@ -306,7 +308,9 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         output_folder = f"{output_folder}/intermediate_outputs"
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-        df_with_search.to_parquet(f"{output_folder}/{output_shortname}.parquet")
+        df_with_search.to_parquet(
+            f"{output_folder}/{output_shortname}.parquet", index=False
+        )
         with open(
             f"{output_folder}/{output_shortname}_metadata.json", "w", encoding="utf8"
         ) as temp_meta:
