@@ -192,7 +192,10 @@ def try_to_restart(
         except FileNotFoundError:
             print(f"Could not find metadata file {input_metadata_json}")
             raise
-        metadata_persisted["start_unix_timestamp"] = datetime.now(UTC).timestamp()
+        metadata_persisted["stage_1_start_timestamp"] = datetime.now(UTC).timestamp()
+        metadata_persisted["stage_1_start_time_readable"] = datetime.now(UTC).strftime(
+            "%Y/%m/%d_%H:%M:%S"
+        )
         metadata_persisted["batch_size"] = batch_size
         df_persisted = pd.read_csv(input_data_file)
         checkpoint_info_persisted = {
@@ -280,8 +283,7 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         metadata (dict): The additional metadata surrounding this processing job.
         output_folder (str): The path to the output folder where the files will be saved.
         output_shortname (str): The prefix given to each file to be saved.
-        is_final (bool): Mark the output as the final output.
-                         Optional, default False.
+        is_final (bool): Mark the output as the final output. Optional, default False.
         completed_batches (int): Specify the number of completed batches being saved.
                                  Optional, default 0.
     Returns: None
