@@ -231,7 +231,10 @@ def get_unambiguous_sic(
     result = {
         "unambiguously_codable": sa_response[0].codable,
         "code": sa_response[0].class_code,
-        "alt_candidates": [i.class_code for i in sa_response[0].alt_candidates],
+        "alt_candidates": [
+            {"code": i.class_code, "title": i.class_descriptive}
+            for i in sa_response[0].alt_candidates
+        ],
     }
     return result
 
@@ -266,7 +269,7 @@ def get_initial_sic_code(row: pd.Series) -> str:
     return ""
 
 
-def get_alt_sic_candidates(row: pd.Series) -> list:
+def get_alt_sic_candidates(row: pd.Series) -> list[dict]:
     """Gets the alternative SIC candidates from the intermediate results, if possible.
     Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
 
