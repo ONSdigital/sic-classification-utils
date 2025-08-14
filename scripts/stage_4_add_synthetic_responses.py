@@ -343,7 +343,7 @@ if __name__ == "__main__":
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1),
+                completed_batches=(batch_id + 1 + START_BATCH_ID),
             )
 
     print("synthetic response generation is complete")
