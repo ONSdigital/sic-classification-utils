@@ -63,6 +63,7 @@ INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 SHORT_LIST = "semantic_search_results"
+MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
 #####################################################
 
 # Enable progress bar for semantic-search
@@ -213,7 +214,7 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
     sa_rag_response = uni_chat.sa_rag_sic_code(  # pylint: disable=E0606
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
-        industry_descr=row[INDUSTRY_DESCR_COL],
+        industry_descr=row[MERGED_INDUSTRY_DESC_COL],
         candidates_limit=10,
         short_list=row[SHORT_LIST],
     )

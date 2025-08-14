@@ -62,6 +62,7 @@ CANDIDATES_LIMIT = 10
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
+MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
 #####################################################
 
 # Enable progress bar for semantic-search
@@ -206,7 +207,7 @@ def get_open_question(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
     Returns: question (str).
     """
     sa_sic_rag = c_llm.sa_rag_sic_code(
-        industry_descr=row[INDUSTRY_DESCR_COL],
+        industry_descr=row[MERGED_INDUSTRY_DESC_COL],
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
         candidates_limit=10,
@@ -214,7 +215,7 @@ def get_open_question(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
     )
 
     sic_followup_object, _ = c_llm.formulate_open_question(
-        industry_descr=row[INDUSTRY_DESCR_COL],
+        industry_descr=row[MERGED_INDUSTRY_DESC_COL],
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
         llm_output=sa_sic_rag[0].sic_candidates,  # type: ignore

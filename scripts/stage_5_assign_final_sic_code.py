@@ -60,6 +60,7 @@ CODE_DIGITS = 5
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
+MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
 SIC_CANDIDATES_COL = "alt_sic_candidates"
 OPEN_QUESTION_COL = "followup_question"
 ANSWER_TO_OPEN_QUESTION_COL = "followup_answer"
@@ -214,7 +215,7 @@ def assign_final_sic_code(row: pd.Series) -> dict:  # pylint: disable=C0103, W06
             final sic cannot be assigned unambiguously.
     """
     sa_final_sic = c_llm.final_sic_code(
-        industry_descr=row[INDUSTRY_DESCR_COL],
+        industry_descr=row[MERGED_INDUSTRY_DESC_COL],
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
         sic_candidates=row[SIC_CANDIDATES_COL],

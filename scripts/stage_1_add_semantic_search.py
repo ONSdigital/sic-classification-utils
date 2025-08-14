@@ -79,6 +79,8 @@ SEARCH_ENDPOINT = "/v1/sic-vector-store/search-index"
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
+SELF_EMPLOYED_DESC_COL = "sic2007_self_employed"
+MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"  # created in this script
 #####################################################
 
 # Enable progress bar for semantic-search
@@ -128,7 +130,7 @@ def parse_args():
 
 def clean_text(text: str) -> str:
     """Cleans a text string by removing newlines, converting arbitrary
-    whitespace to a single space, and standardizing case.
+    whitespace to a single space, removing -9's and standardizing case.
 
     Args:
         text (str): The input string to clean.
@@ -137,6 +139,46 @@ def clean_text(text: str) -> str:
         str: The cleaned string.
     """
     text = text.replace("\n", " ")
+    text = regex_sub(r"\s+", " ", text)
+    text = text.lower()
+    text = text.capitalize()
+    return text
+
+
+def make_merged_industry_desc(row: pd.Series) -> str:
+    """Merges the main industry description column with the self-employed description column.
+
+    Args:
+        row (pd.Series): A row from the input DataFrame containing industry description,
+                         self employed description.
+
+    Returns:
+        description (str): The merged descriptions.
+    """
+    ind_desc = (
+        row[INDUSTRY_DESCR_COL] if isinstance(row[INDUSTRY_DESCR_COL], str) else ""
+    )
+    self_emp_desc = (
+        row[SELF_EMPLOYED_DESC_COL]
+        if isinstance(row[SELF_EMPLOYED_DESC_COL], str)
+        else ""
+    )
+
+    return f"{ind_desc}{self_emp_desc}"
+
+
+def clean_text_industry(text: str) -> str:
+    """Cleans a text string by removing newlines, converting arbitrary
+    whitespace to a single space, removing -9's and standardizing case.
+
+    Args:
+        text (str): The input string to clean.
+
+    Returns:
+        str: The cleaned string.
+    """
+    text = text.replace("\n", " ")
+    text = text.replace("-9", "")
     text = regex_sub(r"\s+", " ", text)
     text = text.lower()
     text = text.capitalize()
@@ -251,13 +293,13 @@ def get_semantic_search_results(row: pd.Series) -> list[dict]:
     Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
 
     Args:
-        row (pd.Series): A row from the input DataFrame containing industry description,
-                         job title, and job description.
+        row (pd.Series): A row from the input DataFrame containing the merged industry
+                         description, job title, and job description.
     Returns: A list of dictionaries containing the title, code and distance for each search
     result.
     """
     payload = {
-        "industry_descr": row[INDUSTRY_DESCR_COL],
+        "industry_descr": row[MERGED_INDUSTRY_DESC_COL],
         "job_title": row[JOB_TITLE_COL],
         "job_description": row[JOB_DESCRIPTION_COL],
     }
@@ -383,10 +425,15 @@ if __name__ == "__main__":
         )
         METADATA["batch_size"] = args.batch_size
         df = pd.read_csv(args.input_data_file)
+        # Make a merged industry description column:
+        df[MERGED_INDUSTRY_DESC_COL] = df.apply(make_merged_industry_desc, axis=1)
         # Clean the Survey Response columns:
         df[INDUSTRY_DESCR_COL] = df[INDUSTRY_DESCR_COL].apply(clean_text)
         df[JOB_DESCRIPTION_COL] = df[JOB_DESCRIPTION_COL].apply(clean_text)
         df[JOB_TITLE_COL] = df[JOB_TITLE_COL].apply(clean_text)
+        df[MERGED_INDUSTRY_DESC_COL] = df[MERGED_INDUSTRY_DESC_COL].apply(
+            clean_text_industry
+        )
         print("Input loaded")
 
     print("running semantic search...")
