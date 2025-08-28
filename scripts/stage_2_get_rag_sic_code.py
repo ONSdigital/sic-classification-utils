@@ -219,7 +219,9 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
         "final_sic_code": sa_rag_response[0].sic_code,
         "sic_descriptive": sa_rag_response[0].sic_descriptive,
         "sic_candidates": [
-            {"sic_code": i.sic_code, "likelihood": i.likelihood}
+            {"sic_code": i.sic_code,
+            "likelihood": i.likelihood,
+            "sic_description": i.sic_descriptive}
             for i in sa_rag_response[0].sic_candidates
         ],
     }
