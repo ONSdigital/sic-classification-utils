@@ -188,8 +188,8 @@ on the list you respond with.
 ===Output===
 """
 
-parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
-    pydantic_object=SurveyAssistSicResponse
+parser = PydanticOutputParser(
+    pydantic_object=SurveyAssistSicResponse  # type: ignore # Suspect langchain ver bug
 )
 
 SA_SIC_PROMPT_RAG = PromptTemplate.from_template(
