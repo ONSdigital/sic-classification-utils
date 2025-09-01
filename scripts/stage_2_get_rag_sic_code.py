@@ -204,8 +204,8 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
         semantic_search_results column.
 
     Returns:
-        result (doct[str, Any]): a dictionary with final_sic_code
-        and sic_candidates for specified row.
+        result (doct[str, Any]): a dictionary with final_sic_code,
+        sic_candidates, and sic_descriptive for specified row.
     """
     sa_rag_response = uni_chat.sa_rag_sic_code(  # pylint: disable=E0606
         job_title=row[JOB_TITLE_COL],
@@ -217,9 +217,16 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
 
     result = {
         "final_sic_code": sa_rag_response[0].sic_code,
-        "sic_candidates": sa_rag_response[0].sic_candidates,
+        "sic_descriptive": sa_rag_response[0].sic_descriptive,
+        "sic_candidates": [
+            {
+                "sic_code": i.sic_code,
+                "likelihood": i.likelihood,
+                "sic_description": i.sic_descriptive,
+            }
+            for i in sa_rag_response[0].sic_candidates
+        ],
     }
-
     return result
 
 
@@ -247,6 +254,19 @@ def get_sic_candidates(row: pd.Series) -> str:
         str: A list of possible sic_code alternatives.
     """
     return row["sa_rag_sic_response"]["sic_candidates"]
+
+
+def get_sic_descriptive(row: pd.Series) -> str:
+    """Generator funciton to access sic_descriptive for the specified row.
+
+    Args:
+        row (pd.Series): A row from the input DataFrame containing
+        semantic_search_results column.
+
+    Returns:
+        str: A list of SIC descriptions.
+    """
+    return row["sa_rag_sic_response"]["sic_descriptive"]
 
 
 def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
@@ -346,9 +366,11 @@ if __name__ == "__main__":
         df["sa_rag_sic_response"] = {
             "final_sic_code": "",
             "sic_candidates": [],
+            "sic_descriptive": "",
         }
         df["final_sic_code"] = ""
         df["sic_candidates"] = np.empty((len(df), 0)).tolist()
+        df["sic_descriptive"] = ""
         START_BATCH_ID = 0
     else:
         START_BATCH_ID = checkpoint_info["completed_batches"]
@@ -367,6 +389,7 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
+            batch.apply(print)
             batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(
                 get_rag_response, axis=1
             )
@@ -376,6 +399,9 @@ if __name__ == "__main__":
             df.loc[batch.index, "sic_candidates"] = batch.apply(
                 get_sic_candidates, axis=1
             )
+            df.loc[batch.index, "sic_descriptive"] = batch.apply(
+                get_sic_descriptive, axis=1
+            )
             persist_results(
                 df,
                 METADATA,
@@ -384,7 +410,7 @@ if __name__ == "__main__":
                 is_final=False,
                 completed_batches=(batch_id + 1),
             )
-
+    df.drop("sa_rag_sic_response", axis=1, inplace=True)
     print("RAG SIC allocation is complete")
 
     print("persisting results...")
