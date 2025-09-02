@@ -217,14 +217,13 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
 
     result = {
         "final_sic": sa_rag_response[0].sic_code,
-        # "sic_descriptive": sa_rag_response[0].sic_descriptive,
         "alt_sic_candidates": [
             {
                 "sic_code": i.sic_code,
                 "likelihood": i.likelihood,
                 "sic_description": i.sic_descriptive,
             }
-            for i in sa_rag_response[0].alt_sic_candidates
+            for i in sa_rag_response[0].sic_candidates
         ],
     }
     return result
@@ -254,19 +253,6 @@ def get_alt_sic_candidates(row: pd.Series) -> str:
         str: A list of possible sic_code alternatives.
     """
     return row["sa_rag_sic_response"]["alt_sic_candidates"]
-
-
-# def get_sic_descriptive(row: pd.Series) -> str:
-#     """Generator funciton to access sic_descriptive for the specified row.
-
-#     Args:
-#         row (pd.Series): A row from the input DataFrame containing
-#         semantic_search_results column.
-
-#     Returns:
-#         str: A list of SIC descriptions.
-#     """
-#     return row["sa_rag_sic_response"]["sic_descriptive"]
 
 
 def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
@@ -366,11 +352,9 @@ if __name__ == "__main__":
         df["sa_rag_sic_response"] = {
             "final_sic": "",
             "alt_sic_candidates": [],
-            # "sic_descriptive": "",
         }
         df["final_sic"] = ""
         df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
-        # df["sic_descriptive"] = ""
         START_BATCH_ID = 0
     else:
         START_BATCH_ID = checkpoint_info["completed_batches"]
@@ -398,9 +382,6 @@ if __name__ == "__main__":
             df.loc[batch.index, "alt_sic_candidates"] = batch.apply(
                 get_alt_sic_candidates, axis=1
             )
-            # df.loc[batch.index, "sic_descriptive"] = batch.apply(
-            #     get_sic_descriptive, axis=1
-            # )
             persist_results(
                 df,
                 METADATA,
