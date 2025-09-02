@@ -282,9 +282,9 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     if is_final:
         time_suffix = datetime.now(UTC).strftime("%Y_%m_%d_%H")
         print("Saving results to CSV...")
-        df_with_search.to_csv(f"{output_folder}/{output_shortname}_{time_suffix}.csv")
+        df_with_search.to_csv(f"{output_folder}/{output_shortname}_{time_suffix}.csv", index=False)
         print("Saving results to parquet...")
-        df_with_search.to_parquet(f"{output_folder}/{output_shortname}_{time_suffix}.parquet")
+        df_with_search.to_parquet(f"{output_folder}/{output_shortname}_{time_suffix}.parquet", index=False)
         print("Saving setup metadata to JSON...")
         with open(
             f"{output_folder}/{output_shortname}_metadata_{time_suffix}.json",
@@ -297,7 +297,7 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         output_folder = f"{output_folder}/intermediate_outputs"
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-        df_with_search.to_parquet(f"{output_folder}/{output_shortname}.parquet")
+        df_with_search.to_parquet(f"{output_folder}/{output_shortname}.parquet", index=False)
         with open(
             f"{output_folder}/{output_shortname}_metadata.json", "w", encoding="utf8"
         ) as temp_meta:
