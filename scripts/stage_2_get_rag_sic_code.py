@@ -37,8 +37,7 @@ Example Usage:
     ```bash
    ls output_folder
    ```
-   (expect to see my_output_<timestamp>.csv, my_output_<timestamp>.parquet,
-    and my_output_metadata_<timestamp>.json)
+   (expect to see my_output.csv, my_output.parquet and my_output_metadata.json)
 """
 import json
 import os
@@ -280,18 +279,15 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         os.makedirs(output_folder)
 
     if is_final:
-        time_suffix = datetime.now(UTC).strftime("%Y_%m_%d_%H")
         print("Saving results to CSV...")
-        df_with_search.to_csv(
-            f"{output_folder}/{output_shortname}_{time_suffix}.csv", index=False
-        )
+        df_with_search.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
         print("Saving results to parquet...")
         df_with_search.to_parquet(
-            f"{output_folder}/{output_shortname}_{time_suffix}.parquet", index=False
+            f"{output_folder}/{output_shortname}.parquet", index=False
         )
         print("Saving setup metadata to JSON...")
         with open(
-            f"{output_folder}/{output_shortname}_metadata_{time_suffix}.json",
+            f"{output_folder}/{output_shortname}_metadata.json",
             "w",
             encoding="utf8",
         ) as output_meta:
