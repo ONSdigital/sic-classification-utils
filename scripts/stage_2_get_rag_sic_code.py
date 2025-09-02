@@ -149,7 +149,7 @@ def try_to_restart(
             cannot be found.
     """
     try:
-        df_persisted = pd.read_parquet(  # noqa: S301
+        df_persisted = pd.read_parquet(
             f"{output_folder}/intermediate_outputs/{output_shortname}.parquet"
         )
         with open(
@@ -181,7 +181,7 @@ def try_to_restart(
             raise
         metadata_persisted["start_unix_timestamp"] = datetime.now(UTC).timestamp()
         metadata_persisted["batch_size"] = batch_size
-        df_persisted = pd.read_parquet(input_parquet_file)  # noqa: S301
+        df_persisted = pd.read_parquet(input_parquet_file)
         checkpoint_info_persisted = {
             "completed_batches": 0,
             "batch_size": batch_size,
@@ -282,9 +282,13 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     if is_final:
         time_suffix = datetime.now(UTC).strftime("%Y_%m_%d_%H")
         print("Saving results to CSV...")
-        df_with_search.to_csv(f"{output_folder}/{output_shortname}_{time_suffix}.csv", index=False)
+        df_with_search.to_csv(
+            f"{output_folder}/{output_shortname}_{time_suffix}.csv", index=False
+        )
         print("Saving results to parquet...")
-        df_with_search.to_parquet(f"{output_folder}/{output_shortname}_{time_suffix}.parquet", index=False)
+        df_with_search.to_parquet(
+            f"{output_folder}/{output_shortname}_{time_suffix}.parquet", index=False
+        )
         print("Saving setup metadata to JSON...")
         with open(
             f"{output_folder}/{output_shortname}_metadata_{time_suffix}.json",
@@ -297,7 +301,9 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         output_folder = f"{output_folder}/intermediate_outputs"
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-        df_with_search.to_parquet(f"{output_folder}/{output_shortname}.parquet", index=False)
+        df_with_search.to_parquet(
+            f"{output_folder}/{output_shortname}.parquet", index=False
+        )
         with open(
             f"{output_folder}/{output_shortname}_metadata.json", "w", encoding="utf8"
         ) as temp_meta:
@@ -344,7 +350,7 @@ if __name__ == "__main__":
             raise
         METADATA["start_unix_timestamp"] = datetime.now(UTC).timestamp()
         METADATA["batch_size"] = args.batch_size
-        df = pd.read_parquet(args.input_parquet_file)  # noqa: S301
+        df = pd.read_parquet(args.input_parquet_file)
         print("Input loaded")
 
     print("Running RAG SIC allocation...")
@@ -376,9 +382,7 @@ if __name__ == "__main__":
             batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(
                 get_rag_response, axis=1
             )
-            df.loc[batch.index, "final_sic"] = batch.apply(
-                get_final_sic, axis=1
-            )
+            df.loc[batch.index, "final_sic"] = batch.apply(get_final_sic, axis=1)
             df.loc[batch.index, "alt_sic_candidates"] = batch.apply(
                 get_alt_sic_candidates, axis=1
             )
