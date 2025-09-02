@@ -91,8 +91,8 @@ def parse_args():
         "--output_shortname",
         "-n",
         type=str,
-        default="STGK",
-        help="output filename prefix for easy identification (optional, default: STGK)",
+        default="STG2",
+        help="output filename prefix for easy identification (optional, default: STG2)",
     )
     parser.add_argument(
         "--batch_size",
