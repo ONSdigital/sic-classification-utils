@@ -38,6 +38,7 @@ from industrial_classification_utils.models.response_model import (
     OpenFollowUp,
     RerankingResponse,
     SicResponse,
+    SurveyAssistSicResponse,
     UnambiguousResponse,
 )
 from industrial_classification_utils.utils.sic_data_access import (
@@ -155,7 +156,8 @@ SIC_PROMPT_RAG = PromptTemplate.from_template(
 _sa_sic_template_rag = """"Given the respondent's description of the main activity their
 company does, their job title and job description (which may be different to the
 main company activity), your task is to determine a list of the most likely UK SIC
-(Standard Industry Classification) codes for this company.
+(Standard Industry Classification) codes for this company and the final code
+that is most likely to match the description.
 
 The following will be provided to make your decision and send appropriate output:
 Respondent Data
@@ -186,8 +188,8 @@ on the list you respond with.
 ===Output===
 """
 
-parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
-    pydantic_object=SicResponse
+parser = PydanticOutputParser(
+    pydantic_object=SurveyAssistSicResponse  # type: ignore # Suspect langchain ver bug
 )
 
 SA_SIC_PROMPT_RAG = PromptTemplate.from_template(
