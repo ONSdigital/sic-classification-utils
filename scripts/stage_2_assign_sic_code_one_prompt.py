@@ -178,10 +178,12 @@ def try_to_restart(
         except FileNotFoundError:
             print(f"Could not find metadata file {input_metadata_json}")
             raise
-        metadata_persisted["stage_2_oneprompt_start_timestamp"] = datetime.now(UTC).timestamp()
-        metadata_persisted["stage_2_oneprompt_start_time_readable"] = datetime.now(UTC).strftime(
-            "%Y/%m/%d_%H:%M:%S"
-        )
+        metadata_persisted["stage_2_oneprompt_start_timestamp"] = datetime.now(
+            UTC
+        ).timestamp()
+        metadata_persisted["stage_2_oneprompt_start_time_readable"] = datetime.now(
+            UTC
+        ).strftime("%Y/%m/%d_%H:%M:%S")
         metadata_persisted["batch_size"] = batch_size
         df_persisted = pd.read_parquet(input_parquet_file)
         checkpoint_info_persisted = {
