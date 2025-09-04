@@ -10,7 +10,7 @@ to CSV, parquet, and JSON metadata files in a user-specified output folder.
 Clarification On Script Arguments:
 
 ```bash
-python stage_2_get_rag_sic_code.py --help
+python stage_2_assign_sic_code_one_prompt.py --help
 ```
 
 Example Usage:
@@ -19,7 +19,7 @@ Example Usage:
 
 2. Run the script:
    ```bash
-   python stage_2_get_rag_sic_code.py \
+   python stage_2_assign_sic_code_one_prompt.py \
         -n my_output \
         -b 200 \
         persisted_dataframe.parquet \
