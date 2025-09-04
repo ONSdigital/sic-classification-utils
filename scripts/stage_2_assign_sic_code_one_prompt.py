@@ -90,7 +90,7 @@ def parse_args():
         "--output_shortname",
         "-n",
         type=str,
-        default="STG2",
+        default="STG2_oneprompt",
         help="output filename prefix for easy identification (optional, default: STG2)",
     )
     parser.add_argument(
@@ -178,7 +178,10 @@ def try_to_restart(
         except FileNotFoundError:
             print(f"Could not find metadata file {input_metadata_json}")
             raise
-        metadata_persisted["start_unix_timestamp"] = datetime.now(UTC).timestamp()
+        metadata_persisted["stage_2_oneprompt_start_timestamp"] = datetime.now(UTC).timestamp()
+        metadata_persisted["stage_2_oneprompt_start_time_readable"] = datetime.now(UTC).strftime(
+            "%Y/%m/%d_%H:%M:%S"
+        )
         metadata_persisted["batch_size"] = batch_size
         df_persisted = pd.read_parquet(input_parquet_file)
         checkpoint_info_persisted = {
@@ -344,7 +347,10 @@ if __name__ == "__main__":
         except FileNotFoundError:
             print(f"Could not find metadata file {args.input_metadata_json}")
             raise
-        METADATA["start_unix_timestamp"] = datetime.now(UTC).timestamp()
+        METADATA["stage_2_oneprompt_start_timestamp"] = datetime.now(UTC).timestamp()
+        METADATA["stage_2_oneprompt_start_time_readable"] = datetime.now(UTC).strftime(
+            "%Y/%m/%d_%H:%M:%S"
+        )
         METADATA["batch_size"] = args.batch_size
         df = pd.read_parquet(args.input_parquet_file)
         print("Input loaded")
@@ -388,7 +394,7 @@ if __name__ == "__main__":
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1),
+                completed_batches=(batch_id + 1 + START_BATCH_ID),
             )
     df.drop("sa_rag_sic_response", axis=1, inplace=True)
     print("RAG SIC allocation is complete")
