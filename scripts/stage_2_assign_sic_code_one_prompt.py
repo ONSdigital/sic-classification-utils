@@ -5,12 +5,12 @@ using RAG approach and persists the results.
 It reloads the output from the previous stage as a DataFrame object,
 performs classification for each row of data passed using LLM and creates
 a new column in the DataFrame with this information, and then saves the results
-to CSV, pickle, and JSON metadata files in a user-specified output folder.
+to CSV, parquet, and JSON metadata files in a user-specified output folder.
 
 Clarification On Script Arguments:
 
 ```bash
-python stage_2_get_rag_sic_code.py --help
+python stage_2_assign_sic_code_one_prompt.py --help
 ```
 
 Example Usage:
@@ -19,17 +19,17 @@ Example Usage:
 
 2. Run the script:
    ```bash
-   python stage_2_get_rag_sic_code.py \
+   python stage_2_assign_sic_code_one_prompt.py \
         -n my_output \
         -b 200 \
-        persisted_dataframe.gz \
+        persisted_dataframe.parquet \
         persisted_metadata.json \
         output_folder
    ```
    where:
      - `-n my_output` sets the output filename prefix to "my_output".
      - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
-     - `persisted_dataframe.gz` is the pickled dataframe output at the previous stage.
+     - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
      - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
      - `output_folder` is the directory where results will be saved.
 
@@ -37,8 +37,7 @@ Example Usage:
     ```bash
    ls output_folder
    ```
-   (expect to see my_output_<timestamp>.csv, my_output_<timestamp>.gz,
-    and my_output_metadata_<timestamp>.json)
+   (expect to see my_output.csv, my_output.parquet and my_output_metadata.json)
 """
 import json
 import os
@@ -73,7 +72,7 @@ def parse_args():
     """Parses command line arguments for the script."""
     parser = AP()
     parser.add_argument(
-        "input_pickle_file",
+        "input_parquet_file",
         type=str,
         help="relative path to the persisted DataFrame from previous stage",
     )
@@ -91,8 +90,8 @@ def parse_args():
         "--output_shortname",
         "-n",
         type=str,
-        default="STGK",
-        help="output filename prefix for easy identification (optional, default: STGK)",
+        default="STG2_oneprompt",
+        help="output filename prefix for easy identification (optional, default: STG2)",
     )
     parser.add_argument(
         "--batch_size",
@@ -113,7 +112,7 @@ def parse_args():
 
 
 def try_to_restart(
-    output_folder, output_shortname, input_pickle_file, input_metadata_json, batch_size
+    output_folder, output_shortname, input_parquet_file, input_metadata_json, batch_size
 ):
     """Attempts to restart a processing job by loading checkpoint data.
 
@@ -128,7 +127,7 @@ def try_to_restart(
     Args:
         output_folder (str): The path to the specified output folder.
         output_shortname (str): The prefix for the output filenames.
-        input_pickle_file (str): The path to the (previous stage's) persisted dataframe file, used
+        input_parquet_file (str): The path to the (previous stage's) persisted dataframe file, used
             only if starting from scratch after failure to restart.
         input_metadata_json (str): The path to the (previous stage's) metadata JSON file,
             used only if starting from scratch after failure to restart.
@@ -145,12 +144,12 @@ def try_to_restart(
 
     Raises:
         FileNotFoundError: If starting from scratch and the initial data
-            file (`input_pickle_file`) or metadata file (`input_metadata_json`)
+            file (`input_parquet_file`) or metadata file (`input_metadata_json`)
             cannot be found.
     """
     try:
-        df_persisted = pd.read_pickle(  # noqa: S301
-            f"{output_folder}/intermediate_outputs/{output_shortname}.gz"
+        df_persisted = pd.read_parquet(
+            f"{output_folder}/intermediate_outputs/{output_shortname}.parquet"
         )
         with open(
             f"{output_folder}/intermediate_outputs/{output_shortname}_checkpoint_info.json",
@@ -179,9 +178,14 @@ def try_to_restart(
         except FileNotFoundError:
             print(f"Could not find metadata file {input_metadata_json}")
             raise
-        metadata_persisted["start_unix_timestamp"] = datetime.now(UTC).timestamp()
+        metadata_persisted["stage_2_oneprompt_start_timestamp"] = datetime.now(
+            UTC
+        ).timestamp()
+        metadata_persisted["stage_2_oneprompt_start_time_readable"] = datetime.now(
+            UTC
+        ).strftime("%Y/%m/%d_%H:%M:%S")
         metadata_persisted["batch_size"] = batch_size
-        df_persisted = pd.read_pickle(input_pickle_file)  # noqa: S301
+        df_persisted = pd.read_parquet(input_parquet_file)
         checkpoint_info_persisted = {
             "completed_batches": 0,
             "batch_size": batch_size,
@@ -204,8 +208,8 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
         semantic_search_results column.
 
     Returns:
-        result (doct[str, Any]): a dictionary with final_sic_code,
-        sic_candidates, and sic_descriptive for specified row.
+        result (doct[str, Any]): a dictionary with final_sic,
+        and alt_sic_candidates for specified row.
     """
     sa_rag_response = uni_chat.sa_rag_sic_code(  # pylint: disable=E0606
         job_title=row[JOB_TITLE_COL],
@@ -216,9 +220,8 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
     )
 
     result = {
-        "final_sic_code": sa_rag_response[0].sic_code,
-        "sic_descriptive": sa_rag_response[0].sic_descriptive,
-        "sic_candidates": [
+        "final_sic": sa_rag_response[0].sic_code,
+        "alt_sic_candidates": [
             {
                 "sic_code": i.sic_code,
                 "likelihood": i.likelihood,
@@ -230,21 +233,21 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
     return result
 
 
-def get_final_sic_code(row: pd.Series) -> str:
-    """Generator funciton to access final_sic_code for the specified row.
+def get_final_sic(row: pd.Series) -> str:
+    """Generator funciton to access final_sic for the specified row.
 
     Args:
         row (pd.Series): A row from the input DataFrame containing
         semantic_search_results column.
 
     Returns:
-        str: a final_sic_code for the row.
+        str: a final_sic for the row.
     """
-    return row["sa_rag_sic_response"]["final_sic_code"]
+    return row["sa_rag_sic_response"]["final_sic"]
 
 
-def get_sic_candidates(row: pd.Series) -> str:
-    """Generator funciton to access sic_candidates for the specified row.
+def get_alt_sic_candidates(row: pd.Series) -> str:
+    """Generator funciton to access alt_sic_candidates for the specified row.
 
     Args:
         row (pd.Series): A row from the input DataFrame containing
@@ -253,20 +256,7 @@ def get_sic_candidates(row: pd.Series) -> str:
     Returns:
         str: A list of possible sic_code alternatives.
     """
-    return row["sa_rag_sic_response"]["sic_candidates"]
-
-
-def get_sic_descriptive(row: pd.Series) -> str:
-    """Generator funciton to access sic_descriptive for the specified row.
-
-    Args:
-        row (pd.Series): A row from the input DataFrame containing
-        semantic_search_results column.
-
-    Returns:
-        str: A list of SIC descriptions.
-    """
-    return row["sa_rag_sic_response"]["sic_descriptive"]
+    return row["sa_rag_sic_response"]["alt_sic_candidates"]
 
 
 def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
@@ -277,7 +267,7 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     is_final: Optional[bool] = False,
     completed_batches: Optional[int] = 0,
 ):
-    """Persists the results DataFrame to CSV, pickle, and saves metadata to JSON.
+    """Persists the results DataFrame to CSV, parquet, and saves metadata to JSON.
 
     Args:
         df_with_search (pd.DataFrame): The DataFrame containing the results to be persisted.
@@ -294,14 +284,15 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         os.makedirs(output_folder)
 
     if is_final:
-        time_suffix = datetime.now(UTC).strftime("%Y_%m_%d_%H")
         print("Saving results to CSV...")
-        df_with_search.to_csv(f"{output_folder}/{output_shortname}_{time_suffix}.csv")
-        print("Saving results to pickle...")
-        df_with_search.to_pickle(f"{output_folder}/{output_shortname}_{time_suffix}.gz")
+        df_with_search.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
+        print("Saving results to parquet...")
+        df_with_search.to_parquet(
+            f"{output_folder}/{output_shortname}.parquet", index=False
+        )
         print("Saving setup metadata to JSON...")
         with open(
-            f"{output_folder}/{output_shortname}_metadata_{time_suffix}.json",
+            f"{output_folder}/{output_shortname}_metadata.json",
             "w",
             encoding="utf8",
         ) as output_meta:
@@ -311,7 +302,9 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         output_folder = f"{output_folder}/intermediate_outputs"
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-        df_with_search.to_pickle(f"{output_folder}/{output_shortname}.gz")
+        df_with_search.to_parquet(
+            f"{output_folder}/{output_shortname}.parquet", index=False
+        )
         with open(
             f"{output_folder}/{output_shortname}_metadata.json", "w", encoding="utf8"
         ) as temp_meta:
@@ -340,7 +333,7 @@ if __name__ == "__main__":
             df, METADATA, checkpoint_info, RESTART_SUCCESS = try_to_restart(
                 args.output_folder,
                 args.output_shortname,
-                args.input_pickle_file,
+                args.input_parquet_file,
                 args.input_metadata_json,
                 args.batch_size,
             )
@@ -356,21 +349,22 @@ if __name__ == "__main__":
         except FileNotFoundError:
             print(f"Could not find metadata file {args.input_metadata_json}")
             raise
-        METADATA["start_unix_timestamp"] = datetime.now(UTC).timestamp()
+        METADATA["stage_2_oneprompt_start_timestamp"] = datetime.now(UTC).timestamp()
+        METADATA["stage_2_oneprompt_start_time_readable"] = datetime.now(UTC).strftime(
+            "%Y/%m/%d_%H:%M:%S"
+        )
         METADATA["batch_size"] = args.batch_size
-        df = pd.read_pickle(args.input_pickle_file)  # noqa: S301
+        df = pd.read_parquet(args.input_parquet_file)
         print("Input loaded")
 
     print("Running RAG SIC allocation...")
     if (not args.restart) or (not RESTART_SUCCESS):
         df["sa_rag_sic_response"] = {
-            "final_sic_code": "",
-            "sic_candidates": [],
-            "sic_descriptive": "",
+            "final_sic": "",
+            "alt_sic_candidates": [],
         }
-        df["final_sic_code"] = ""
-        df["sic_candidates"] = np.empty((len(df), 0)).tolist()
-        df["sic_descriptive"] = ""
+        df["final_sic"] = ""
+        df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
         START_BATCH_ID = 0
     else:
         START_BATCH_ID = checkpoint_info["completed_batches"]
@@ -389,18 +383,12 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            batch.apply(print)
             batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(
                 get_rag_response, axis=1
             )
-            df.loc[batch.index, "final_sic_code"] = batch.apply(
-                get_final_sic_code, axis=1
-            )
-            df.loc[batch.index, "sic_candidates"] = batch.apply(
-                get_sic_candidates, axis=1
-            )
-            df.loc[batch.index, "sic_descriptive"] = batch.apply(
-                get_sic_descriptive, axis=1
+            df.loc[batch.index, "final_sic"] = batch.apply(get_final_sic, axis=1)
+            df.loc[batch.index, "alt_sic_candidates"] = batch.apply(
+                get_alt_sic_candidates, axis=1
             )
             persist_results(
                 df,
@@ -408,7 +396,7 @@ if __name__ == "__main__":
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1),
+                completed_batches=(batch_id + 1 + START_BATCH_ID),
             )
     df.drop("sa_rag_sic_response", axis=1, inplace=True)
     print("RAG SIC allocation is complete")
