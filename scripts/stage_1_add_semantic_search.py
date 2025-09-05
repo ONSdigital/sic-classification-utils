@@ -3,7 +3,7 @@
 and persists the results. It reads in a CSV file as a DataFrame object,
 interacts with a vector store to obtain semantic search results for each
 row, creates a new column in the DataFrame with this information, and
-then saves the results to CSV, pickle, and JSON metadata files in a
+then saves the results to CSV, parquet, and JSON metadata files in a
 user-specified output folder.
 
 The script requires a running vector store service.
@@ -39,7 +39,7 @@ Example Usage:
     ```bash
    ls output_folder
    ```
-   (expect to see my_output.csv, my_output.gz, and my_output_metadata.json)
+   (expect to see my_output.csv, my_output.parquet, and my_output_metadata.json)
 
 --------------
 Example expected Contents of initial_metadata.json:
@@ -79,6 +79,8 @@ SEARCH_ENDPOINT = "/v1/sic-vector-store/search-index"
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
+SELF_EMPLOYED_DESC_COL = "sic2007_self_employed"
+MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"  # created in this script
 #####################################################
 
 # Enable progress bar for semantic-search
@@ -128,7 +130,7 @@ def parse_args():
 
 def clean_text(text: str) -> str:
     """Cleans a text string by removing newlines, converting arbitrary
-    whitespace to a single space, and standardizing case.
+    whitespace to a single space, removing -9's and standardizing case.
 
     Args:
         text (str): The input string to clean.
@@ -137,6 +139,46 @@ def clean_text(text: str) -> str:
         str: The cleaned string.
     """
     text = text.replace("\n", " ")
+    text = regex_sub(r"\s+", " ", text)
+    text = text.lower()
+    text = text.capitalize()
+    return text
+
+
+def make_merged_industry_desc(row: pd.Series) -> str:
+    """Merges the main industry description column with the self-employed description column.
+
+    Args:
+        row (pd.Series): A row from the input DataFrame containing industry description,
+                         self employed description.
+
+    Returns:
+        description (str): The merged descriptions.
+    """
+    ind_desc = (
+        row[INDUSTRY_DESCR_COL] if isinstance(row[INDUSTRY_DESCR_COL], str) else ""
+    )
+    self_emp_desc = (
+        row[SELF_EMPLOYED_DESC_COL]
+        if isinstance(row[SELF_EMPLOYED_DESC_COL], str)
+        else ""
+    )
+
+    return f"{ind_desc}{self_emp_desc}"
+
+
+def clean_text_industry(text: str) -> str:
+    """Cleans a text string by removing newlines, converting arbitrary
+    whitespace to a single space, removing -9's and standardizing case.
+
+    Args:
+        text (str): The input string to clean.
+
+    Returns:
+        str: The cleaned string.
+    """
+    text = text.replace("\n", " ")
+    text = text.replace("-9", "")
     text = regex_sub(r"\s+", " ", text)
     text = text.lower()
     text = text.capitalize()
@@ -180,8 +222,8 @@ def try_to_restart(
             cannot be found.
     """
     try:
-        df_persisted = pd.read_pickle(  # noqa: S301
-            f"{output_folder}/intermediate_outputs/{output_shortname}.gz"
+        df_persisted = pd.read_parquet(
+            f"{output_folder}/intermediate_outputs/{output_shortname}.parquet"
         )
         with open(
             f"{output_folder}/intermediate_outputs/{output_shortname}_checkpoint_info.json",
@@ -210,7 +252,10 @@ def try_to_restart(
         except FileNotFoundError:
             print(f"Could not find metadata file {input_metadata_json}")
             raise
-        metadata_persisted["start_unix_timestamp"] = datetime.now(UTC).timestamp()
+        metadata_persisted["stage_1_start_timestamp"] = datetime.now(UTC).timestamp()
+        metadata_persisted["stage_1_start_time_readable"] = datetime.now(UTC).strftime(
+            "%Y/%m/%d_%H:%M:%S"
+        )
         metadata_persisted["batch_size"] = batch_size
         df_persisted = pd.read_csv(input_data_file)
         checkpoint_info_persisted = {
@@ -248,13 +293,13 @@ def get_semantic_search_results(row: pd.Series) -> list[dict]:
     Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
 
     Args:
-        row (pd.Series): A row from the input DataFrame containing industry description,
-                         job title, and job description.
+        row (pd.Series): A row from the input DataFrame containing the merged industry
+                         description, job title, and job description.
     Returns: A list of dictionaries containing the title, code and distance for each search
     result.
     """
     payload = {
-        "industry_descr": row[INDUSTRY_DESCR_COL],
+        "industry_descr": row[MERGED_INDUSTRY_DESC_COL],
         "job_title": row[JOB_TITLE_COL],
         "job_description": row[JOB_DESCRIPTION_COL],
     }
@@ -291,15 +336,14 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     is_final: Optional[bool] = False,
     completed_batches: Optional[int] = 0,
 ):
-    """Persists the results DataFrame to CSV, pickle, and saves metadata to JSON.
+    """Persists the results DataFrame to CSV, parquet, and saves metadata to JSON.
 
     Args:
         df_with_search (pd.DataFrame): The DataFrame containing the results to be persisted.
         metadata (dict): The additional metadata surrounding this processing job.
         output_folder (str): The path to the output folder where the files will be saved.
         output_shortname (str): The prefix given to each file to be saved.
-        is_final (bool): Mark the output as the final output and timestamp filenames.
-                         Optional, default False.
+        is_final (bool): Mark the output as the final output. Optional, default False.
         completed_batches (int): Specify the number of completed batches being saved.
                                  Optional, default 0.
     Returns: None
@@ -308,14 +352,15 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         os.makedirs(output_folder)
 
     if is_final:
-        time_suffix = datetime.now(UTC).strftime("%Y_%m_%d_%H")
         print("Saving results to CSV...")
-        df_with_search.to_csv(f"{output_folder}/{output_shortname}_{time_suffix}.csv")
-        print("Saving results to pickle...")
-        df_with_search.to_pickle(f"{output_folder}/{output_shortname}_{time_suffix}.gz")
+        df_with_search.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
+        print("Saving results to parquet...")
+        df_with_search.to_parquet(
+            f"{output_folder}/{output_shortname}.parquet", index=False
+        )
         print("Saving setup metadata to JSON...")
         with open(
-            f"{output_folder}/{output_shortname}_metadata_{time_suffix}.json",
+            f"{output_folder}/{output_shortname}_metadata.json",
             "w",
             encoding="utf8",
         ) as output_meta:
@@ -325,7 +370,9 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         output_folder = f"{output_folder}/intermediate_outputs"
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-        df_with_search.to_pickle(f"{output_folder}/{output_shortname}.gz")
+        df_with_search.to_parquet(
+            f"{output_folder}/{output_shortname}.parquet", index=False
+        )
         with open(
             f"{output_folder}/{output_shortname}_metadata.json", "w", encoding="utf8"
         ) as temp_meta:
@@ -372,13 +419,21 @@ if __name__ == "__main__":
         except FileNotFoundError:
             print(f"Could not find metadata file {args.input_metadata_json}")
             raise
-        METADATA["start_unix_timestamp"] = datetime.now(UTC).timestamp()
+        METADATA["stage_1_start_timestamp"] = datetime.now(UTC).timestamp()
+        METADATA["stage_1_start_time_readable"] = datetime.now(UTC).strftime(
+            "%Y/%m/%d_%H:%M:%S"
+        )
         METADATA["batch_size"] = args.batch_size
         df = pd.read_csv(args.input_data_file)
+        # Make a merged industry description column:
+        df[MERGED_INDUSTRY_DESC_COL] = df.apply(make_merged_industry_desc, axis=1)
         # Clean the Survey Response columns:
         df[INDUSTRY_DESCR_COL] = df[INDUSTRY_DESCR_COL].apply(clean_text)
         df[JOB_DESCRIPTION_COL] = df[JOB_DESCRIPTION_COL].apply(clean_text)
         df[JOB_TITLE_COL] = df[JOB_TITLE_COL].apply(clean_text)
+        df[MERGED_INDUSTRY_DESC_COL] = df[MERGED_INDUSTRY_DESC_COL].apply(
+            clean_text_industry
+        )
         print("Input loaded")
 
     print("running semantic search...")
@@ -410,7 +465,7 @@ if __name__ == "__main__":
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1),
+                completed_batches=(batch_id + 1 + START_BATCH_ID),
             )
 
     print("semantic search complete")
