@@ -86,6 +86,7 @@ def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     input_metadata_json: str,
     batch_size: int,
     stage_id: Optional[str] = "stage_k",
+    is_stage_1: Optional[bool] = False,
 ):
     """Attempts to restart a processing job by loading checkpoint data.
 
@@ -107,6 +108,7 @@ def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         batch_size (int): The size of processing batches, used only if starting
             from scratch after failure to restart.
         stage_id (str): A prefix used for per-stage fields in the metadata.
+        is_stage_1 (bool): A flag to indicate the incoming data is .csv not .parquet.
 
     Returns:
         tuple: A tuple containing:
@@ -159,7 +161,10 @@ def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             UTC
         ).strftime("%Y/%m/%d_%H:%M:%S")
         metadata_persisted["batch_size"] = batch_size
-        df_persisted = pd.read_parquet(input_parquet_file)
+        if is_stage_1:
+            df_persisted = pd.read_csv(input_parquet_file)
+        else:
+            df_persisted = pd.read_parquet(input_parquet_file)
         checkpoint_info_persisted = {
             "completed_batches": 0,
             "batch_size": batch_size,
@@ -244,6 +249,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     input_metadata_json: str,
     batch_size: int,
     stage_id: Optional[str] = "stage_k",
+    is_stage_1: Optional[bool] = False,
 ) -> tuple[pd.DataFrame, dict, int, bool]:
     """Sets up the initial state for a pipeline stage.
 
@@ -263,6 +269,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             from the previous stage.
         batch_size (int): The size of processing batches.
         stage_id (str): A prefix used for per-stage fields in the metadata.
+        is_stage_1 (bool): A flag to indicate the incoming data is .csv not .parquet.
 
     Returns:
         tuple: A tuple containing:
@@ -282,6 +289,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
                 input_metadata_json,
                 batch_size,
                 stage_id=stage_id,
+                is_stage_1=is_stage_1,
             )
         except Exception:
             print(
@@ -300,7 +308,10 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             "%Y/%m/%d_%H:%M:%S"
         )
         metadata["batch_size"] = batch_size
-        df = pd.read_parquet(input_parquet_file)
+        if is_stage_1:
+            df = pd.read_csv(input_parquet_file)
+        else:
+            df = pd.read_parquet(input_parquet_file)
         print("Input loaded")
 
     start_batch_id = (

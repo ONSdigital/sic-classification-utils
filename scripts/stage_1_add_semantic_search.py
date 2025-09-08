@@ -65,7 +65,7 @@ import requests
 from requests.exceptions import HTTPError, RequestException
 from tqdm import tqdm
 
-from .shared_evaluation_pipeline_components import (
+from shared_evaluation_pipeline_components import (
     parse_args,
     persist_results,
     set_up_initial_state,
@@ -217,6 +217,7 @@ if __name__ == "__main__":
         args.input_metadata_json,
         args.batch_size,
         stage_id="stage_1",
+        is_stage_1=True,
     )
 
     # Make a merged industry description column:

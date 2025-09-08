@@ -52,7 +52,7 @@ from tqdm import tqdm
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
 
-from .shared_evaluation_pipeline_components import (
+from shared_evaluation_pipeline_components import (
     parse_args,
     persist_results,
     set_up_initial_state,
