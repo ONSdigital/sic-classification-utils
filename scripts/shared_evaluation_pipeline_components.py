@@ -161,10 +161,11 @@ def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             UTC
         ).strftime("%Y/%m/%d_%H:%M:%S")
         metadata_persisted["batch_size"] = batch_size
-        if is_stage_1:
-            df_persisted = pd.read_csv(input_parquet_file)
-        else:
-            df_persisted = pd.read_parquet(input_parquet_file)
+        df_persisted = (
+            pd.read_csv(input_parquet_file)
+            if is_stage_1
+            else pd.read_parquet(input_parquet_file)
+        )
         checkpoint_info_persisted = {
             "completed_batches": 0,
             "batch_size": batch_size,
@@ -308,10 +309,11 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             "%Y/%m/%d_%H:%M:%S"
         )
         metadata["batch_size"] = batch_size
-        if is_stage_1:
-            df = pd.read_csv(input_parquet_file)
-        else:
-            df = pd.read_parquet(input_parquet_file)
+        df = (
+            pd.read_csv(input_parquet_file)
+            if is_stage_1
+            else pd.read_parquet(input_parquet_file)
+        )
         print("Input loaded")
 
     start_batch_id = (
