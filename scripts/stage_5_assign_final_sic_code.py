@@ -155,7 +155,7 @@ c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
 print("Classification LLM loaded.")
 
 if __name__ == "__main__":
-    args = parse_args()
+    args = parse_args("STG5")
 
     df, metadata, start_batch_id, restart_successful = set_up_initial_state(
         args.restart,

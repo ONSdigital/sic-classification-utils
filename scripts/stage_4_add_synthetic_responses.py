@@ -90,7 +90,7 @@ def get_followup_answer(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
 SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
 
 if __name__ == "__main__":
-    args = parse_args()
+    args = parse_args("STG4")
 
     df, metadata, start_batch_id, restart_successful = set_up_initial_state(
         args.restart,
