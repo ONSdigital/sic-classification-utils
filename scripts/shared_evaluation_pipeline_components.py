@@ -10,7 +10,7 @@ to various file formats.
 The main components provided are:
 - `parse_args`: A function to parse common command-line arguments for
   pipeline stage scripts.
-- `try_to_restart`: A function to handle loading data from a checkpoint
+- `_try_to_restart`: A function to handle loading data from a checkpoint
   or starting a processing stage from scratch.
 - `persist_results`: A function to save DataFrames and metadata to
   intermediate or final output files.
@@ -79,12 +79,13 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
     return parser.parse_args()
 
 
-def try_to_restart(
+def _try_to_restart(
     output_folder: str,
     output_shortname: str,
     input_parquet_file: str,
     input_metadata_json: str,
     batch_size: int,
+    stage_id: Optional[str] = 'stage_k'
 ):
     """Attempts to restart a processing job by loading checkpoint data.
 
@@ -105,6 +106,7 @@ def try_to_restart(
             used only if starting from scratch after failure to restart.
         batch_size (int): The size of processing batches, used only if starting
             from scratch after failure to restart.
+        stage_id (str): A prefix used for per-stage fields in the metadata.
 
     Returns:
         tuple: A tuple containing:
@@ -150,8 +152,8 @@ def try_to_restart(
         except FileNotFoundError:
             print(f"Could not find metadata file {input_metadata_json}")
             raise
-        metadata_persisted["stage_k_start_timestamp"] = datetime.now(UTC).timestamp()
-        metadata_persisted["stage_k_start_time_readable"] = datetime.now(UTC).strftime(
+        metadata_persisted[f"{stage_id}_start_timestamp"] = datetime.now(UTC).timestamp()
+        metadata_persisted[f"{stage_id}_start_time_readable"] = datetime.now(UTC).strftime(
             "%Y/%m/%d_%H:%M:%S"
         )
         metadata_persisted["batch_size"] = batch_size
@@ -239,6 +241,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     input_parquet_file: str,
     input_metadata_json: str,
     batch_size: int,
+    stage_id: Optional[str] = 'stage_k'
 ) -> tuple[pd.DataFrame, dict, int, bool]:
     """Sets up the initial state for a pipeline stage.
 
@@ -257,6 +260,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         input_metadata_json (str): The path to the persisted metadata JSON file
             from the previous stage.
         batch_size (int): The size of processing batches.
+        stage_id (str): A prefix used for per-stage fields in the metadata.
 
     Returns:
         tuple: A tuple containing:
@@ -269,12 +273,13 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     restart_successful = True
     if restart:
         try:
-            df, metadata, checkpoint_info, restart_successful = try_to_restart(  # type: ignore
+            df, metadata, checkpoint_info, restart_successful = _try_to_restart(  # type: ignore
                 output_folder,
                 output_shortname,
                 input_parquet_file,
                 input_metadata_json,
                 batch_size,
+                stage_id = stage_id
             )
         except Exception:
             print(
@@ -288,8 +293,8 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         except FileNotFoundError:
             print(f"Could not find metadata file {input_metadata_json}")
             raise
-        metadata["stage_k_start_timestamp"] = datetime.now(UTC).timestamp()
-        metadata["stage_k_start_time_readable"] = datetime.now(UTC).strftime(
+        metadata[f"{stage_id}_start_timestamp"] = datetime.now(UTC).timestamp()
+        metadata[f"{stage_id}_start_time_readable"] = datetime.now(UTC).strftime(
             "%Y/%m/%d_%H:%M:%S"
         )
         metadata["batch_size"] = batch_size
