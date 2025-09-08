@@ -114,7 +114,7 @@ if __name__ == "__main__":
         args.input_parquet_file,
         args.input_metadata_json,
         args.batch_size,
-        stage_id="stage_k"
+        stage_id="stage_k",
     )
 
     print("running X...")
