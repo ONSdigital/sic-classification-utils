@@ -79,13 +79,13 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
     return parser.parse_args()
 
 
-def _try_to_restart(
+def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     output_folder: str,
     output_shortname: str,
     input_parquet_file: str,
     input_metadata_json: str,
     batch_size: int,
-    stage_id: Optional[str] = 'stage_k'
+    stage_id: Optional[str] = "stage_k",
 ):
     """Attempts to restart a processing job by loading checkpoint data.
 
@@ -152,10 +152,12 @@ def _try_to_restart(
         except FileNotFoundError:
             print(f"Could not find metadata file {input_metadata_json}")
             raise
-        metadata_persisted[f"{stage_id}_start_timestamp"] = datetime.now(UTC).timestamp()
-        metadata_persisted[f"{stage_id}_start_time_readable"] = datetime.now(UTC).strftime(
-            "%Y/%m/%d_%H:%M:%S"
-        )
+        metadata_persisted[f"{stage_id}_start_timestamp"] = datetime.now(
+            UTC
+        ).timestamp()
+        metadata_persisted[f"{stage_id}_start_time_readable"] = datetime.now(
+            UTC
+        ).strftime("%Y/%m/%d_%H:%M:%S")
         metadata_persisted["batch_size"] = batch_size
         df_persisted = pd.read_parquet(input_parquet_file)
         checkpoint_info_persisted = {
@@ -241,7 +243,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     input_parquet_file: str,
     input_metadata_json: str,
     batch_size: int,
-    stage_id: Optional[str] = 'stage_k'
+    stage_id: Optional[str] = "stage_k",
 ) -> tuple[pd.DataFrame, dict, int, bool]:
     """Sets up the initial state for a pipeline stage.
 
@@ -279,7 +281,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
                 input_parquet_file,
                 input_metadata_json,
                 batch_size,
-                stage_id = stage_id
+                stage_id=stage_id,
             )
         except Exception:
             print(

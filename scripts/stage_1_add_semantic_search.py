@@ -57,12 +57,7 @@ Example expected Contents of initial_metadata.json:
 }
 
 """
-import json
-import os
-from argparse import ArgumentParser as AP
-from datetime import UTC, datetime
 from re import sub as regex_sub
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -73,7 +68,7 @@ from tqdm import tqdm
 from .shared_evaluation_pipeline_components import (
     parse_args,
     persist_results,
-    set_up_initial_state
+    set_up_initial_state,
 )
 
 #####################################################
@@ -91,6 +86,7 @@ MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"  # created in this script
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
+
 
 def clean_text(text: str) -> str:
     """Cleans a text string by removing newlines, converting arbitrary
@@ -206,8 +202,9 @@ def get_semantic_search_results(row: pd.Series) -> list[dict]:
     ]
     return reduced_results
 
+
 if __name__ == "__main__":
-     args = parse_args("STG1")
+    args = parse_args("STG1")
 
     check_vector_store_ready()
     print("Vector store is ready")
@@ -219,7 +216,7 @@ if __name__ == "__main__":
         args.input_parquet_file,
         args.input_metadata_json,
         args.batch_size,
-        stage_id="stage_1"
+        stage_id="stage_1",
     )
 
     # Make a merged industry description column:
