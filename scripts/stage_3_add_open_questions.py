@@ -45,7 +45,6 @@ import pandas as pd
 from tqdm import tqdm
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
-
 from industrial_classification_utils.utils.shared_evaluation_pipeline_components import (
     parse_args,
     persist_results,

@@ -46,7 +46,6 @@ from tqdm import tqdm
 from industrial_classification_utils.synthetic_responses.synthetic_response_utils import (
     SyntheticResponder,
 )
-
 from industrial_classification_utils.utils.shared_evaluation_pipeline_components import (
     parse_args,
     persist_results,
