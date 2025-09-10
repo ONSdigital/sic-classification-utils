@@ -57,7 +57,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from .shared_evaluation_pipeline_components import (
+from industrial_classification_utils.utils.shared_evaluation_pipeline_components import (
     parse_args,
     persist_results,
     set_up_initial_state,

@@ -47,7 +47,7 @@ from industrial_classification_utils.synthetic_responses.synthetic_response_util
     SyntheticResponder,
 )
 
-from shared_evaluation_pipeline_components import (
+from industrial_classification_utils.utils.shared_evaluation_pipeline_components import (
     parse_args,
     persist_results,
     set_up_initial_state,
