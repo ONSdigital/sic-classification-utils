@@ -11,12 +11,16 @@ from langchain_openai import ChatOpenAI
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
 from industrial_classification_utils.models.response_model import SicResponse
+from langchain.output_parsers import PydanticOutputParser
+from langchain_core.messages import AIMessage
+import json
 
 MODEL_NAME = "gemini-1.5-flash"
+LOCATION = "europe-west2"
 
 
 def test_setup():
-    vertexai.init(project="classifai-sandbox", location="europe-west2")
+    vertexai.init(project="classifai-sandbox", location=LOCATION)
 
 
 @pytest.fixture(autouse=True)
@@ -44,6 +48,11 @@ def test_llm_model(model, openai_api_key, expected_model):
     ).llm
     assert isinstance(llm_model_type, expected_model)
 
+@pytest.mark.utils
+def test_pass_llm_argument():
+    llm_model = ClassificationLLM(llm = "model").llm
+    assert llm_model == "model"
+
 
 @pytest.mark.utils
 def test_llm_model_default():
@@ -53,6 +62,39 @@ def test_llm_model_default():
 @pytest.mark.utils
 def test_model_name():
     assert ClassificationLLM().llm.model_name == "gemini-1.0-pro"
+
+@pytest.mark.utils
+def test_llm_response_mocked(mocker):
+    mock_object_str = {
+        "codable": True,
+        "followup": "This is follow-up",
+        "sic_code": "12345",
+        "sic_descriptive": "description12345",
+        "sic_candidates": [
+            {
+            "sic_code": "23456",
+            "sic_descriptive": "description23456",
+            "likelihood": 0.5
+            },
+            {
+            "sic_code": "34567",
+            "sic_descriptive": "description34567",
+            "likelihood": 0.5
+            }
+        ],
+        "reasoning": "reasoning12345"
+        }
+    mock_object_json = json.dumps(mock_object_str)
+
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+
+    mock_patcher = mocker.patch("industrial_classification_utils.llm.llm.ChatVertexAI.invoke", return_value = mock_message)
+
+    result = ClassificationLLM(model_name=MODEL_NAME).get_sic_code(
+        industry_descr="", job_description="", job_title=""
+    )
+    assert str(result) == "codable=True followup='This is follow-up' sic_code='12345' sic_descriptive='description12345' sic_candidates=[SicCandidate(sic_code='23456', sic_descriptive='description23456', likelihood=0.5), SicCandidate(sic_code='34567', sic_descriptive='description34567', likelihood=0.5)] reasoning='reasoning12345'"
 
 
 @pytest.mark.utils
