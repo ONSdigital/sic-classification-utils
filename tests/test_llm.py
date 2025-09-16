@@ -95,7 +95,7 @@ def test_llm_response_mocked_get_sic_code(mocker):
         industry_descr="", job_description="", job_title=""
     )
     assert isinstance(result, SicResponse)
-    
+
 
 @pytest.mark.utils
 def test_sic_get_code_initialise():
@@ -127,6 +127,7 @@ def prompt_candidate_sic():
     llm_class = ClassificationLLM(model_name=MODEL_NAME)
     llm_class.sic = sic
     return llm_class
+
 
 @pytest.mark.utils
 def test_llm_response_mocked_sa_rag_sic_code(mocker, prompt_candidate_sic):
@@ -183,6 +184,59 @@ def test_llm_response_mocked_sa_rag_sic_code(mocker, prompt_candidate_sic):
     for i in result[2]:
         result_list.append(i)
     assert result_list == ['followup', 'sic_code', 'sic_descriptive', 'sic_candidates', 'reasoning', 'distance', 'title', 'code', 'four_digit_code', 'two_digit_code', 'industry_descr','job_title', 'job_description', 'sic_index']
+
+
+@pytest.mark.utils
+def test_llm_response_mocked_unambiguous_sic_code(mocker, prompt_candidate_sic):
+    sic_candidates = [
+        {
+            "distance": 0.6,
+            "title": "title1",
+            "code": "12345",
+            "four_digit_code": "1234",
+            "two_digit_code": "12",
+        },
+        {
+            "distance": 0.7,
+            "title": "title2",
+            "code": "23456",
+            "four_digit_code": "2345",
+            "two_digit_code": "23",
+        }
+    ]
+    mock_object_str = {
+        "codable": True,
+        "followup": "This is follow-up",
+        "sic_code": "12345",
+        "sic_descriptive": "description12345",
+        "sic_candidates": [
+            {
+            "sic_code": "23456",
+            "sic_descriptive": "description23456",
+            "likelihood": 0.5
+            },
+            {
+            "sic_code": "34567",
+            "sic_descriptive": "description34567",
+            "likelihood": 0.5
+            }
+        ],
+        "reasoning": "This is reasoning for the llm answer. Padded to 50 characters (Pydantic)"
+        }
+    mock_object_json = json.dumps(mock_object_str)
+
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+
+    mock_patcher = mocker.patch("industrial_classification_utils.llm.llm.ChatVertexAI.invoke", return_value = mock_message)
+
+    result = prompt_candidate_sic.unambiguous_sic_code(
+        industry_descr="", job_description="", job_title="", sic_candidates = sic_candidates
+    )
+    result_list = []
+    for i in result[0]:
+        result_list.append(i[0])
+    assert result_list == ['codable', 'class_code', 'class_descriptive', 'alt_candidates', 'reasoning']
 
 
 @pytest.mark.parametrize(
