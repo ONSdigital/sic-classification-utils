@@ -445,18 +445,23 @@ class ClassificationLLM:
     def unambiguous_sic_code(
         self,
         industry_descr: str,
+        semantic_search_results: list[dict],
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        sic_candidates: Optional[str] = None,
+        candidates_limit: int = 5,
+        code_digits: int = 5,
     ) -> tuple[UnambiguousResponse, Optional[Any]]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
         Args:
             industry_descr (str): The description of the industry.
+            semantic_search_results (list of dicts): List of semantic search results.
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
-            sic_candidates (list, str): Short list of SIC candidates to pass to LLM.
-                Defaults to None.
+            candidates_limit (int, optional): The maximum number of candidates
+                to include in the prompt. Defaults to 5.
+            code_digits (int, optional): The number of digits to consider from
+                the code for filtering candidates. Defaults to 5.
 
         Returns:
             UnambiguousResponse: The generated response to the query.
@@ -467,39 +472,21 @@ class ClassificationLLM:
                 not loaded correctly.
 
         """
+        sic_candidates = self._prompt_candidate_list(
+            short_list=semantic_search_results, 
+            code_digits=code_digits,
+            candidates_limit=candidates_limit,
+        )
 
-        def prep_call_dict(industry_descr, job_title, job_description, sic_candidates):
-            # Helper function to prepare the call dictionary
-            is_job_title_present = job_title is None or job_title in {"", " "}
-            job_title = "Unknown" if is_job_title_present else job_title
+        job_title = "Unknown" if (job_title is None or job_title in {"", " "}) else job_title
+        job_description = "Unknown" if (job_description is None or job_description in {"", " "}) else job_description
 
-            is_job_description_present = job_description is None or job_description in {
-                "",
-                " ",
-            }
-            job_description = (
-                "Unknown" if is_job_description_present else job_description
-            )
-
-            call_dict = {
+        call_dict = {
                 "industry_descr": industry_descr,
                 "job_title": job_title,
                 "job_description": job_description,
                 "sic_candidates": sic_candidates,
             }
-            return call_dict
-
-        if sic_candidates is None:
-            raise ValueError(
-                "Short list is None - list provided from embedding search."
-            )
-
-        call_dict = prep_call_dict(
-            industry_descr=industry_descr,
-            job_title=job_title,
-            job_description=job_description,
-            sic_candidates=sic_candidates,
-        )
 
         if self.verbose:
             final_prompt = self.sic_prompt_unambiguous.format(**call_dict)
