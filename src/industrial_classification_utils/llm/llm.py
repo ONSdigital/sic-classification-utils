@@ -442,7 +442,7 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    def unambiguous_sic_code(
+    def unambiguous_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
         semantic_search_results: list[dict],
@@ -473,20 +473,26 @@ class ClassificationLLM:
 
         """
         sic_candidates = self._prompt_candidate_list(
-            short_list=semantic_search_results, 
+            short_list=semantic_search_results,
             code_digits=code_digits,
             candidates_limit=candidates_limit,
         )
 
-        job_title = "Unknown" if (job_title is None or job_title in {"", " "}) else job_title
-        job_description = "Unknown" if (job_description is None or job_description in {"", " "}) else job_description
+        job_title = (
+            "Unknown" if (job_title is None or job_title in {"", " "}) else job_title
+        )
+        job_description = (
+            "Unknown"
+            if (job_description is None or job_description in {"", " "})
+            else job_description
+        )
 
         call_dict = {
-                "industry_descr": industry_descr,
-                "job_title": job_title,
-                "job_description": job_description,
-                "sic_candidates": sic_candidates,
-            }
+            "industry_descr": industry_descr,
+            "job_title": job_title,
+            "job_description": job_description,
+            "sic_candidates": sic_candidates,
+        }
 
         if self.verbose:
             final_prompt = self.sic_prompt_unambiguous.format(**call_dict)

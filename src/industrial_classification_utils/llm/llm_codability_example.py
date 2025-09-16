@@ -444,8 +444,8 @@ sa_response = uni_chat.unambiguous_sic_code(
     semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
     job_title=JOB_TITLE,
     job_description=JOB_DESCRIPTION,
-    code_digits=5, 
-    candidates_limit=7
+    code_digits=5,
+    candidates_limit=7,
 )
 
 pprint(sa_response[0].model_dump(), indent=2, width=80)
