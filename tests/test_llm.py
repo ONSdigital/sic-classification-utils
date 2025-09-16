@@ -64,7 +64,7 @@ def test_model_name():
     assert ClassificationLLM().llm.model_name == "gemini-1.0-pro"
 
 @pytest.mark.utils
-def test_llm_response_mocked(mocker):
+def test_llm_response_mocked_get_sic_code(mocker):
     mock_object_str = {
         "codable": True,
         "followup": "This is follow-up",
@@ -94,8 +94,8 @@ def test_llm_response_mocked(mocker):
     result = ClassificationLLM(model_name=MODEL_NAME).get_sic_code(
         industry_descr="", job_description="", job_title=""
     )
-    assert str(result) == "codable=True followup='This is follow-up' sic_code='12345' sic_descriptive='description12345' sic_candidates=[SicCandidate(sic_code='23456', sic_descriptive='description23456', likelihood=0.5), SicCandidate(sic_code='34567', sic_descriptive='description34567', likelihood=0.5)] reasoning='reasoning12345'"
-
+    assert isinstance(result, SicResponse)
+    
 
 @pytest.mark.utils
 def test_sic_get_code_initialise():
@@ -109,8 +109,8 @@ def test_sic_get_code_initialise():
 @pytest.fixture
 def prompt_candidate_sic():
     nodes = [
-        SicNode(sic_code=SicCode("A0111x"), description="Bird watching"),
-        SicNode(sic_code=SicCode("A0112x"), description="Petting animals"),
+        SicNode(sic_code=SicCode("A12345"), description="description12345"),
+        SicNode(sic_code=SicCode("A23456"), description="description23456"),
     ]
     lookup = {}
     for node in nodes:
@@ -126,15 +126,70 @@ def prompt_candidate_sic():
     sic = SIC(nodes=nodes, code_lookup=lookup)
     llm_class = ClassificationLLM(model_name=MODEL_NAME)
     llm_class.sic = sic
-    print(llm_class.sic.all_leaf_text())
     return llm_class
+
+@pytest.mark.utils
+def test_llm_response_mocked_sa_rag_sic_code(mocker, prompt_candidate_sic):
+    short_list = [
+        {
+            "distance": 0.6,
+            "title": "title1",
+            "code": "12345",
+            "four_digit_code": "1234",
+            "two_digit_code": "12",
+        },
+        {
+            "distance": 0.7,
+            "title": "title2",
+            "code": "23456",
+            "four_digit_code": "2345",
+            "two_digit_code": "23",
+        }
+    ]
+    mock_object_str = {
+        "codable": True,
+        "followup": "This is follow-up",
+        "sic_code": "12345",
+        "sic_descriptive": "description12345",
+        "sic_candidates": [
+            {
+            "sic_code": "23456",
+            "sic_descriptive": "description23456",
+            "likelihood": 0.5
+            },
+            {
+            "sic_code": "34567",
+            "sic_descriptive": "description34567",
+            "likelihood": 0.5
+            }
+        ],
+        "reasoning": "reasoning12345"
+        }
+    mock_object_json = json.dumps(mock_object_str)
+
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+
+    mock_patcher = mocker.patch("industrial_classification_utils.llm.llm.ChatVertexAI.invoke", return_value = mock_message)
+
+    result = prompt_candidate_sic.sa_rag_sic_code(
+        industry_descr="", job_description="", job_title="", short_list = short_list
+    )
+    result_list = []
+    for i in result[0]:
+        result_list.append(i[0])
+    for i in result[1][0]:
+        result_list.append(i)
+    for i in result[2]:
+        result_list.append(i)
+    assert result_list == ['followup', 'sic_code', 'sic_descriptive', 'sic_candidates', 'reasoning', 'distance', 'title', 'code', 'four_digit_code', 'two_digit_code', 'industry_descr','job_title', 'job_description', 'sic_index']
 
 
 @pytest.mark.parametrize(
     "code, activities, expected_output_code, expected_output_activities",
     [
-        ("01110", ["observing"], "01110", "observing"),
-        ("01120", ["giving belly rubs"], "01120", "giving belly rubs"),
+        ("12345", ["activity1"], "12345", "activity1"),
+        ("23456", ["activity2"], "23456", "activity2"),
     ],
 )
 @pytest.mark.utils
