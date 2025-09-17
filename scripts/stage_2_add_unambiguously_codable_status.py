@@ -89,17 +89,11 @@ def get_unambiguous_sic(
     Returns:
         result (dict): the codability, assigned code (or None), and the alternatice SIC candidates.
     """
-    short_list = c_llm._prompt_candidate_list(  # pylint: disable=W0212
-        row["semantic_search_results"],
-        code_digits=CODE_DIGITS,
-        candidates_limit=CANDIDATES_LIMIT,
-    )
-
     sa_response = c_llm.unambiguous_sic_code(
         industry_descr=row[MERGED_INDUSTRY_DESC_COL],
+        semantic_search_results=row["semantic_search_results"],
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
-        sic_candidates=short_list,
     )
 
     result = {

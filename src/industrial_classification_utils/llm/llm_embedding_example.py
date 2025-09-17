@@ -73,11 +73,12 @@ response, short_list, prompt = gemini_llm.sa_rag_sic_code(
 )
 # Print the response
 print(response)
-# print(short_list)
-# print(prompt)
 
 query_response, call_dict = gemini_llm.unambiguous_sic_code(
-    ORG_DESCRIPTION, JOB_TITLE, JOB_DESCRIPTION
+    industry_descr=ORG_DESCRIPTION,
+    semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
+    job_title=JOB_TITLE,
+    job_description=JOB_DESCRIPTION,
 )
 
 # Print the response

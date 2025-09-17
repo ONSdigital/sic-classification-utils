@@ -436,13 +436,11 @@ EXAMPLE_EMBED_SHORT_LIST = [
     },
 ]
 
-candidate_list = uni_chat._prompt_candidate_list(EXAMPLE_EMBED_SHORT_LIST)  # type: ignore
-
 sic_response_unambiguous = uni_chat.unambiguous_sic_code(
     industry_descr=ORG_DESCRIPTION,
+    semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
     job_title=JOB_TITLE,
     job_description=JOB_DESCRIPTION,
-    sic_candidates=candidate_list,
 )
 
 # Formulate Open Question
