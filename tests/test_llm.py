@@ -1,19 +1,23 @@
 # pylint: disable=C0116
 """Tests for industrial_classification_utils.llm.llm.py."""
 
+import json
 from unittest import mock
 
 import pytest
 import vertexai
 from industrial_classification.hierarchy.sic_hierarchy import SIC, SicCode, SicNode
+from langchain_core.messages import AIMessage
 from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import ChatOpenAI
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
-from industrial_classification_utils.models.response_model import SicResponse
-from langchain.output_parsers import PydanticOutputParser
-from langchain_core.messages import AIMessage
-import json
+from industrial_classification_utils.models.response_model import (
+    FinalSICAssignment,
+    SicResponse,
+    SurveyAssistSicResponse,
+    UnambiguousResponse,
+)
 
 MODEL_NAME = "gemini-1.5-flash"
 LOCATION = "europe-west2"
@@ -48,9 +52,10 @@ def test_llm_model(model, openai_api_key, expected_model):
     ).llm
     assert isinstance(llm_model_type, expected_model)
 
+
 @pytest.mark.utils
 def test_pass_llm_argument():
-    llm_model = ClassificationLLM(llm = "model").llm
+    llm_model = ClassificationLLM(llm="model").llm
     assert llm_model == "model"
 
 
@@ -63,33 +68,37 @@ def test_llm_model_default():
 def test_model_name():
     assert ClassificationLLM().llm.model_name == "gemini-1.0-pro"
 
+
 @pytest.mark.utils
 def test_llm_response_mocked_get_sic_code(mocker):
-    mock_object_str = {
+    mock_object_dict = {
         "codable": True,
         "followup": "This is follow-up",
         "sic_code": "12345",
         "sic_descriptive": "description12345",
         "sic_candidates": [
             {
-            "sic_code": "23456",
-            "sic_descriptive": "description23456",
-            "likelihood": 0.5
+                "sic_code": "23456",
+                "sic_descriptive": "description23456",
+                "likelihood": 0.5,
             },
             {
-            "sic_code": "34567",
-            "sic_descriptive": "description34567",
-            "likelihood": 0.5
-            }
+                "sic_code": "34567",
+                "sic_descriptive": "description34567",
+                "likelihood": 0.5,
+            },
         ],
-        "reasoning": "reasoning12345"
-        }
-    mock_object_json = json.dumps(mock_object_str)
+        "reasoning": "reasoning12345",
+    }
+    mock_object_json = json.dumps(mock_object_dict)
 
     mock_message = mocker.Mock(spec=AIMessage)
     mock_message.content = mock_object_json
 
-    mock_patcher = mocker.patch("industrial_classification_utils.llm.llm.ChatVertexAI.invoke", return_value = mock_message)
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
 
     result = ClassificationLLM(model_name=MODEL_NAME).get_sic_code(
         industry_descr="", job_description="", job_title=""
@@ -145,45 +154,43 @@ def test_llm_response_mocked_sa_rag_sic_code(mocker, prompt_candidate_sic):
             "code": "23456",
             "four_digit_code": "2345",
             "two_digit_code": "23",
-        }
+        },
     ]
-    mock_object_str = {
+    mock_object_dict = {
         "codable": True,
         "followup": "This is follow-up",
         "sic_code": "12345",
         "sic_descriptive": "description12345",
         "sic_candidates": [
             {
-            "sic_code": "23456",
-            "sic_descriptive": "description23456",
-            "likelihood": 0.5
+                "sic_code": "23456",
+                "sic_descriptive": "description23456",
+                "likelihood": 0.5,
             },
             {
-            "sic_code": "34567",
-            "sic_descriptive": "description34567",
-            "likelihood": 0.5
-            }
+                "sic_code": "34567",
+                "sic_descriptive": "description34567",
+                "likelihood": 0.5,
+            },
         ],
-        "reasoning": "reasoning12345"
-        }
-    mock_object_json = json.dumps(mock_object_str)
+        "reasoning": "reasoning12345",
+    }
+    mock_object_json = json.dumps(mock_object_dict)
 
     mock_message = mocker.Mock(spec=AIMessage)
     mock_message.content = mock_object_json
 
-    mock_patcher = mocker.patch("industrial_classification_utils.llm.llm.ChatVertexAI.invoke", return_value = mock_message)
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
 
     result = prompt_candidate_sic.sa_rag_sic_code(
-        industry_descr="", job_description="", job_title="", short_list = short_list
+        industry_descr="", job_description="", job_title="", short_list=short_list
     )
-    result_list = []
-    for i in result[0]:
-        result_list.append(i[0])
-    for i in result[1][0]:
-        result_list.append(i)
-    for i in result[2]:
-        result_list.append(i)
-    assert result_list == ['followup', 'sic_code', 'sic_descriptive', 'sic_candidates', 'reasoning', 'distance', 'title', 'code', 'four_digit_code', 'two_digit_code', 'industry_descr','job_title', 'job_description', 'sic_index']
+    assert isinstance(result[0], SurveyAssistSicResponse)
+    assert isinstance(result[1], list)
+    assert isinstance(result[2], dict)
 
 
 @pytest.mark.utils
@@ -202,41 +209,102 @@ def test_llm_response_mocked_unambiguous_sic_code(mocker, prompt_candidate_sic):
             "code": "23456",
             "four_digit_code": "2345",
             "two_digit_code": "23",
-        }
+        },
     ]
-    mock_object_str = {
+    mock_object_dict = {
         "codable": True,
         "followup": "This is follow-up",
         "sic_code": "12345",
         "sic_descriptive": "description12345",
         "sic_candidates": [
             {
-            "sic_code": "23456",
-            "sic_descriptive": "description23456",
-            "likelihood": 0.5
+                "sic_code": "23456",
+                "sic_descriptive": "description23456",
+                "likelihood": 0.5,
             },
             {
-            "sic_code": "34567",
-            "sic_descriptive": "description34567",
-            "likelihood": 0.5
-            }
+                "sic_code": "34567",
+                "sic_descriptive": "description34567",
+                "likelihood": 0.5,
+            },
         ],
-        "reasoning": "This is reasoning for the llm answer. Padded to 50 characters (Pydantic)"
-        }
-    mock_object_json = json.dumps(mock_object_str)
+        "reasoning": "This is reasoning for the llm answer. Padded to 50 characters (Pydantic)",
+    }
+    mock_object_json = json.dumps(mock_object_dict)
 
     mock_message = mocker.Mock(spec=AIMessage)
     mock_message.content = mock_object_json
 
-    mock_patcher = mocker.patch("industrial_classification_utils.llm.llm.ChatVertexAI.invoke", return_value = mock_message)
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
 
     result = prompt_candidate_sic.unambiguous_sic_code(
-        industry_descr="", job_description="", job_title="", sic_candidates = sic_candidates
+        industry_descr="",
+        job_description="",
+        job_title="",
+        sic_candidates=sic_candidates,
     )
-    result_list = []
-    for i in result[0]:
-        result_list.append(i[0])
-    assert result_list == ['codable', 'class_code', 'class_descriptive', 'alt_candidates', 'reasoning']
+    assert isinstance(result[0], UnambiguousResponse)
+    assert isinstance(result[1], dict)
+
+
+@pytest.mark.utils
+def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
+    sic_candidates = [
+        {
+            "class_code": "12345",
+            "class_descriptive": "description1",
+            "likelihood": 0.8,
+        },
+        {
+            "class_code": "23456",
+            "class_descriptive": "description2",
+            "likelihood": 0.6,
+        },
+    ]
+    mock_object_dict = {
+        "codable": True,
+        "followup": "This is follow-up",
+        "sic_code": "12345",
+        "sic_descriptive": "description12345",
+        "sic_candidates": [
+            {
+                "sic_code": "23456",
+                "sic_descriptive": "description23456",
+                "likelihood": 0.5,
+            },
+            {
+                "sic_code": "34567",
+                "sic_descriptive": "description34567",
+                "likelihood": 0.5,
+            },
+        ],
+        "reasoning": "This is reasoning for the llm answer. Padded to 50 characters (Pydantic)",
+    }
+    mock_object_json = json.dumps(mock_object_dict)
+
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
+
+    result = prompt_candidate_sic.final_sic_code(
+        industry_descr="",
+        job_title="",
+        job_description="",
+        sic_candidates=str(sic_candidates),
+        open_question="",
+        answer_to_open_question="",
+        closed_question="",
+        answer_to_closed_question="",
+    )
+    assert isinstance(result[0], FinalSICAssignment)
+    assert isinstance(result[1], dict)
 
 
 @pytest.mark.parametrize(
