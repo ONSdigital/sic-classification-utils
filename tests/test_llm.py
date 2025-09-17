@@ -6,18 +6,21 @@ from unittest import mock
 
 import pytest
 import vertexai
+import pandas as pd
 from industrial_classification.hierarchy.sic_hierarchy import SIC, SicCode, SicNode
 from langchain_core.messages import AIMessage
 from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import ChatOpenAI
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
+from industrial_classification.meta.classification_meta import ClassificationMeta
 from industrial_classification_utils.models.response_model import (
     FinalSICAssignment,
     SicResponse,
     SurveyAssistSicResponse,
     UnambiguousResponse,
 )
+from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 
 MODEL_NAME = "gemini-1.5-flash"
 LOCATION = "europe-west2"
@@ -306,6 +309,56 @@ def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
     assert isinstance(result[0], FinalSICAssignment)
     assert isinstance(result[1], dict)
 
+@pytest.fixture
+def mock_sic_meta():
+    SICMeta_mock = {}
+    SICMeta_mock["Axxxxx"] = {"title": "titleA", "detail":"detailA"}
+    SICMeta_mock["A11xxx"] = {"title": "title11", "detail":"detail11"}
+    SICMeta_mock["A111xx"] = {"title": "title111", "detail":"detail111"}
+    SICMeta_mock["A1111x"] = {"title": "title1111", "detail":"detail1111"}
+    SICMeta_mock["A11112"] = {"title": "title11112", "detail":"detail11112"}
+    SICMeta_mock["A11111"] = {"title": "title11111", "detail":"detail11111"}
+    sic_meta_mock = [
+    ClassificationMeta.model_validate({"code": k} | v) for k, v in SICMeta_mock.items()
+    ]
+    return sic_meta_mock
+
+
+@pytest.fixture
+def mock_sic_meta_patch(mock_sic_meta):
+    with mock.patch('industrial_classification.meta.sic_meta.sic_meta', mock_sic_meta):
+        yield
+
+
+@pytest.mark.utils
+def test_prompt_candidate_include_all(mock_sic_meta_patch):
+    nodes = [
+        SicNode(sic_code=SicCode("Axxxxx"), description="descriptionA"),
+        SicNode(sic_code=SicCode("A11xxx"), description="description11"),
+        SicNode(sic_code=SicCode("A111xx"), description="description111"),
+        SicNode(sic_code=SicCode("A1111x"), description="description1111"),
+        SicNode(sic_code=SicCode("A11111"), description="description11111"),
+        SicNode(sic_code=SicCode("A11112"), description="description11112"),
+    ]
+    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+
+    index_mock = {'uk_sic_2007': ["11111", "11112"],
+    'activity': ["activity1", "activity2"]}
+    sic_index_df_mock = pd.DataFrame(index_mock)
+    df_mock = {'description':["desc1", "desc2", "desc3", "desc4", "desc5", "desc6"],
+    'section': ["A", "A", "A", "A", "A", "A"],
+    'most_disaggregated_level': ["11111", "11112", "1111", "111", "11", "A"],
+    'level_headings': ["Sub Class", "Sub Class", "Class", "Group", "Division", "SECTION"]}
+    sic_df_mock = pd.DataFrame(df_mock)
+    sic = load_hierarchy(sic_df_mock, sic_index_df_mock)
+
+    llm_class.sic = sic
+
+    result = llm_class._prompt_candidate("111", ["activity"], include_all = True)
+
+    assert isinstance(result, str)
+    assert all(x in result for x in ["Code", "Title", "Details"])
+    
 
 @pytest.mark.parametrize(
     "code, activities, expected_output_code, expected_output_activities",
