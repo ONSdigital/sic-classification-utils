@@ -94,6 +94,8 @@ def get_unambiguous_sic(
         semantic_search_results=row["semantic_search_results"],
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
+        candidates_limit=CANDIDATES_LIMIT,
+        code_digits=CODE_DIGITS,
     )
 
     result = {
