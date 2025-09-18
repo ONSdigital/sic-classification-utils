@@ -315,9 +315,9 @@ def mock_sic_meta():
     SICMeta_mock["Axxxxx"] = {"title": "titleA", "detail":"detailA"}
     SICMeta_mock["A11xxx"] = {"title": "title11", "detail":"detail11"}
     SICMeta_mock["A111xx"] = {"title": "title111", "detail":"detail111"}
-    SICMeta_mock["A1111x"] = {"title": "title1111", "detail":"detail1111"}
+    SICMeta_mock["A1111x"] = {"title": "title1111", "detail":"detail1111", "includes": ["includes1111", "includes1111A"]}
+    SICMeta_mock["A11111"] = {"title": "title11111", "detail":"detail11111", "excludes": ["excludes11111"]}
     SICMeta_mock["A11112"] = {"title": "title11112", "detail":"detail11112"}
-    SICMeta_mock["A11111"] = {"title": "title11111", "detail":"detail11111"}
     sic_meta_mock = [
     ClassificationMeta.model_validate({"code": k} | v) for k, v in SICMeta_mock.items()
     ]
@@ -330,8 +330,8 @@ def mock_sic_meta_patch(mock_sic_meta):
         yield
 
 
-@pytest.mark.utils
-def test_prompt_candidate_include_all(mock_sic_meta_patch):
+@pytest.fixture
+def classification_llm_with_sic():
     nodes = [
         SicNode(sic_code=SicCode("Axxxxx"), description="descriptionA"),
         SicNode(sic_code=SicCode("A11xxx"), description="description11"),
@@ -354,10 +354,21 @@ def test_prompt_candidate_include_all(mock_sic_meta_patch):
 
     llm_class.sic = sic
 
-    result = llm_class._prompt_candidate("111", ["activity"], include_all = True)
+    return llm_class
 
-    assert isinstance(result, str)
-    assert all(x in result for x in ["Code", "Title", "Details"])
+@pytest.mark.utils
+def test_prompt_candidate_include_all(mock_sic_meta_patch, classification_llm_with_sic):
+
+    result111 = classification_llm_with_sic._prompt_candidate("111", ["activity"], include_all = True)
+    result1111 = classification_llm_with_sic._prompt_candidate("1111", ["activity"], include_all = True)
+    result11111 = classification_llm_with_sic._prompt_candidate("11111", ["activity"], include_all = True)
+
+    assert isinstance(result111, str)
+    assert isinstance(result1111, str)
+    assert isinstance(result11111, str)
+    assert all(x in result111 for x in ["Code", "Title", "Details"])
+    assert all(x in result1111 for x in ["Code", "Title", "Details", "Includes"])
+    assert all(x in result11111 for x in ["Code", "Title", "Details", "Excludes"])
     
 
 @pytest.mark.parametrize(
@@ -533,3 +544,38 @@ def test_reranker_sic_response_is_str(industry, short_list):
         .model_dump()["selected_codes"][0]["reasoning"]
     )
     assert isinstance(result, str)
+
+@pytest.mark.utils
+def test_open_api_key_raise_not_implemented_error():
+    with pytest.raises(NotImplementedError, match="Need to provide an OpenAI API key"):
+        ClassificationLLM(model_name="gpt")
+
+
+@pytest.mark.utils
+def test_model_family_raise_not_implemented_error():
+    with pytest.raises(NotImplementedError, match="Unsupported model family"):
+        ClassificationLLM(model_name="aaaa")
+
+
+# @patch('industrial_classification_utils.models.response_model.SicResponse')
+# def test_except_value_error_get_sic_code(mock_parser_class):
+#     mock_parser_instance = mock_parser_class.return_value
+#     mock_parser_instance.parse.side_effect = ValueError("Parsing error")
+
+
+@pytest.mark.utils
+def test_unambiguous_sic_code_sic_candidates_is_none_raise_value_error():
+    with pytest.raises(ValueError, match="Short list is None - list provided from embedding search."):
+        ClassificationLLM(model_name=MODEL_NAME).unambiguous_sic_code(industry_descr="", job_description="", job_title="")
+
+
+@pytest.mark.utils
+def test_sa_rag_sic_code_short_list_is_none_raise_value_error():
+    with pytest.raises(ValueError, match="Short list is None - list provided from embedding search."):
+        ClassificationLLM(model_name=MODEL_NAME).sa_rag_sic_code(industry_descr="", job_description="", job_title="")
+
+
+@pytest.mark.utils
+def test_reranker_sic_short_list_is_none_raise_value_error():
+    with pytest.raises(ValueError, match="Short list is None - list provided from embedding search."):
+        ClassificationLLM(model_name=MODEL_NAME).reranker_sic(industry_descr="", job_description="", job_title="")
