@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
+## [0.1.4] - 2025-09-18
+
+## Added
+- `final_sic_code` method for `ClassificationLLM class in `industrail_classification.llm.llm.py`, to assign SIC using initial response & followup question and response.
+- `formulate_open_question` and `formulate_closed_question` methods for  `ClassificationLLM class in `industrail_classification.llm.llm.py`, to construct followup questions.
+- `synthetic_responses` module, with a `SyntheticResponder` class capable of emulating user interaction.
+- "Evaluation Pipeline" scripts to batch process survey responses, stored in `scripts/` folder.
+
+## Changed
+- updated `unambiguous_sic_code` method of ClassificationLLM to accept the raw semantic search output as input, rather than needing it to be pre-formatted.
+- updated `unambiguous_sic_code` method and `UnambiguousResponse` response model to check if a response is unambiguously codable to 5-digits.
+
+---
 ## [0.1.3] - 2025-06-30
 
 ## Added
