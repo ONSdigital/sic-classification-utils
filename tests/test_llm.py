@@ -557,12 +557,6 @@ def test_model_family_raise_not_implemented_error():
         ClassificationLLM(model_name="aaaa")
 
 
-# @patch('industrial_classification_utils.models.response_model.SicResponse')
-# def test_except_value_error_get_sic_code(mock_parser_class):
-#     mock_parser_instance = mock_parser_class.return_value
-#     mock_parser_instance.parse.side_effect = ValueError("Parsing error")
-
-
 @pytest.mark.utils
 def test_unambiguous_sic_code_sic_candidates_is_none_raise_value_error():
     with pytest.raises(ValueError, match="Short list is None - list provided from embedding search."):
