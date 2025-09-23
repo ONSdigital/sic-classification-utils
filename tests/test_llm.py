@@ -20,6 +20,8 @@ from langchain_openai import ChatOpenAI
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
 from industrial_classification_utils.models.response_model import (
+    ClosedFollowUp,
+    OpenFollowUp,
     FinalSICAssignment,
     SicResponse,
     SurveyAssistSicResponse,
@@ -30,6 +32,7 @@ MODEL_NAME = "gemini-1.5-flash"
 LOCATION = "europe-west2"
 
 
+# Test initialisation
 def test_setup():
     vertexai.init(project="classifai-sandbox", location=LOCATION)
 
@@ -76,6 +79,7 @@ def test_model_name():
     assert ClassificationLLM().llm.model_name == "gemini-1.0-pro"
 
 
+# Test methods in ClassificationLLM
 @pytest.mark.utils
 def test_llm_response_mocked_get_sic_code(mocker):
     mock_object_dict = {
@@ -353,9 +357,9 @@ def test_llm_response_mocked_unambiguous_sic_code(mocker, prompt_candidate_sic):
 
     result = prompt_candidate_sic.unambiguous_sic_code(
         industry_descr="",
+        semantic_search_results=[],
         job_description="",
         job_title="",
-        sic_candidates=sic_candidates,
     )
     assert isinstance(result[0], UnambiguousResponse)
     assert isinstance(result[1], dict)
@@ -417,6 +421,59 @@ def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
     assert isinstance(result[0], FinalSICAssignment)
     assert isinstance(result[1], dict)
 
+
+@pytest.mark.utils
+def test_llm_response_mocked_formulate_open_question(mocker, prompt_candidate_sic):
+    mock_object_dict = {
+        "class_code": "",
+        "class_descriptive": "",
+        "likelihood": 0.5
+        }
+    mock_object_json = json.dumps(mock_object_dict)
+
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
+
+    result = prompt_candidate_sic.formulate_open_question(
+        industry_descr="",
+        job_title="",
+        job_description="",
+        llm_output="",
+    )
+    assert isinstance(result[0], OpenFollowUp)
+    assert isinstance(result[1], dict)
+
+
+@pytest.mark.utils
+def test_llm_response_mocked_formulate_closed_question(mocker, prompt_candidate_sic):
+    mock_object_dict = {
+        "class_code": "",
+        "class_descriptive": "",
+        "likelihood": 0.5
+        }
+    mock_object_json = json.dumps(mock_object_dict)
+
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
+
+    result = prompt_candidate_sic.formulate_closed_question(
+        industry_descr="",
+        job_title="",
+        job_description="",
+        llm_output="",
+    )
+    assert isinstance(result[0], ClosedFollowUp)
+    assert isinstance(result[1], dict)
 
 @pytest.fixture
 def mock_sic_meta():
@@ -542,34 +599,34 @@ def test_sa_rag_sic_code_prep_followup_is_str(  # noqa: PLR0913
 
 
 @pytest.mark.parametrize(
-    "industry, title, job_description, sic_candidates, expected_job_title",
+    "industry, semantic_search_results, title, job_description, expected_job_title",
     [
         (
             "school",
+            [{"title": "Education", "code": "11111"}],
             "",
             "educate kids",
-            [{"title": "Education", "code": "01"}],
             "Unknown",
         ),
         (
             "school",
+            [{"title": "Education", "code": "11111"}],
             " ",
             "educate kids",
-            [{"title": "Education", "code": "01"}],
             "Unknown",
         ),
         (
             "school",
+            [{"title": "Education", "code": "11111"}],
             None,
             "educate kids",
-            [{"title": "Education", "code": "01"}],
             "Unknown",
         ),
         (
             "school",
+            [{"title": "Education", "code": "11111"}],
             "teacher",
             "educate kids",
-            [{"title": "Education", "code": "01"}],
             "teacher",
         ),
     ],
@@ -577,15 +634,18 @@ def test_sa_rag_sic_code_prep_followup_is_str(  # noqa: PLR0913
 @pytest.mark.utils
 def test_unambiguous_sic_code_call_dict_job_title_correct(  # noqa: PLR0913
     industry,
+    semantic_search_results,
     title,
     job_description,
-    sic_candidates,
     expected_job_title,
     mock_sic_meta_patch,
     classification_llm_with_sic,
 ):
     result = classification_llm_with_sic.unambiguous_sic_code(
-        industry, title, job_description, sic_candidates=sic_candidates
+        industry,
+        semantic_search_results,
+        title,
+        job_description,
     )[1]["job_title"]
     assert result == expected_job_title
 
@@ -595,10 +655,10 @@ def test_unambiguous_sic_code_followup_is_str(
     mock_sic_meta_patch, classification_llm_with_sic
 ):
     result = classification_llm_with_sic.unambiguous_sic_code(
-        "school",
-        "teacher",
-        "educate kids",
-        sic_candidates=[{"title": "Education", "code": "01"}],
+        industry_descr="school",
+        semantic_search_results=[{"title": "Education", "code": "11111"}],
+        job_title="teacher",
+        job_description="educate kids",
     )[0].reasoning
     assert isinstance(result, str)
 
@@ -648,20 +708,6 @@ def test_open_api_key_raise_not_implemented_error():
 def test_model_family_raise_not_implemented_error():
     with pytest.raises(NotImplementedError, match="Unsupported model family"):
         ClassificationLLM(model_name="aaaa")
-
-
-@pytest.mark.utils
-def test_unambiguous_sic_code_sic_candidates_is_none_raise_value_error(
-    mock_sic_meta_patch, classification_llm_with_sic
-):
-    with pytest.raises(
-        ValueError, match="Short list is None - list provided from embedding search."
-    ):
-        classification_llm_with_sic.unambiguous_sic_code(
-            industry_descr="",
-            job_description="",
-            job_title="",
-        )
 
 
 @pytest.mark.utils
