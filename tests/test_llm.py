@@ -366,6 +366,89 @@ def test_llm_response_mocked_unambiguous_sic_code(mocker, prompt_candidate_sic):
 
 
 @pytest.mark.utils
+def test_llm_response_mocked_prompt_candidate_list_filtered_full(mock_sic_meta_patch, classification_llm_with_sic):
+    short_list = [
+        {
+            "distance": 0.5,
+            "title": "title",
+            "code": "11111",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        }
+        ]
+
+    result = classification_llm_with_sic._prompt_candidate_list_filtered(short_list=short_list,
+        filtered_list=["11111"])
+    assert isinstance(result, str)
+
+
+@pytest.mark.utils
+def test_llm_response_mocked_prompt_candidate_list_filtered_no_filtered_list(mock_sic_meta_patch, classification_llm_with_sic):
+    short_list = [
+        {
+            "distance": 0.5,
+            "title": "title",
+            "code": "11111",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        }
+        ]
+
+    result = classification_llm_with_sic._prompt_candidate_list_filtered(short_list=short_list)
+    assert result == ""
+
+
+@pytest.mark.utils
+def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(mock_sic_meta_patch, classification_llm_with_sic):
+    short_list = [
+        {
+            "distance": 0.5,
+            "title": "title",
+            "code": "11111",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        },
+        {
+            "distance": 0.5,
+            "title": "title",
+            "code": "11112",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        },
+        ]
+
+    result = classification_llm_with_sic._prompt_candidate_list_filtered(short_list=short_list,
+    chars_limit=80,
+    filtered_list=["11111", "11112"])
+    assert len(result) < 80
+
+
+@pytest.mark.utils
+def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(mock_sic_meta_patch, classification_llm_with_sic):
+    short_list = [
+        {
+            "distance": 0.5,
+            "title": "title",
+            "code": "11111",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        },
+        {
+            "distance": 0.5,
+            "title": "title",
+            "code": "11112",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        },
+        ]
+
+    result = classification_llm_with_sic._prompt_candidate_list_filtered(short_list=short_list,
+    chars_limit=80,
+    filtered_list=["11111", "11112"])
+    assert len(result) < 80
+    
+
+@pytest.mark.utils
 def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
     sic_candidates = [
         {
