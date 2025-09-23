@@ -1,16 +1,15 @@
-"""This module provides illustration for the use of unambiguous prompt with an LLM."""
+# pylint: disable=invalid-name, protected-access, line-too-long, missing-module-docstring, duplicate-code
 
 from pprint import pprint
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
 
-# pylint: disable=duplicate-code
+uni_chat = ClassificationLLM(model_name="gemini-1.5-flash", verbose=True)
 
-LLM_MODEL = "gemini-1.5-flash"
+# Inputs for ClassificationLLM methods
 JOB_TITLE = "psychologist"
 JOB_DESCRIPTION = "I help adults who have mental health difficulties"
 ORG_DESCRIPTION = "adult mental health"
-
 
 # The following is a mock response for the embedding search
 EXAMPLE_EMBED_SHORT_LIST = [
@@ -437,15 +436,40 @@ EXAMPLE_EMBED_SHORT_LIST = [
     },
 ]
 
-uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
-
-sa_response = uni_chat.unambiguous_sic_code(
+sic_response_unambiguous = uni_chat.unambiguous_sic_code(
     industry_descr=ORG_DESCRIPTION,
     semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
     job_title=JOB_TITLE,
     job_description=JOB_DESCRIPTION,
-    code_digits=5,
-    candidates_limit=7,
 )
 
-pprint(sa_response[0].model_dump(), indent=2, width=80)
+# Formulate Open Question
+sic_followup = uni_chat.formulate_open_question(
+    industry_descr=ORG_DESCRIPTION,
+    job_title=JOB_TITLE,
+    job_description=JOB_DESCRIPTION,
+    llm_output=sic_response_unambiguous[0].alt_candidates,  # type: ignore
+)
+
+print("Open Question answer: Follow-up and Reasoning")
+pprint(sic_followup[0].model_dump(), indent=2, width=80)
+
+filtered_list = [elem.class_code for elem in sic_response_unambiguous[0].alt_candidates]
+filtered_candidates = uni_chat._prompt_candidate_list_filtered(
+    EXAMPLE_EMBED_SHORT_LIST, filtered_list=filtered_list, activities_limit=5  # type: ignore
+)
+
+# Formulate Closed Quesiton
+sic_closed_followup = uni_chat.formulate_closed_question(
+    industry_descr=ORG_DESCRIPTION,
+    job_title=JOB_TITLE,
+    job_description=JOB_DESCRIPTION,
+    llm_output=filtered_candidates,  # type: ignore
+)
+print(
+    """\nClosed Quesiton answer: Follow-up, Reasoning, and List of simplified SIC options to choose from"""
+)
+pprint(sic_closed_followup[0].model_dump(), indent=2, width=80)
+
+print("\nCandidate list for the prompt")
+pprint(filtered_candidates, indent=2, width=80)
