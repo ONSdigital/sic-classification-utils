@@ -651,17 +651,23 @@ def test_model_family_raise_not_implemented_error():
 
 
 @pytest.mark.utils
-def test_unambiguous_sic_code_sic_candidates_is_none_raise_value_error(mock_sic_meta_patch, classification_llm_with_sic):
+def test_unambiguous_sic_code_sic_candidates_is_none_raise_value_error(
+    mock_sic_meta_patch, classification_llm_with_sic
+):
     with pytest.raises(
         ValueError, match="Short list is None - list provided from embedding search."
     ):
         classification_llm_with_sic.unambiguous_sic_code(
-            industry_descr="", job_description="", job_title="", 
+            industry_descr="",
+            job_description="",
+            job_title="",
         )
 
 
 @pytest.mark.utils
-def test_sa_rag_sic_code_short_list_is_none_raise_value_error(mock_sic_meta_patch, classification_llm_with_sic):
+def test_sa_rag_sic_code_short_list_is_none_raise_value_error(
+    mock_sic_meta_patch, classification_llm_with_sic
+):
     with pytest.raises(
         ValueError, match="Short list is None - list provided from embedding search."
     ):
@@ -671,7 +677,9 @@ def test_sa_rag_sic_code_short_list_is_none_raise_value_error(mock_sic_meta_patc
 
 
 @pytest.mark.utils
-def test_reranker_sic_short_list_is_none_raise_value_error(mock_sic_meta_patch, classification_llm_with_sic):
+def test_reranker_sic_short_list_is_none_raise_value_error(
+    mock_sic_meta_patch, classification_llm_with_sic
+):
     with pytest.raises(
         ValueError, match="Short list is None - list provided from embedding search."
     ):
