@@ -21,8 +21,8 @@ from langchain_openai import ChatOpenAI
 from industrial_classification_utils.llm.llm import ClassificationLLM
 from industrial_classification_utils.models.response_model import (
     ClosedFollowUp,
-    OpenFollowUp,
     FinalSICAssignment,
+    OpenFollowUp,
     SicResponse,
     SurveyAssistSicResponse,
     UnambiguousResponse,
@@ -310,22 +310,22 @@ def test_llm_mocked_sa_rag_sic_code_job_title(  # noqa: PLR0913
 
 @pytest.mark.utils
 def test_llm_response_mocked_unambiguous_sic_code(mocker, prompt_candidate_sic):
-    sic_candidates = [
-        {
-            "distance": 0.6,
-            "title": "title1",
-            "code": "12345",
-            "four_digit_code": "1234",
-            "two_digit_code": "12",
-        },
-        {
-            "distance": 0.7,
-            "title": "title2",
-            "code": "23456",
-            "four_digit_code": "2345",
-            "two_digit_code": "23",
-        },
-    ]
+    # sic_candidates = [
+    #     {
+    #         "distance": 0.6,
+    #         "title": "title1",
+    #         "code": "12345",
+    #         "four_digit_code": "1234",
+    #         "two_digit_code": "12",
+    #     },
+    #     {
+    #         "distance": 0.7,
+    #         "title": "title2",
+    #         "code": "23456",
+    #         "four_digit_code": "2345",
+    #         "two_digit_code": "23",
+    #     },
+    # ]
     mock_object_dict = {
         "codable": True,
         "followup": "This is follow-up",
@@ -366,7 +366,9 @@ def test_llm_response_mocked_unambiguous_sic_code(mocker, prompt_candidate_sic):
 
 
 @pytest.mark.utils
-def test_llm_response_mocked_prompt_candidate_list_filtered_full(mock_sic_meta_patch, classification_llm_with_sic):
+def test_llm_response_mocked_prompt_candidate_list_filtered_full(
+    mock_sic_meta_patch, classification_llm_with_sic
+):
     short_list = [
         {
             "distance": 0.5,
@@ -375,15 +377,18 @@ def test_llm_response_mocked_prompt_candidate_list_filtered_full(mock_sic_meta_p
             "four_digit_code": "1111",
             "two_digit_code": "11",
         }
-        ]
+    ]
 
-    result = classification_llm_with_sic._prompt_candidate_list_filtered(short_list=short_list,
-        filtered_list=["11111"])
+    result = classification_llm_with_sic._prompt_candidate_list_filtered(
+        short_list=short_list, filtered_list=["11111"]
+    )
     assert isinstance(result, str)
 
 
 @pytest.mark.utils
-def test_llm_response_mocked_prompt_candidate_list_filtered_no_filtered_list(mock_sic_meta_patch, classification_llm_with_sic):
+def test_llm_response_mocked_prompt_candidate_list_filtered_no_filtered_list(
+    mock_sic_meta_patch, classification_llm_with_sic
+):
     short_list = [
         {
             "distance": 0.5,
@@ -392,14 +397,18 @@ def test_llm_response_mocked_prompt_candidate_list_filtered_no_filtered_list(moc
             "four_digit_code": "1111",
             "two_digit_code": "11",
         }
-        ]
+    ]
 
-    result = classification_llm_with_sic._prompt_candidate_list_filtered(short_list=short_list)
+    result = classification_llm_with_sic._prompt_candidate_list_filtered(
+        short_list=short_list
+    )
     assert result == ""
 
 
 @pytest.mark.utils
-def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(mock_sic_meta_patch, classification_llm_with_sic):
+def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(
+    mock_sic_meta_patch, classification_llm_with_sic
+):
     short_list = [
         {
             "distance": 0.5,
@@ -415,38 +424,13 @@ def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(mock
             "four_digit_code": "1111",
             "two_digit_code": "11",
         },
-        ]
+    ]
 
-    result = classification_llm_with_sic._prompt_candidate_list_filtered(short_list=short_list,
-    chars_limit=80,
-    filtered_list=["11111", "11112"])
-    assert len(result) < 80
+    result = classification_llm_with_sic._prompt_candidate_list_filtered(
+        short_list=short_list, chars_limit=80, filtered_list=["11111", "11112"]
+    )
+    assert len(result) < 80  # noqa: PLR2004
 
-
-@pytest.mark.utils
-def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(mock_sic_meta_patch, classification_llm_with_sic):
-    short_list = [
-        {
-            "distance": 0.5,
-            "title": "title",
-            "code": "11111",
-            "four_digit_code": "1111",
-            "two_digit_code": "11",
-        },
-        {
-            "distance": 0.5,
-            "title": "title",
-            "code": "11112",
-            "four_digit_code": "1111",
-            "two_digit_code": "11",
-        },
-        ]
-
-    result = classification_llm_with_sic._prompt_candidate_list_filtered(short_list=short_list,
-    chars_limit=80,
-    filtered_list=["11111", "11112"])
-    assert len(result) < 80
-    
 
 @pytest.mark.utils
 def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
@@ -507,11 +491,7 @@ def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
 
 @pytest.mark.utils
 def test_llm_response_mocked_formulate_open_question(mocker, prompt_candidate_sic):
-    mock_object_dict = {
-        "class_code": "",
-        "class_descriptive": "",
-        "likelihood": 0.5
-        }
+    mock_object_dict = {"class_code": "", "class_descriptive": "", "likelihood": 0.5}
     mock_object_json = json.dumps(mock_object_dict)
 
     mock_message = mocker.Mock(spec=AIMessage)
@@ -534,11 +514,7 @@ def test_llm_response_mocked_formulate_open_question(mocker, prompt_candidate_si
 
 @pytest.mark.utils
 def test_llm_response_mocked_formulate_closed_question(mocker, prompt_candidate_sic):
-    mock_object_dict = {
-        "class_code": "",
-        "class_descriptive": "",
-        "likelihood": 0.5
-        }
+    mock_object_dict = {"class_code": "", "class_descriptive": "", "likelihood": 0.5}
     mock_object_json = json.dumps(mock_object_dict)
 
     mock_message = mocker.Mock(spec=AIMessage)
@@ -557,6 +533,7 @@ def test_llm_response_mocked_formulate_closed_question(mocker, prompt_candidate_
     )
     assert isinstance(result[0], ClosedFollowUp)
     assert isinstance(result[1], dict)
+
 
 @pytest.fixture
 def mock_sic_meta():
