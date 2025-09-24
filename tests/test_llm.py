@@ -663,9 +663,9 @@ def test_reranker_sic_response_is_str(
     mock_sic_meta_patch, classification_llm_with_sic_reranker
 ):
     short_list = [{"title": "Education", "code": "11111"}]
-    result = classification_llm_with_sic_reranker.reranker_sic("school", short_list=short_list)[
-        0
-    ].model_dump()["selected_codes"][0]["reasoning"]
+    result = classification_llm_with_sic_reranker.reranker_sic(
+        "school", short_list=short_list
+    )[0].model_dump()["selected_codes"][0]["reasoning"]
     assert isinstance(result, str)
 
 
