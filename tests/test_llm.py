@@ -478,7 +478,7 @@ def classification_llm_with_sic_reranker(mocker, mock_sic):
                 "code": "11111",
                 "title": "Education",
                 "relevance_score": 0.5,
-                "reasoning": "This is reasoning for the llm answer. Padded to 30 characters (Pydantic)",
+                "reasoning": "This is reasoning for the llm answer. Padded to 30 characters (Pydantic)",  # pylint: disable=C0301
             }
         ],
         "excluded_codes": [],
