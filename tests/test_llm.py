@@ -310,22 +310,6 @@ def test_llm_mocked_sa_rag_sic_code_job_title(  # noqa: PLR0913
 
 @pytest.mark.utils
 def test_llm_response_mocked_unambiguous_sic_code(mocker, prompt_candidate_sic):
-    # sic_candidates = [
-    #     {
-    #         "distance": 0.6,
-    #         "title": "title1",
-    #         "code": "12345",
-    #         "four_digit_code": "1234",
-    #         "two_digit_code": "12",
-    #     },
-    #     {
-    #         "distance": 0.7,
-    #         "title": "title2",
-    #         "code": "23456",
-    #         "four_digit_code": "2345",
-    #         "two_digit_code": "23",
-    #     },
-    # ]
     mock_object_dict = {
         "codable": True,
         "followup": "This is follow-up",
@@ -566,7 +550,7 @@ def mock_sic_meta_patch(mock_sic_meta):
 
 
 @pytest.fixture
-def classification_llm_with_sic():
+def mock_sic():
     nodes = [  # noqa: F841
         SicNode(sic_code=SicCode("Axxxxx"), description="descriptionA"),
         SicNode(sic_code=SicCode("A11xxx"), description="description11"),
@@ -575,7 +559,6 @@ def classification_llm_with_sic():
         SicNode(sic_code=SicCode("A11111"), description="description11111"),
         SicNode(sic_code=SicCode("A11112"), description="description11112"),
     ]
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
 
     index_mock = {
         "uk_sic_2007": ["11111", "11112"],
@@ -598,7 +581,43 @@ def classification_llm_with_sic():
     sic_df_mock = pd.DataFrame(df_mock)
     sic = load_hierarchy(sic_df_mock, sic_index_df_mock)
 
-    llm_class.sic = sic
+    return sic
+
+
+@pytest.fixture
+def classification_llm_with_sic(mock_sic):
+    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class.sic = mock_sic
+
+    return llm_class
+
+
+@pytest.fixture
+def classification_llm_with_sic_sa_rag_sic_code(mocker, mock_sic):
+    mock_llm = mock.MagicMock()  # noqa: F841
+    mock_object_dict = {
+        "selected_codes": [
+            {
+                "code": "11111",
+                "title": "Education",
+                "relevance_score": 0.5,
+                "reasoning": ".",
+            }
+        ],
+        "excluded_codes": [],
+        "status": "success",
+        "n_requested": 5,
+    }
+    mock_object_json = json.dumps(mock_object_dict)
+
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
+    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class.sic = mock_sic
 
     return llm_class
 
@@ -724,20 +743,23 @@ def test_unambiguous_sic_code_followup_is_str(
 
 
 @pytest.mark.parametrize(
-    "industry, title, short_list, expected_job_title",
+    "title, expected_job_title",
     [
-        ("school", None, [{"title": "Education", "code": "01"}], "Unknown"),
-        ("school", "", [{"title": "Education", "code": "01"}], "Unknown"),
-        ("school", " ", [{"title": "Education", "code": "01"}], "Unknown"),
-        ("school", "teacher", [{"title": "Education", "code": "01"}], "teacher"),
+        (None, "Unknown"),
+        ("", "Unknown"),
+        (" ", "Unknown"),
+        ("teacher", "teacher"),
     ],
 )
 @pytest.mark.utils
 def test_reranker_sic_call_dict_job_title_correct(
-    industry, title, short_list, expected_job_title
+    mock_sic_meta_patch,
+    classification_llm_with_sic_sa_rag_sic_code,
+    title,
+    expected_job_title,
 ):
-    result = ClassificationLLM(model_name=MODEL_NAME).reranker_sic(
-        industry, title, short_list=short_list
+    result = classification_llm_with_sic_sa_rag_sic_code.reranker_sic(
+        "school", title, short_list=[{"title": "Education", "code": "11111"}]
     )[2]["job_title"]
     assert result == expected_job_title
 
