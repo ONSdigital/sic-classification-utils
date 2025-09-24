@@ -32,6 +32,101 @@ MODEL_NAME = "gemini-1.5-flash"
 LOCATION = "europe-west2"
 
 
+# Test initializaiton
+@pytest.fixture
+def classification_llm_with_sic(mock_sic):  # pylint: disable=W0621
+    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class.sic = mock_sic
+    return llm_class
+
+
+@pytest.fixture
+def classification_llm_with_sic_reranker(mocker, mock_sic):  # pylint: disable=W0621
+    mock_llm = mock.MagicMock()  # noqa: F841
+    mock_object_dict = {
+        "selected_codes": [
+            {
+                "code": "11111",
+                "title": "Education",
+                "relevance_score": 0.5,
+                "reasoning": "This is reasoning for the llm answer. Padded to 30 characters (Pydantic)",  # pylint: disable=C0301
+            }
+        ],
+        "excluded_codes": [],
+        "status": "success",
+        "n_requested": 5,
+    }
+    mock_object_json = json.dumps(mock_object_dict)
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
+    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class.sic = mock_sic
+    return llm_class
+
+
+@pytest.fixture
+def classification_llm_with_sic_unambiguous(mocker, mock_sic):  # pylint: disable=W0621
+    mock_llm = mock.MagicMock()  # noqa: F841
+    mock_object_dict = {
+        "codable": False,
+        "class_code": None,
+        "class_descriptive": None,
+        "alt_candidates": [
+            {
+                "class_code": "1111",
+                "class_descriptive": "description",
+                "likelihood": 0.5,
+            }
+        ],
+        "reasoning": "This is reasoning for the llm answer. Padded to 50 characters (Pydantic)",
+    }
+    mock_object_json = json.dumps(mock_object_dict)
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
+    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class.sic = mock_sic
+    return llm_class
+
+
+# Mock LLM connections
+@pytest.fixture
+def classification_llm_with_sic_sa_rag_sic(mocker, mock_sic):  # pylint: disable=W0621
+    mock_llm = mock.MagicMock()  # noqa: F841
+    mock_object_dict = {
+        "followup": "",
+        "sic_code": None,
+        "sic_descriptive": None,
+        "sic_candidates": [
+            {
+                "sic_code": "11111",
+                "sic_descriptive": "description12345",
+                "likelihood": 0.5,
+            }
+        ],
+        "reasoning": "",
+    }
+
+    mock_object_json = json.dumps(mock_object_dict)
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
+    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class.sic = mock_sic
+
+    return llm_class
+
+
 # Test initialisation
 def test_setup():
     vertexai.init(project="classifai-sandbox", location=LOCATION)
@@ -295,57 +390,22 @@ def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(
 
 @pytest.mark.utils
 def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
-    sic_candidates = [
-        {
-            "class_code": "12345",
-            "class_descriptive": "description1",
-            "likelihood": 0.8,
-        },
-        {
-            "class_code": "23456",
-            "class_descriptive": "description2",
-            "likelihood": 0.6,
-        },
-    ]
     mock_object_dict = {
         "codable": True,
-        "followup": "This is follow-up",
-        "sic_code": "12345",
-        "sic_descriptive": "description12345",
-        "sic_candidates": [
-            {
-                "sic_code": "23456",
-                "sic_descriptive": "description23456",
-                "likelihood": 0.5,
-            },
-            {
-                "sic_code": "34567",
-                "sic_descriptive": "description34567",
-                "likelihood": 0.5,
-            },
-        ],
+        "unambiguous_code": "11111",
+        "unambiguous_code_descriptive": "descriptive11111",
+        "higher_level_code": "1111",
         "reasoning": "This is reasoning for the llm answer. Padded to 50 characters (Pydantic)",
     }
     mock_object_json = json.dumps(mock_object_dict)
-
     mock_message = mocker.Mock(spec=AIMessage)
     mock_message.content = mock_object_json
-
     mock_patcher = mocker.patch(  # noqa: F841
         "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
         return_value=mock_message,
     )
 
-    result = prompt_candidate_sic.final_sic_code(
-        industry_descr="",
-        job_title="",
-        job_description="",
-        sic_candidates=str(sic_candidates),
-        open_question="",
-        answer_to_open_question="",
-        closed_question="",
-        answer_to_closed_question="",
-    )
+    result = prompt_candidate_sic.final_sic_code(industry_descr="")
     assert isinstance(result[0], FinalSICAssignment)
     assert isinstance(result[1], dict)
 
@@ -428,15 +488,6 @@ def mock_sic_meta_patch(mock_sic_meta):
 
 @pytest.fixture
 def mock_sic():
-    nodes = [  # noqa: F841
-        SicNode(sic_code=SicCode("Axxxxx"), description="descriptionA"),
-        SicNode(sic_code=SicCode("A11xxx"), description="description11"),
-        SicNode(sic_code=SicCode("A111xx"), description="description111"),
-        SicNode(sic_code=SicCode("A1111x"), description="description1111"),
-        SicNode(sic_code=SicCode("A11111"), description="description11111"),
-        SicNode(sic_code=SicCode("A11112"), description="description11112"),
-    ]
-
     index_mock = {
         "uk_sic_2007": ["11111", "11112"],
         "activity": ["activity1", "activity2"],
@@ -461,124 +512,25 @@ def mock_sic():
     return sic
 
 
-@pytest.fixture
-def classification_llm_with_sic(mock_sic):
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
-    llm_class.sic = mock_sic
-
-    return llm_class
-
-
-@pytest.fixture
-def classification_llm_with_sic_reranker(mocker, mock_sic):
-    mock_llm = mock.MagicMock()  # noqa: F841
-    mock_object_dict = {
-        "selected_codes": [
-            {
-                "code": "11111",
-                "title": "Education",
-                "relevance_score": 0.5,
-                "reasoning": "This is reasoning for the llm answer. Padded to 30 characters (Pydantic)",  # pylint: disable=C0301
-            }
-        ],
-        "excluded_codes": [],
-        "status": "success",
-        "n_requested": 5,
-    }
-    mock_object_json = json.dumps(mock_object_dict)
-
-    mock_message = mocker.Mock(spec=AIMessage)
-    mock_message.content = mock_object_json
-    mock_patcher = mocker.patch(  # noqa: F841
-        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
-        return_value=mock_message,
-    )
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
-    llm_class.sic = mock_sic
-
-    return llm_class
-
-
-@pytest.fixture
-def classification_llm_with_sic_unambiguous(mocker, mock_sic):
-    mock_llm = mock.MagicMock()  # noqa: F841
-    mock_object_dict = {
-        "codable": False,
-        "class_code": None,
-        "class_descriptive": None,
-        "alt_candidates": [
-            {
-                "class_code": "1111",
-                "class_descriptive": "description",
-                "likelihood": 0.5,
-            }
-        ],
-        "reasoning": "This is reasoning for the llm answer. Padded to 50 characters (Pydantic)",
-    }
-    mock_object_json = json.dumps(mock_object_dict)
-
-    mock_message = mocker.Mock(spec=AIMessage)
-    mock_message.content = mock_object_json
-    mock_patcher = mocker.patch(  # noqa: F841
-        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
-        return_value=mock_message,
-    )
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
-    llm_class.sic = mock_sic
-
-    return llm_class
-
-
-@pytest.fixture
-def classification_llm_with_sic_sa_rag_sic(mocker, mock_sic):
-    mock_llm = mock.MagicMock()  # noqa: F841
-    mock_object_dict = {
-        "followup": "",
-        "sic_code": None,
-        "sic_descriptive": None,
-        "sic_candidates": [
-            {
-                "sic_code": "11111",
-                "sic_descriptive": "description12345",
-                "likelihood": 0.5,
-            }
-        ],
-        "reasoning": "",
-    }
-
-    mock_object_json = json.dumps(mock_object_dict)
-
-    mock_message = mocker.Mock(spec=AIMessage)
-    mock_message.content = mock_object_json
-    mock_patcher = mocker.patch(  # noqa: F841
-        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
-        return_value=mock_message,
-    )
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
-    llm_class.sic = mock_sic
-
-    return llm_class
-
-
+@pytest.mark.parametrize(
+    "code, expected_output",
+    [
+        ("111", ["Code", "Title", "Details"]),
+        ("1111", ["Code", "Title", "Details", "Includes"]),
+        ("11111", ["Code", "Title", "Details", "Excludes"]),
+    ],
+)
 @pytest.mark.utils
-def test_prompt_candidate_include_all(mock_sic_meta_patch, classification_llm_with_sic):
+def test_prompt_candidate_include_all(
+    mock_sic_meta_patch, classification_llm_with_sic, code, expected_output
+):
 
-    result111 = classification_llm_with_sic._prompt_candidate(
-        "111", ["activity"], include_all=True
-    )
-    result1111 = classification_llm_with_sic._prompt_candidate(
-        "1111", ["activity"], include_all=True
-    )
-    result11111 = classification_llm_with_sic._prompt_candidate(
-        "11111", ["activity"], include_all=True
+    result = classification_llm_with_sic._prompt_candidate(
+        code, ["activity"], include_all=True
     )
 
-    assert isinstance(result111, str)
-    assert isinstance(result1111, str)
-    assert isinstance(result11111, str)
-    assert all(x in result111 for x in ["Code", "Title", "Details"])
-    assert all(x in result1111 for x in ["Code", "Title", "Details", "Includes"])
-    assert all(x in result11111 for x in ["Code", "Title", "Details", "Excludes"])
+    assert isinstance(result, str)
+    assert all(x in result for x in expected_output)
 
 
 @pytest.mark.utils
@@ -669,6 +621,7 @@ def test_reranker_sic_response_is_str(
     assert isinstance(result, str)
 
 
+# Tests for rising errors
 @pytest.mark.utils
 def test_open_api_key_raise_not_implemented_error():
     with pytest.raises(NotImplementedError, match="Need to provide an OpenAI API key"):
@@ -683,23 +636,23 @@ def test_model_family_raise_not_implemented_error():
 
 @pytest.mark.utils
 def test_sa_rag_sic_code_short_list_is_none_raise_value_error(
-    mock_sic_meta_patch, classification_llm_with_sic
+    mock_sic_meta_patch, classification_llm_with_sic_sa_rag_sic
 ):
     with pytest.raises(
         ValueError, match="Short list is None - list provided from embedding search."
     ):
-        classification_llm_with_sic.sa_rag_sic_code(
+        classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
             industry_descr="", job_description="", job_title=""
         )
 
 
 @pytest.mark.utils
 def test_reranker_sic_short_list_is_none_raise_value_error(
-    mock_sic_meta_patch, classification_llm_with_sic
+    mock_sic_meta_patch, classification_llm_with_sic_reranker
 ):
     with pytest.raises(
         ValueError, match="Short list is None - list provided from embedding search."
     ):
-        classification_llm_with_sic.reranker_sic(
+        classification_llm_with_sic_reranker.reranker_sic(
             industry_descr="", job_description="", job_title=""
         )
