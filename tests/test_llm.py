@@ -309,37 +309,11 @@ def test_llm_mocked_sa_rag_sic_code_job_title(  # noqa: PLR0913
 
 
 @pytest.mark.utils
-def test_llm_response_mocked_unambiguous_sic_code(mocker, prompt_candidate_sic):
-    mock_object_dict = {
-        "codable": True,
-        "followup": "This is follow-up",
-        "sic_code": "12345",
-        "sic_descriptive": "description12345",
-        "sic_candidates": [
-            {
-                "sic_code": "23456",
-                "sic_descriptive": "description23456",
-                "likelihood": 0.5,
-            },
-            {
-                "sic_code": "34567",
-                "sic_descriptive": "description34567",
-                "likelihood": 0.5,
-            },
-        ],
-        "reasoning": "This is reasoning for the llm answer. Padded to 50 characters (Pydantic)",
-    }
-    mock_object_json = json.dumps(mock_object_dict)
+def test_llm_response_mocked_unambiguous_sic_code(
+    mock_sic_meta_patch, classification_llm_with_sic_unambiguous
+):
 
-    mock_message = mocker.Mock(spec=AIMessage)
-    mock_message.content = mock_object_json
-
-    mock_patcher = mocker.patch(  # noqa: F841
-        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
-        return_value=mock_message,
-    )
-
-    result = prompt_candidate_sic.unambiguous_sic_code(
+    result = classification_llm_with_sic_unambiguous.unambiguous_sic_code(
         industry_descr="",
         semantic_search_results=[],
         job_description="",
@@ -593,7 +567,7 @@ def classification_llm_with_sic(mock_sic):
 
 
 @pytest.fixture
-def classification_llm_with_sic_sa_rag_sic_code(mocker, mock_sic):
+def classification_llm_with_sic_reranker(mocker, mock_sic):
     mock_llm = mock.MagicMock()  # noqa: F841
     mock_object_dict = {
         "selected_codes": [
@@ -607,6 +581,36 @@ def classification_llm_with_sic_sa_rag_sic_code(mocker, mock_sic):
         "excluded_codes": [],
         "status": "success",
         "n_requested": 5,
+    }
+    mock_object_json = json.dumps(mock_object_dict)
+
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
+    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class.sic = mock_sic
+
+    return llm_class
+
+
+@pytest.fixture
+def classification_llm_with_sic_unambiguous(mocker, mock_sic):
+    mock_llm = mock.MagicMock()  # noqa: F841
+    mock_object_dict = {
+        "codable": False,
+        "class_code": None,
+        "class_descriptive": None,
+        "alt_candidates": [
+            {
+                "class_code": "1111",
+                "class_descriptive": "description",
+                "likelihood": 0.5,
+            }
+        ],
+        "reasoning": "This is reasoning for the llm answer. Padded to 50 characters (Pydantic)",
     }
     mock_object_json = json.dumps(mock_object_dict)
 
@@ -678,62 +682,32 @@ def test_sa_rag_sic_code_prep_followup_is_str(  # noqa: PLR0913
 
 
 @pytest.mark.parametrize(
-    "industry, semantic_search_results, title, job_description, expected_job_title",
+    "title, expected_job_title",
     [
-        (
-            "school",
-            [{"title": "Education", "code": "11111"}],
-            "",
-            "educate kids",
-            "Unknown",
-        ),
-        (
-            "school",
-            [{"title": "Education", "code": "11111"}],
-            " ",
-            "educate kids",
-            "Unknown",
-        ),
-        (
-            "school",
-            [{"title": "Education", "code": "11111"}],
-            None,
-            "educate kids",
-            "Unknown",
-        ),
-        (
-            "school",
-            [{"title": "Education", "code": "11111"}],
-            "teacher",
-            "educate kids",
-            "teacher",
-        ),
+        ("", "Unknown"),
+        (" ", "Unknown"),
+        (None, "Unknown"),
+        ("teacher", "teacher"),
     ],
 )
 @pytest.mark.utils
-def test_unambiguous_sic_code_call_dict_job_title_correct(  # noqa: PLR0913
-    industry,
-    semantic_search_results,
+def test_unambiguous_sic_code_call_dict_job_title_correct(
     title,
-    job_description,
     expected_job_title,
     mock_sic_meta_patch,
-    classification_llm_with_sic,
+    classification_llm_with_sic_unambiguous,
 ):
-    result = classification_llm_with_sic.unambiguous_sic_code(
-        industry,
-        semantic_search_results,
-        title,
-        job_description,
+    result = classification_llm_with_sic_unambiguous.unambiguous_sic_code(
+        "school", [{"title": "Education", "code": "11111"}], title, "educate kids"
     )[1]["job_title"]
     assert result == expected_job_title
 
 
 @pytest.mark.utils
 def test_unambiguous_sic_code_followup_is_str(
-    mock_sic_meta_patch, classification_llm_with_sic
+    mock_sic_meta_patch, classification_llm_with_sic_unambiguous
 ):
-    result = classification_llm_with_sic.unambiguous_sic_code(
+    result = classification_llm_with_sic_unambiguous.unambiguous_sic_code(
         industry_descr="school",
         semantic_search_results=[{"title": "Education", "code": "11111"}],
         job_title="teacher",
@@ -754,11 +728,11 @@ def test_unambiguous_sic_code_followup_is_str(
 @pytest.mark.utils
 def test_reranker_sic_call_dict_job_title_correct(
     mock_sic_meta_patch,
-    classification_llm_with_sic_sa_rag_sic_code,
+    classification_llm_with_sic_reranker,
     title,
     expected_job_title,
 ):
-    result = classification_llm_with_sic_sa_rag_sic_code.reranker_sic(
+    result = classification_llm_with_sic_reranker.reranker_sic(
         "school", title, short_list=[{"title": "Education", "code": "11111"}]
     )[2]["job_title"]
     assert result == expected_job_title
