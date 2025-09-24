@@ -228,82 +228,33 @@ def test_llm_response_mocked_sa_rag_sic_code(  # noqa: PLR0913
 
 
 @pytest.mark.parametrize(
-    "industry, title, job_description, short_list, expected_job_title",
+    "title, expected_job_title",
     [
-        (
-            "school",
-            "",
-            "educate kids",
-            [
-                {
-                    "distance": 0.6,
-                    "title": "title1",
-                    "code": "11111",
-                    "four_digit_code": "1111",
-                    "two_digit_code": "11",
-                }
-            ],
-            "Unknown",
-        ),
-        (
-            "school",
-            " ",
-            "educate kids",
-            [
-                {
-                    "distance": 0.6,
-                    "title": "title1",
-                    "code": "11111",
-                    "four_digit_code": "1111",
-                    "two_digit_code": "11",
-                }
-            ],
-            "Unknown",
-        ),
-        (
-            "school",
-            None,
-            "educate kids",
-            [
-                {
-                    "distance": 0.6,
-                    "title": "title1",
-                    "code": "11111",
-                    "four_digit_code": "1111",
-                    "two_digit_code": "11",
-                }
-            ],
-            "Unknown",
-        ),
-        (
-            "school",
-            "teacher",
-            "educate kids",
-            [
-                {
-                    "distance": 0.6,
-                    "title": "title1",
-                    "code": "11111",
-                    "four_digit_code": "1111",
-                    "two_digit_code": "11",
-                }
-            ],
-            "teacher",
-        ),
+        ("", "Unknown"),
+        (" ", "Unknown"),
+        (None, "Unknown"),
+        ("teacher", "teacher"),
     ],
 )
 @pytest.mark.utils
-def test_llm_mocked_sa_rag_sic_code_job_title(  # noqa: PLR0913
-    industry,
+def test_llm_mocked_sa_rag_sic_code_job_title(
     title,
-    job_description,
-    short_list,
     expected_job_title,
     mock_sic_meta_patch,
-    classification_llm_with_sic,
+    classification_llm_with_sic_sa_rag_sic,
 ):
-    result = classification_llm_with_sic.sa_rag_sic_code(
-        industry, title, job_description, short_list=short_list
+    short_list=[{
+            "distance": 0.6,
+            "title": "title",
+            "code": "11111",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        }]
+    result = classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
+        "school",
+        title,
+        "educate kids",
+        short_list=short_list,
     )[2]["job_title"]
     assert result == expected_job_title
 
@@ -626,6 +577,37 @@ def classification_llm_with_sic_unambiguous(mocker, mock_sic):
     return llm_class
 
 
+@pytest.fixture
+def classification_llm_with_sic_sa_rag_sic(mocker, mock_sic):
+    mock_llm = mock.MagicMock()  # noqa: F841
+    mock_object_dict = {
+        "followup": "",
+        "sic_code": None,
+        "sic_descriptive": None,
+        "sic_candidates": [
+            {
+                "sic_code": "11111",
+                "sic_descriptive": "description12345",
+                "likelihood": 0.5,
+            }
+        ],
+        "reasoning": "",
+    }
+
+    mock_object_json = json.dumps(mock_object_dict)
+
+    mock_message = mocker.Mock(spec=AIMessage)
+    mock_message.content = mock_object_json
+    mock_patcher = mocker.patch(  # noqa: F841
+        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        return_value=mock_message,
+    )
+    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class.sic = mock_sic
+
+    return llm_class
+
+
 @pytest.mark.utils
 def test_prompt_candidate_include_all(mock_sic_meta_patch, classification_llm_with_sic):
 
@@ -673,9 +655,9 @@ def test_sa_rag_sic_code_prep_followup_is_str(  # noqa: PLR0913
     job_description,
     short_list,
     mock_sic_meta_patch,
-    classification_llm_with_sic,
+    classification_llm_with_sic_sa_rag_sic,
 ):
-    result = classification_llm_with_sic.sa_rag_sic_code(
+    result = classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
         industry, title, job_description, short_list=short_list
     )[0].followup
     assert isinstance(result, str)
