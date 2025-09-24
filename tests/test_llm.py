@@ -142,83 +142,33 @@ def prompt_candidate_sic():
 
 
 @pytest.mark.parametrize(
-    "industry, title, job_description, short_list, expected_job_title",
+    "title, expected_job_title",
     [
-        (
-            "school",
-            "",
-            "educate kids",
-            [
-                {
-                    "distance": 0.6,
-                    "title": "title1",
-                    "code": "11111",
-                    "four_digit_code": "1111",
-                    "two_digit_code": "11",
-                }
-            ],
-            "Unknown",
-        ),
-        (
-            "school",
-            " ",
-            "educate kids",
-            [
-                {
-                    "distance": 0.6,
-                    "title": "title1",
-                    "code": "11111",
-                    "four_digit_code": "1111",
-                    "two_digit_code": "11",
-                }
-            ],
-            "Unknown",
-        ),
-        (
-            "school",
-            None,
-            "educate kids",
-            [
-                {
-                    "distance": 0.6,
-                    "title": "title1",
-                    "code": "11111",
-                    "four_digit_code": "1111",
-                    "two_digit_code": "11",
-                }
-            ],
-            "Unknown",
-        ),
-        (
-            "school",
-            "teacher",
-            "educate kids",
-            [
-                {
-                    "distance": 0.6,
-                    "title": "title1",
-                    "code": "11111",
-                    "four_digit_code": "1111",
-                    "two_digit_code": "11",
-                }
-            ],
-            "teacher",
-        ),
+        ("", "Unknown"),
+        (" ", "Unknown"),
+        (None, "Unknown"),
+        ("teacher", "teacher"),
     ],
 )
 @pytest.mark.utils
-def test_llm_response_mocked_sa_rag_sic_code(  # noqa: PLR0913
-    industry,
+def test_llm_response_mocked_sa_rag_sic_code(
     title,
-    job_description,
-    short_list,
     expected_job_title,
     mock_sic_meta_patch,
-    classification_llm_with_sic,
+    classification_llm_with_sic_sa_rag_sic,
 ):
-    result = classification_llm_with_sic.sa_rag_sic_code(
-        industry_descr=industry,
-        job_description=job_description,
+    short_list = [
+        {
+            "distance": 0.6,
+            "title": "title1",
+            "code": "11111",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        }
+    ]
+    result = classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
+        industry_descr="school",
+        job_description="educate kids",
         job_title=title,
         short_list=short_list,
     )
@@ -631,36 +581,22 @@ def test_prompt_candidate_include_all(mock_sic_meta_patch, classification_llm_wi
     assert all(x in result11111 for x in ["Code", "Title", "Details", "Excludes"])
 
 
-@pytest.mark.parametrize(
-    "industry, title, job_description, short_list",
-    [
-        (
-            "school",
-            "teacher",
-            "educate kids",
-            [
-                {
-                    "distance": 0.6,
-                    "title": "title1",
-                    "code": "11111",
-                    "four_digit_code": "1111x",
-                    "two_digit_code": "11xxx",
-                }
-            ],
-        ),
-    ],
-)
 @pytest.mark.utils
-def test_sa_rag_sic_code_prep_followup_is_str(  # noqa: PLR0913
-    industry,
-    title,
-    job_description,
-    short_list,
+def test_sa_rag_sic_code_prep_followup_is_str(
     mock_sic_meta_patch,
     classification_llm_with_sic_sa_rag_sic,
 ):
+    short_list = [
+        {
+            "distance": 0.6,
+            "title": "title1",
+            "code": "11111",
+            "four_digit_code": "1111x",
+            "two_digit_code": "11xxx",
+        }
+    ]
     result = classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
-        industry, title, job_description, short_list=short_list
+        "school", "teacher", "educate kids", short_list=short_list
     )[0].followup
     assert isinstance(result, str)
 
@@ -722,17 +658,12 @@ def test_reranker_sic_call_dict_job_title_correct(
     assert result == expected_job_title
 
 
-@pytest.mark.parametrize(
-    "industry, short_list",
-    [
-        ("school", [{"title": "Education", "code": "11111"}]),
-    ],
-)
 @pytest.mark.utils
 def test_reranker_sic_response_is_str(
-    industry, short_list, mock_sic_meta_patch, classification_llm_with_sic
+    mock_sic_meta_patch, classification_llm_with_sic_reranker
 ):
-    result = classification_llm_with_sic.reranker_sic(industry, short_list=short_list)[
+    short_list = [{"title": "Education", "code": "11111"}]
+    result = classification_llm_with_sic_reranker.reranker_sic("school", short_list=short_list)[
         0
     ].model_dump()["selected_codes"][0]["reasoning"]
     assert isinstance(result, str)
