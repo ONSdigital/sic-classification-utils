@@ -243,13 +243,15 @@ def test_llm_mocked_sa_rag_sic_code_job_title(
     mock_sic_meta_patch,
     classification_llm_with_sic_sa_rag_sic,
 ):
-    short_list=[{
+    short_list = [
+        {
             "distance": 0.6,
             "title": "title",
             "code": "11111",
             "four_digit_code": "1111",
             "two_digit_code": "11",
-        }]
+        }
+    ]
     result = classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
         "school",
         title,
