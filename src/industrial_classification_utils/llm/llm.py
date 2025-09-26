@@ -97,6 +97,7 @@ class ClassificationLLM:
                 max_output_tokens=max_tokens,
                 temperature=temperature,
                 location="europe-west2",
+                model_kwargs={"thinking_budget":0} # Reduce latency
             )
         elif model_name.startswith("gpt"):
             if openai_api_key is None:
