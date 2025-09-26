@@ -15,7 +15,7 @@ EXAMPLE_FOLLOWUP = (
 )
 
 SR = SyntheticResponder(
-    persona=None, get_question_function=None, model_name="gemini-1.5-flash"
+    persona=None, get_question_function=None, model_name="gemini-2.5-flash"
 )
 answer_followup_prompt = SR.construct_prompt(EXAMPLE_BODY, EXAMPLE_FOLLOWUP)
 llm_response = SR.answer_followup(answer_followup_prompt, EXAMPLE_BODY)

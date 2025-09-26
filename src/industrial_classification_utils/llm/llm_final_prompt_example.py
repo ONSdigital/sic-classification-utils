@@ -6,7 +6,7 @@ from industrial_classification_utils.llm.llm import ClassificationLLM
 
 # pylint: disable=duplicate-code
 
-LLM_MODEL = "gemini-1.5-flash"
+LLM_MODEL = "gemini-2.5-flash"
 JOB_TITLE = "community assessment officer"
 JOB_DESCRIPTION = "social services"
 ORG_DESCRIPTION = "adult social care"

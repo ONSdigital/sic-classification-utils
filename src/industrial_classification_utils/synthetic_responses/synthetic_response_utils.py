@@ -9,7 +9,7 @@ Classes:
           to emulate.
         - get_question_function (optional, callable): a helper function to retrieve
           question(s) from an API / data file.
-        - model_name (str): The name of the LLM to use. Defaults to "gemini-1.5-flash".
+        - model_name (str): The name of the LLM to use. Defaults to "gemini-2.5-flash".
 
     - Methods:
         - instantiate_llm: Initialises a VertexAI instance, using the model specified in
@@ -40,7 +40,7 @@ Typical usage example:
 
     SR = SyntheticResponder(persona=None,
                             get_question_function=get_question_example,
-                            model_name="gemini-1.5-flash")
+                            model_name="gemini-2.5-flash")
 
     follow_up_question = SR.get_question_function(EXAMPLE_BODY)
 
@@ -85,7 +85,7 @@ class SyntheticResponder:
 
     Methods:
         instantiate_llm:
-            Initializes a VertexAI instance. Defaults to "gemini-1.5-flash".
+            Initializes a VertexAI instance. Defaults to "gemini-2.5-flash".
         construct_prompt:
             Constructs the LLM prompt to answer a follow-up question, incorporating the persona
             and survey information.
@@ -105,7 +105,7 @@ class SyntheticResponder:
         self.instantiate_llm(model_name=self.model_name)
         logger.debug("SyntheticResponder initialised, connection to LLM established.")
 
-    def instantiate_llm(self, model_name: str = "gemini-1.5-flash"):
+    def instantiate_llm(self, model_name: str = "gemini-2.5-flash"):
         """Initialises a VertexAI instance."""
         try:
             self.llm = VertexAI(
