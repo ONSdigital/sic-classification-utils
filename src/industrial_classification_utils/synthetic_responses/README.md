@@ -64,7 +64,7 @@ def get_question_example(body):
 
 SR = SyntheticResponder(persona=None, 
                         get_question_function=get_question_example, 
-                        model_name="gemini-1.5-flash")
+                        model_name="gemini-2.5-flash")
 
 follow_up_question = SR.get_question_function(EXAMPLE_BODY)
 prompt_to_answer_followup = SR.construct_prompt(EXAMPLE_BODY, follow_up_question)

@@ -15,7 +15,7 @@ from industrial_classification_utils.llm.llm import ClassificationLLM
 # pylint: disable=duplicate-code
 
 EXAMPLE_QUERY = "school teacher primary education"
-LLM_MODEL = "gemini-1.5-flash"
+LLM_MODEL = "gemini-2.5-flash"
 JOB_TITLE = "school teacher"
 JOB_DESCRIPTION = "teach maths"
 ORG_DESCRIPTION = "school"

@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
+## [0.1.5] - 2025-09-26
+
+## Changed
+- updated `__init__` method of ClassificationLLM to pass thinking_budget as 0 to accommodate newer gemini model (2.5-flash) and set region to europe-west1
+- updated example scripts to use the new gemini-2.5-flash model as gemini-1.5-flash is now deprecated
+
 ## [0.1.4] - 2025-09-18
 
 ## Added
-- `final_sic_code` method for `ClassificationLLM class in `industrail_classification.llm.llm.py`, to assign SIC using initial response & followup question and response.
-- `formulate_open_question` and `formulate_closed_question` methods for  `ClassificationLLM class in `industrail_classification.llm.llm.py`, to construct followup questions.
+- `final_sic_code` method for `ClassificationLLM class in `industrial_classification.llm.llm.py`, to assign SIC using initial response & followup question and response.
+- `formulate_open_question` and `formulate_closed_question` methods for  `ClassificationLLM class in `industrial_classification.llm.llm.py`, to construct followup questions.
 - `synthetic_responses` module, with a `SyntheticResponder` class capable of emulating user interaction.
 - "Evaluation Pipeline" scripts to batch process survey responses, stored in `scripts/` folder.
 

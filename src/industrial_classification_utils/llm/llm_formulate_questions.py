@@ -4,7 +4,7 @@ from pprint import pprint
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
 
-uni_chat = ClassificationLLM(model_name="gemini-1.5-flash", verbose=True)
+uni_chat = ClassificationLLM(model_name="gemini-2.5-flash", verbose=True)
 
 # Inputs for ClassificationLLM methods
 JOB_TITLE = "psychologist"
