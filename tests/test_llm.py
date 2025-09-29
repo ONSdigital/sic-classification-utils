@@ -28,7 +28,7 @@ from industrial_classification_utils.models.response_model import (
     UnambiguousResponse,
 )
 
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.5-flash"
 LOCATION = "europe-west2"
 
 
@@ -150,7 +150,7 @@ def mock_vertex_ai():
         ("gpt", "key", ChatOpenAI),
     ],
 )
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_model(model, openai_api_key, expected_model):
     llm_model_type = ClassificationLLM(
         model_name=model, openai_api_key=openai_api_key
@@ -158,24 +158,24 @@ def test_llm_model(model, openai_api_key, expected_model):
     assert isinstance(llm_model_type, expected_model)
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_pass_llm_argument():
     llm_model = ClassificationLLM(llm="model").llm
     assert llm_model == "model"
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_model_default():
     assert isinstance(ClassificationLLM().llm, ChatVertexAI)
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_model_name():
     assert ClassificationLLM().llm.model_name == "gemini-1.0-pro"
 
 
 # Test methods in ClassificationLLM
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_response_mocked_get_sic_code(mocker):
     mock_object_dict = {
         "codable": True,
@@ -245,7 +245,7 @@ def prompt_candidate_sic():
         ("teacher", "teacher"),
     ],
 )
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_response_mocked_sa_rag_sic_code(
     title,
     expected_job_title,
@@ -281,7 +281,7 @@ def test_llm_response_mocked_sa_rag_sic_code(
         ("teacher", "teacher"),
     ],
 )
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_mocked_sa_rag_sic_code_job_title(
     title,
     expected_job_title,
@@ -306,7 +306,7 @@ def test_llm_mocked_sa_rag_sic_code_job_title(
     assert result == expected_job_title
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_response_mocked_unambiguous_sic_code(
     mock_sic_meta_patch, classification_llm_with_sic_unambiguous
 ):
@@ -321,7 +321,7 @@ def test_llm_response_mocked_unambiguous_sic_code(
     assert isinstance(result[1], dict)
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_response_mocked_prompt_candidate_list_filtered_full(
     mock_sic_meta_patch, classification_llm_with_sic
 ):
@@ -341,7 +341,7 @@ def test_llm_response_mocked_prompt_candidate_list_filtered_full(
     assert isinstance(result, str)
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_response_mocked_prompt_candidate_list_filtered_no_filtered_list(
     mock_sic_meta_patch, classification_llm_with_sic
 ):
@@ -361,7 +361,7 @@ def test_llm_response_mocked_prompt_candidate_list_filtered_no_filtered_list(
     assert result == ""
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(
     mock_sic_meta_patch, classification_llm_with_sic
 ):
@@ -388,7 +388,7 @@ def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(
     assert len(result) < 80  # noqa: PLR2004
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
     mock_object_dict = {
         "codable": True,
@@ -410,7 +410,7 @@ def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
     assert isinstance(result[1], dict)
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_response_mocked_formulate_open_question(mocker, prompt_candidate_sic):
     mock_object_dict = {"class_code": "", "class_descriptive": "", "likelihood": 0.5}
     mock_object_json = json.dumps(mock_object_dict)
@@ -433,7 +433,7 @@ def test_llm_response_mocked_formulate_open_question(mocker, prompt_candidate_si
     assert isinstance(result[1], dict)
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_llm_response_mocked_formulate_closed_question(mocker, prompt_candidate_sic):
     mock_object_dict = {"class_code": "", "class_descriptive": "", "likelihood": 0.5}
     mock_object_json = json.dumps(mock_object_dict)
@@ -520,7 +520,7 @@ def mock_sic():
         ("11111", ["Code", "Title", "Details", "Excludes"]),
     ],
 )
-@pytest.mark.utils
+@pytest.mark.llm
 def test_prompt_candidate_include_all(
     mock_sic_meta_patch, classification_llm_with_sic, code, expected_output
 ):
@@ -533,7 +533,7 @@ def test_prompt_candidate_include_all(
     assert all(x in result for x in expected_output)
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_sa_rag_sic_code_prep_followup_is_str(
     mock_sic_meta_patch,
     classification_llm_with_sic_sa_rag_sic,
@@ -562,7 +562,7 @@ def test_sa_rag_sic_code_prep_followup_is_str(
         ("teacher", "teacher"),
     ],
 )
-@pytest.mark.utils
+@pytest.mark.llm
 def test_unambiguous_sic_code_call_dict_job_title_correct(
     title,
     expected_job_title,
@@ -575,7 +575,7 @@ def test_unambiguous_sic_code_call_dict_job_title_correct(
     assert result == expected_job_title
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_unambiguous_sic_code_followup_is_str(
     mock_sic_meta_patch, classification_llm_with_sic_unambiguous
 ):
@@ -597,7 +597,7 @@ def test_unambiguous_sic_code_followup_is_str(
         ("teacher", "teacher"),
     ],
 )
-@pytest.mark.utils
+@pytest.mark.llm
 def test_reranker_sic_call_dict_job_title_correct(
     mock_sic_meta_patch,
     classification_llm_with_sic_reranker,
@@ -610,7 +610,7 @@ def test_reranker_sic_call_dict_job_title_correct(
     assert result == expected_job_title
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_reranker_sic_response_is_str(
     mock_sic_meta_patch, classification_llm_with_sic_reranker
 ):
@@ -622,19 +622,19 @@ def test_reranker_sic_response_is_str(
 
 
 # Tests for rising errors
-@pytest.mark.utils
+@pytest.mark.llm
 def test_open_api_key_raise_not_implemented_error():
     with pytest.raises(NotImplementedError, match="Need to provide an OpenAI API key"):
         ClassificationLLM(model_name="gpt")
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_model_family_raise_not_implemented_error():
     with pytest.raises(NotImplementedError, match="Unsupported model family"):
         ClassificationLLM(model_name="aaaa")
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_sa_rag_sic_code_short_list_is_none_raise_value_error(
     mock_sic_meta_patch, classification_llm_with_sic_sa_rag_sic
 ):
@@ -646,7 +646,7 @@ def test_sa_rag_sic_code_short_list_is_none_raise_value_error(
         )
 
 
-@pytest.mark.utils
+@pytest.mark.llm
 def test_reranker_sic_short_list_is_none_raise_value_error(
     mock_sic_meta_patch, classification_llm_with_sic_reranker
 ):
