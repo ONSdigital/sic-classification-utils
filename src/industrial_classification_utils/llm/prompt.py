@@ -168,11 +168,14 @@ Only use the subset of UK SIC 2007 provided to determine if you can match the mo
 likely sic codes, provide a confidence score between 0 and 1 where 0.1 is least
 likely and 0.9 is most likely.
 
-You must return the a subset list of possible sic codes (UK SIC 2007 codes provided)
+You must return a subset list of possible sic codes (UK SIC 2007 codes provided)
 that might match with a confidence score for each.
 
 You must provide a follow up question that would help identify the exact coding based
 on the list you respond with.
+
+Always provide reasoning for your decision.
+
 
 ===Respondent Data===
 - Company's main activity: {industry_descr}
