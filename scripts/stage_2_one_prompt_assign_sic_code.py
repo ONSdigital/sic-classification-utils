@@ -108,6 +108,7 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
 
 def get_codable_status(row: pd.Series) -> str:
     """Generator funciton to access initial_sic for the specified row.
+
     Args:
         row (pd.Series): A row from the input DataFrame containing
         semantic_search_results column.
@@ -120,6 +121,7 @@ def get_codable_status(row: pd.Series) -> str:
 
 def get_followup_question(row: pd.Series) -> str:
     """Generator funciton to access initial_sic for the specified row.
+
     Args:
         row (pd.Series): A row from the input DataFrame containing
         semantic_search_results column.
@@ -129,8 +131,10 @@ def get_followup_question(row: pd.Series) -> str:
     """
     return row["sa_rag_sic_response"]["followup"]
 
+
 def get_initial_sic(row: pd.Series) -> str:
     """Generator funciton to access initial_sic for the specified row.
+
     Args:
         row (pd.Series): A row from the input DataFrame containing
         semantic_search_results column.
@@ -139,6 +143,7 @@ def get_initial_sic(row: pd.Series) -> str:
         str: a initial_sic for the row.
     """
     return row["sa_rag_sic_response"]["initial_sic"]
+
 
 def get_alt_sic_candidates(row: pd.Series) -> str:
     """Generator funciton to access alt_sic_candidates for the specified row.
