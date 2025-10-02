@@ -79,7 +79,7 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
         semantic_search_results column.
 
     Returns:
-        result (doct[str, Any]): a dictionary with final_sic,
+        result (doct[str, Any]): a dictionary with initial_sic,
         and alt_sic_candidates for specified row.
     """
     sa_rag_response = uni_chat.sa_rag_sic_code(  # pylint: disable=E0606
@@ -91,7 +91,7 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
     )
 
     result = {
-        "final_sic": sa_rag_response[0].sic_code,
+        "initial_sic": sa_rag_response[0].sic_code,
         "followup": sa_rag_response[0].followup,
         "is_codable": sa_rag_response[0].sic_code not in ("", None),
         "alt_sic_candidates": [
@@ -107,43 +107,38 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
 
 
 def get_codable_status(row: pd.Series) -> str:
-    """Generator funciton to access final_sic for the specified row.
-
+    """Generator funciton to access initial_sic for the specified row.
     Args:
         row (pd.Series): A row from the input DataFrame containing
         semantic_search_results column.
 
     Returns:
-        str: a final_sic for the row.
+        str: a initial_sic for the row.
     """
     return row["sa_rag_sic_response"]["is_codable"]
 
 
 def get_followup_question(row: pd.Series) -> str:
-    """Generator funciton to access final_sic for the specified row.
-
+    """Generator funciton to access initial_sic for the specified row.
     Args:
         row (pd.Series): A row from the input DataFrame containing
         semantic_search_results column.
 
     Returns:
-        str: a final_sic for the row.
+        str: a initial_sic for the row.
     """
     return row["sa_rag_sic_response"]["followup"]
 
-
-def get_final_sic(row: pd.Series) -> str:
-    """Generator funciton to access final_sic for the specified row.
-
+def get_initial_sic(row: pd.Series) -> str:
+    """Generator funciton to access initial_sic for the specified row.
     Args:
         row (pd.Series): A row from the input DataFrame containing
         semantic_search_results column.
 
     Returns:
-        str: a final_sic for the row.
+        str: a initial_sic for the row.
     """
-    return row["sa_rag_sic_response"]["final_sic"]
-
+    return row["sa_rag_sic_response"]["initial_sic"]
 
 def get_alt_sic_candidates(row: pd.Series) -> str:
     """Generator funciton to access alt_sic_candidates for the specified row.
@@ -159,8 +154,7 @@ def get_alt_sic_candidates(row: pd.Series) -> str:
 
 
 if __name__ == "__main__":
-    args = parse_args()
-
+    args = parse_args("STG2_oneprompt")
     df, metadata, start_batch_id, restart_successful = set_up_initial_state(
         args.restart,
         args.output_folder,
@@ -168,18 +162,18 @@ if __name__ == "__main__":
         args.input_parquet_file,
         args.input_metadata_json,
         args.batch_size,
-        stage_id="stage_k",
+        stage_id="stage_2",
     )
 
     print("Running RAG SIC allocation...")
     if (not args.restart) or (not restart_successful):
         df["sa_rag_sic_response"] = {
-            "final_sic": "",
+            "initial_sic": "",
             "followup": "",
             "is_codable": False,
             "alt_sic_candidates": [],
         }
-        df["final_sic"] = ""
+        df["initial_sic"] = ""
         df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
         df["followup_question"] = ""
         df["codable_oneprompt"] = False
@@ -201,7 +195,7 @@ if __name__ == "__main__":
             batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(
                 get_rag_response, axis=1
             )
-            df.loc[batch.index, "final_sic"] = batch.apply(get_final_sic, axis=1)
+            df.loc[batch.index, "initial_sic"] = batch.apply(get_initial_sic, axis=1)
             df.loc[batch.index, "alt_sic_candidates"] = batch.apply(
                 get_alt_sic_candidates, axis=1
             )
