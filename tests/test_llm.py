@@ -35,7 +35,7 @@ LOCATION = "europe-west2"
 # Test initializaiton
 @pytest.fixture
 def classification_llm_with_sic(mock_sic):  # pylint: disable=W0621
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class = ClassificationLLM(model_name=MODEL_NAME)
     llm_class.sic = mock_sic
     return llm_class
 
@@ -63,7 +63,7 @@ def classification_llm_with_sic_reranker(mocker, mock_sic):  # pylint: disable=W
         "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
         return_value=mock_message,
     )
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class = ClassificationLLM(model_name=MODEL_NAME)
     llm_class.sic = mock_sic
     return llm_class
 
@@ -91,7 +91,7 @@ def classification_llm_with_sic_unambiguous(mocker, mock_sic):  # pylint: disabl
         "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
         return_value=mock_message,
     )
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class = ClassificationLLM(model_name=MODEL_NAME)
     llm_class.sic = mock_sic
     return llm_class
 
@@ -121,7 +121,7 @@ def classification_llm_with_sic_sa_rag_sic(mocker, mock_sic):  # pylint: disable
         "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
         return_value=mock_message,
     )
-    llm_class = ClassificationLLM(model_name="gemini-1.5-flash")
+    llm_class = ClassificationLLM(model_name=MODEL_NAME)
     llm_class.sic = mock_sic
 
     return llm_class
