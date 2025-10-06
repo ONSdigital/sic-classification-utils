@@ -35,6 +35,9 @@ black: ## Run black
 embed-tests:  # Allowing 75% coverage for lookup for initial commit
 	poetry run pytest -m embed  --cov=src/industrial_classification_utils/embed --cov-report=term-missing --cov-fail-under=80 --cov-config=.coveragerc
 
+llm-tests:
+	poetry run pytest -m llm  --cov=src/industrial_classification_utils/llm  --cov-report=term-missing --cov-fail-under=80 --cov-config=.coveragerc
+
 utils-tests:
 	poetry run pytest -m utils  --cov=src/industrial_classification_utils/utils --cov-report=term-missing --cov-fail-under=80 --cov-config=.coveragerc
 
