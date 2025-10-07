@@ -3,6 +3,34 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# ignore data files
+*.csv
+*.xls
+*.xlsx
+*.json
+*.png
+*.html
+*.parquet
+*.pkl
+*.dat
+*.npy
+*.npz
+*.zip
+*.gz
+/data/
+
+# ignore temporary files
+*.tmp
+*.aux
+tmp/
+temp/
+
+# ignore pictures and graphs of data
+*.png
+*.jpg
+*.pdf
+*.bmp
+
 # C extensions
 *.so
 
@@ -77,6 +105,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*.ipynb
 
 # IPython
 profile_default/
