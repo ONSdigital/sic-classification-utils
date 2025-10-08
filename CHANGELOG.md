@@ -34,4 +34,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - Added langchain models to use the most recent versions (langchain-google-genai, langchain-core, langchain-community, langchain-huggingface, langchain-chroma)
     - Updated package versions (langchain-openai, numpy, chromadb)
     - Removed packages that were replaced by their newer counterparts (langchain was replaced with langchain-core, langchain-community, langchain-huggingface, langchain-chroma; langchain-google-vertexai replaced with langchain-google-genai that uses different LLM model)
-
