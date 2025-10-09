@@ -57,7 +57,7 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 VECTOR_STORE_URL_BASE = "http://0.0.0.0:8088"
 STATUS_ENDPOINT = "/v1/sic-vector-store/status"
 SEARCH_ENDPOINT = "/v1/sic-vector-store/search-index"
-MODEL_NAME = "gemini-2.0-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
@@ -159,7 +159,7 @@ def get_alt_sic_candidates(row: pd.Series) -> str:
 
 
 if __name__ == "__main__":
-    args = parse_args("STG2_oneprompt")
+    args = parse_args("STG2")
     df, metadata, start_batch_id, restart_successful = set_up_initial_state(
         args.restart,
         args.output_folder,
