@@ -12,3 +12,38 @@ repos:
       - id: check-yaml
       - id: debug-statements
       - id: check-merge-conflict
+      - id: trailing-whitespace # strip out white spaces at end of lines
+      - id: end-of-file-fixer # ensure newline present at end of file
+      - id: check-yaml # checks yaml files for parseable syntax.
+      - id: check-json # checks json files for parseable syntax
+      - id: check-added-large-files # check for files above certain size (as likely to be data files)
+        args: ['--maxkb=500']
+      - id: detect-private-key # detects the presence of private keys.
+      - id: check-case-conflict # check for files that would conflict in case-insensitive file systems.
+
+# ----- Detect-secrets - Detects high entropy strings that are likely to be passwords.
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+
+# ---- Ruff ---- A *very* fast formatter and linter.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.12.1
+    hooks:
+      # Run the linter.
+      - id: ruff-check
+        args: [ --fix ]
+      # Run the formatter.
+      # disabled for now as it fights with makefile checks
+      # - id: ruff-format
+
+  # ---- Pylint etc from Makefile ----
+  - repo: local
+    hooks:
+      - id: make-check-python
+        name: make check-python
+        entry: make check-python
+        language: system
+        types: [python]

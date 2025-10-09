@@ -115,3 +115,7 @@ indent-style = "space"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pylint]
+ignore = [".venv"]
+ignore-paths = ["notebooks/temp/"]
