@@ -80,7 +80,7 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
 
     Returns:
         result (doct[str, Any]): a dictionary with initial_sic,
-        and alt_sic_candidates for specified row.
+        and alt_candidates for specified row.
     """
     sa_rag_response = uni_chat.sa_rag_sic_code(  # pylint: disable=E0606
         job_title=row[JOB_TITLE_COL],
@@ -93,12 +93,11 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
     result = {
         "initial_sic": sa_rag_response[0].sic_code,
         "followup": sa_rag_response[0].followup,
-        "is_codable": sa_rag_response[0].sic_code not in ("", None),
-        "alt_sic_candidates": [
+        "unambiguously_codable": sa_rag_response[0].sic_code not in ("", None),
+        "alt_candidates": [
             {
-                "sic_code": i.sic_code,
-                "likelihood": i.likelihood,
-                "sic_description": i.sic_descriptive,
+                "code": i.sic_code,
+                "title": i.sic_descriptive,
             }
             for i in sa_rag_response[0].sic_candidates
         ],
@@ -116,7 +115,7 @@ def get_codable_status(row: pd.Series) -> str:
     Returns:
         str: a initial_sic for the row.
     """
-    return row["sa_rag_sic_response"]["is_codable"]
+    return row["sa_rag_sic_response"]["unambiguously_codable"]
 
 
 def get_followup_question(row: pd.Series) -> str:
@@ -146,7 +145,7 @@ def get_initial_sic(row: pd.Series) -> str:
 
 
 def get_alt_sic_candidates(row: pd.Series) -> str:
-    """Generator funciton to access alt_sic_candidates for the specified row.
+    """Generator funciton to access alt_candidates for the specified row.
 
     Args:
         row (pd.Series): A row from the input DataFrame containing
@@ -155,7 +154,7 @@ def get_alt_sic_candidates(row: pd.Series) -> str:
     Returns:
         str: A list of possible sic_code alternatives.
     """
-    return row["sa_rag_sic_response"]["alt_sic_candidates"]
+    return row["sa_rag_sic_response"]["alt_candidates"]
 
 
 if __name__ == "__main__":
@@ -173,15 +172,15 @@ if __name__ == "__main__":
     print("Running RAG SIC allocation...")
     if (not args.restart) or (not restart_successful):
         df["sa_rag_sic_response"] = {
+            "unambiguously_codable": False,
             "initial_sic": "",
+            "alt_candidates": [],
             "followup": "",
-            "is_codable": False,
-            "alt_sic_candidates": [],
         }
-        df["initial_sic"] = ""
+        df["unambiguously_codable"] = False
+        df["initial_code"] = ""
         df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
         df["followup_question"] = ""
-        df["codable_oneprompt"] = False
 
     uni_chat = ClassificationLLM(model_name=MODEL_NAME)
     for batch_id, batch in tqdm(
@@ -200,15 +199,15 @@ if __name__ == "__main__":
             batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(
                 get_rag_response, axis=1
             )
-            df.loc[batch.index, "initial_sic"] = batch.apply(get_initial_sic, axis=1)
+            df.loc[batch.index, "unambiguously_codable"] = batch.apply(
+                get_codable_status, axis=1
+            )
+            df.loc[batch.index, "initial_code"] = batch.apply(get_initial_sic, axis=1)
             df.loc[batch.index, "alt_sic_candidates"] = batch.apply(
                 get_alt_sic_candidates, axis=1
             )
             df.loc[batch.index, "followup_question"] = batch.apply(
                 get_followup_question, axis=1
-            )
-            df.loc[batch.index, "codable_oneprompt"] = batch.apply(
-                get_codable_status, axis=1
             )
             persist_results(
                 df,
