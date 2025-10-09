@@ -8,7 +8,7 @@ all: ## Show the available make targets.
 .PHONY: clean
 clean: ## Clean the temporary files.
 	rm -rf .mypy_cache
-	rm -rf .ruff_cache	
+	rm -rf .ruff_cache
 
 run-docs: ## Run the mkdocs
 	poetry run mkdocs serve
@@ -43,7 +43,7 @@ utils-tests:
 
 all-tests:
 	poetry run pytest  --cov=. --cov-report=term-missing --cov-fail-under=80 --cov-config=.coveragerc
-	
+
 install: ## Install the dependencies
 	poetry install --only main --no-root
 
