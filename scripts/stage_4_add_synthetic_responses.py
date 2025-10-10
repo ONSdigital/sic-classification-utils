@@ -54,8 +54,8 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Constants:
-MODEL_NAME = "gemini-2.0-flash"
-MODEL_LOCATION = "europe-west9"
+MODEL_NAME = "gemini-2.5-flash"
+MODEL_LOCATION = "europe-west1"
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
