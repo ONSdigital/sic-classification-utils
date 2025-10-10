@@ -80,7 +80,7 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
 
     Returns:
         result (doct[str, Any]): a dictionary with initial_sic,
-        and alt_candidates for specified row.
+        and alt_sic_candidates for specified row.
     """
     sa_rag_response = uni_chat.sa_rag_sic_code(  # pylint: disable=E0606
         job_title=row[JOB_TITLE_COL],
@@ -94,9 +94,10 @@ def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103
         "initial_sic": sa_rag_response[0].sic_code,
         "followup": sa_rag_response[0].followup,
         "unambiguously_codable": sa_rag_response[0].sic_code not in ("", None),
-        "alt_candidates": [
+        "alt_sic_candidates": [
             {
                 "code": i.sic_code,
+                "likelihood": i.likelihood,
                 "title": i.sic_descriptive,
             }
             for i in sa_rag_response[0].sic_candidates
@@ -145,7 +146,7 @@ def get_initial_sic(row: pd.Series) -> str:
 
 
 def get_alt_sic_candidates(row: pd.Series) -> str:
-    """Generator funciton to access alt_candidates for the specified row.
+    """Generator funciton to access alt_sic_candidates for the specified row.
 
     Args:
         row (pd.Series): A row from the input DataFrame containing
@@ -154,7 +155,7 @@ def get_alt_sic_candidates(row: pd.Series) -> str:
     Returns:
         str: A list of possible sic_code alternatives.
     """
-    return row["sa_rag_sic_response"]["alt_candidates"]
+    return row["sa_rag_sic_response"]["alt_sic_candidates"]
 
 
 if __name__ == "__main__":
@@ -174,7 +175,7 @@ if __name__ == "__main__":
         df["sa_rag_sic_response"] = {
             "unambiguously_codable": False,
             "initial_sic": "",
-            "alt_candidates": [],
+            "alt_sic_candidates": [],
             "followup": "",
         }
         df["unambiguously_codable"] = False
