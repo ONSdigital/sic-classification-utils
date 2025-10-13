@@ -24,7 +24,6 @@ from industrial_classification_utils.models.response_model import (
     FinalSICAssignment,
     OpenFollowUp,
     SicResponse,
-    SurveyAssistSicResponse,
     UnambiguousResponse,
 )
 
@@ -267,7 +266,7 @@ def test_llm_response_mocked_sa_rag_sic_code(
         job_title=title,
         short_list=short_list,
     )
-    assert isinstance(result[0], SurveyAssistSicResponse)
+    assert isinstance(result[0], SicResponse)
     assert isinstance(result[1], list)
     assert isinstance(result[2], dict)
 
