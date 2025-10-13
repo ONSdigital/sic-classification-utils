@@ -47,7 +47,6 @@ from industrial_classification_utils.models.response_model import (
     RerankingResponse,
     SicCandidate,
     SicResponse,
-    SurveyAssistSicResponse,
     UnambiguousResponse,
 )
 from industrial_classification_utils.utils.sic_data_access import (
@@ -338,7 +337,7 @@ class ClassificationLLM:
         code_digits: int = 5,
         candidates_limit: int = 5,
         short_list: Optional[list[dict[Any, Any]]] = None,
-    ) -> tuple[SurveyAssistSicResponse, Optional[list[dict[Any, Any]]], Optional[Any]]:
+    ) -> tuple[SicResponse, Optional[list[dict[Any, Any]]], Optional[Any]]:
         """Generates a SIC classification based on respondent's data using RAG approach.
 
         Args:
@@ -352,7 +351,7 @@ class ClassificationLLM:
             short_list (list[dict[Any, Any]], optional): A list of results from embedding search
 
         Returns:
-            SurveyAssistSicResponse: The generated response to the query.
+            SicResponse: The generated response to the query.
 
         Raises:
             ValueError: If there is an error during the parsing of the response.
@@ -409,10 +408,8 @@ class ClassificationLLM:
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from chain, exit early")
-            validated_answer = SurveyAssistSicResponse(
-                followup="Follow-up question not available due to error.",
-                sic_code="N/A",
-                sic_descriptive="N/A",
+            validated_answer = SicResponse(
+                codable=False,
                 sic_candidates=[],
                 reasoning="Error from chain, exit early",
             )
@@ -422,7 +419,7 @@ class ClassificationLLM:
 
         # Parse the output to the desired format
         parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
-            pydantic_object=SurveyAssistSicResponse
+            pydantic_object=SicResponse
         )
         try:
             validated_answer = parser.parse(str(response.content))
@@ -433,10 +430,8 @@ class ClassificationLLM:
             reasoning = (
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
             )
-            validated_answer = SurveyAssistSicResponse(
-                followup="Follow-up question not available due to error.",
-                sic_code="N/A",
-                sic_descriptive="N/A",
+            validated_answer = SicResponse(
+                codable=False,
                 sic_candidates=[],
                 reasoning=reasoning,
             )
