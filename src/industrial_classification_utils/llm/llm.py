@@ -410,6 +410,9 @@ class ClassificationLLM:
             logger.warning("Error from chain, exit early")
             validated_answer = SicResponse(
                 codable=False,
+                followup="Follow-up question not available due to error.",
+                sic_code="N/A",
+                sic_descriptive="N/A",
                 sic_candidates=[],
                 reasoning="Error from chain, exit early",
             )
@@ -432,6 +435,9 @@ class ClassificationLLM:
             )
             validated_answer = SicResponse(
                 codable=False,
+                followup="Follow-up question not available due to error.",
+                sic_code="N/A",
+                sic_descriptive="N/A",
                 sic_candidates=[],
                 reasoning=reasoning,
             )
