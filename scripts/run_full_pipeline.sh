@@ -29,7 +29,7 @@ if [ "$pipeline_choice" -eq "1" ]; then
     rm -r "./$output_folder""/intermediate_outputs"
 
     echo "RUNNING: STAGE 4 (one-prompt pipeline)";
-    ./stage_4_one_prompt_add_synthetic_responses.py -n "STG4" -b "$batch_size" "./$output_folder""/STG2.parquet" "./$output_folder""/STG2_metadata.json" "./$output_folder"
+    ./stage_4_add_synthetic_responses.py -n "STG4" -b "$batch_size" "./$output_folder""/STG2.parquet" "./$output_folder""/STG2_metadata.json" "./$output_folder"
     rm -r "./$output_folder""/intermediate_outputs"
 
 else
