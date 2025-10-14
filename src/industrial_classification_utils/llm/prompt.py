@@ -635,3 +635,19 @@ SIC_PROMPT_CLOSEDFOLLOWUP = PromptTemplate.from_template(
         "format_instructions": parser_followup_closed.get_format_instructions(),
     },
 )
+
+
+FIX_PARSING_PROMPT = PromptTemplate.from_template(
+    """You are a meticulous assistant tasked with ensuring that
+the output from a language model adheres strictly to the required JSON format.
+
+Your task is to review the output and make any necessary adjustments to ensure it is valid JSON.
+If the output is not valid JSON, you must fix it without altering the intended meaning.
+
+====Output from LLM====
+{llm_output}
+
+===Output Format===
+{format_instructions}
+"""
+)
