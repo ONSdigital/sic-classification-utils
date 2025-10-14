@@ -500,12 +500,10 @@ Given:
 that respondent can be assigned to.
 
 Your task is to generate a single, well-crafted follow-up question that:
-
 1. Uses clear, simple language.
 2. Makes it possible to disambiguate between SIC code candidates.
-3. Is specific enough to enable assignment of the SIC code with
-a high degree of confidence.
-4. Follows the quality standards below.
+3. Is specific enough to enable assignment of the SIC code with a high degree of confidence.
+4. Follows the quality standards.
 
 ===Respondent Data===
 - Company's main activity: {industry_descr}
@@ -517,42 +515,39 @@ a high degree of confidence.
 
 ===Quality standards===
 Language and Clarity
-- Use simple, natural language that is easy to understand
-- Use plain English - define or avoid technical jargon
-- Be specific about what information is sought - avoid vague terms
-- Use concise, grammatically correct phrasing
-- Specify time frames clearly when relevant (e.g., "currently," "in your main job")
-- Refer to employer as "employer" or "organisation" (e.g. "services your organisation offers")
+- Use simple, natural language that is easy to understand.
+- Use plain British English - define or avoid technical jargon and abbreviations.
+- Use concise, grammatically correct phrasing.
+- Specify time frames clearly when relevant (e.g., "currently," "in your main job").
+- Refer to employer as "employer" or "organisation" (e.g. "services your organisation offers").
+    Use "organisation" when talking about non-profits, charities, government bodies, educational institutions,
+    "company" when talking about corporations, LTDs, Startups. If it is unknown, use "employer".
+- Be specific about what information is sought - avoid vague terms.
+- Ask questions that will prompt respondent to providing more relevant information.
 
 Question Structure
 - **REQUIRED: Focus on the employer's main business activities, products, or services rather
-than the specific job role**
-- **REQUIRED: Start questions with open-ended phrases such as "What," "How," "Which," "Where,"
-"Please explain," or "Please describe"**
-- Vary your question starters and actively choose from different opening phrases to create
-natural variation
-- Limit question to one sentence
-- Ask only one thing at a time - avoid double-barreled questions
-- AVOID binary A/B questions or "either/or" structures
-- Provide sufficient context for understanding the question
-- Focus on factual information rather than hypothetical situations
+than the specific job role**.
+- **REQUIRED: Start questions with open-ended phrases such as "What", "How", "Which", "Where", "Please describe"**.
+- Limit question to one sentence.
+- Questions should not be complex and should not leave any room for misinterpretation.
+- Ask only one thing at a time - avoid double-barreled questions.
+- Acoid binary A/B questions.
+- Avoid "either/or" structures.
+- Provide sufficient context for understanding the question.
+- Focus on factual information rather than hypothetical situations.
 
 Respondent Considerations
-- Formulate questions in such a way that a respondent can answer them easily in a few words
-- Only ask for information the respondent would reasonably know
-- Don't assume knowledge or circumstances that may not apply
-- Avoid requiring complex mental calculations
+- Formulate questions in such a way that a respondent can answer them easily in a few words.
+- Only ask for information the respondent would reasonably know.
+- Don't assume knowledge or circumstances that may not apply.
+- Avoid requiring complex mental calculations.
 
 Neutrality and Bias
-- Use neutral wording that doesn't suggest a "correct" answer
-- Avoid leading the respondent toward particular responses
-- Keep phrasing positive and straightforward - don't use double negatives
-
-===Example Questions===
-- "What is the age range of the students that you teach?"
-- "How would you describe the main products your employer manufactures?"
-- "Which types of furniture does your organisation primarily sell?"
-- "Could you describe the main types of legal work your firm specialises in?"
+- Use neutral wording that doesn't suggest a "correct" answer.
+- Never lead the respondent toward particular response.
+- Keep phrasing straightforward - don't use double negatives.
+- Avoid societal bias.
 _fi
 ===Output Format===
 {format_instructions}
