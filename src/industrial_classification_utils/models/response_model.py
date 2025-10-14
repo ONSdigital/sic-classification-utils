@@ -78,7 +78,8 @@ class SicResponse(BaseModel):
 
     codable: bool = Field(
         description="""True if enough information is provided to decide
-        SIC code, False otherwise."""
+        SIC code, False otherwise.""",
+        default=False,
     )
     followup: Optional[str] = Field(
         description="""Question to ask user in order to collect additional information
@@ -97,13 +98,15 @@ class SicResponse(BaseModel):
     )
     sic_candidates: list[SicCandidate] = Field(
         description="""Short list of less than ten possible or alternative SIC codes
-        that may be applicable with their descriptive label and estimated likelihood."""
+        that may be applicable with their descriptive label and estimated likelihood.""",
+        default=[],
     )
 
     reasoning: str = Field(
         description="""Step by step reasoning behind classification selected. Specifies
             the information used to assign the SIC code or any additional information
-            required to assign a SIC code."""
+            required to assign a SIC code.""",
+        default="No reasoning provided.",
     )
 
     @classmethod
