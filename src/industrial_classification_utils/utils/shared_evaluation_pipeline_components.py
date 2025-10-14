@@ -20,11 +20,13 @@ The main components provided are:
 """
 import json
 import os
+import shutil
 from argparse import ArgumentParser as AP
 from argparse import Namespace
 from datetime import UTC, datetime
 from typing import Optional
 
+import gcsfs
 import pandas as pd
 
 
@@ -127,16 +129,12 @@ def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         df_persisted = pd.read_parquet(
             f"{output_folder}/intermediate_outputs/{output_shortname}.parquet"
         )
-        with open(
-            f"{output_folder}/intermediate_outputs/{output_shortname}_checkpoint_info.json",
-            encoding="utf8",
-        ) as checkpoint:
-            checkpoint_info_persisted = json.load(checkpoint)
-        with open(
-            f"{output_folder}/intermediate_outputs/{output_shortname}_metadata.json",
-            encoding="utf8",
-        ) as meta:
-            metadata_persisted = json.load(meta)
+        checkpoint_info_persisted = _read_json(
+            f"{output_folder}/intermediate_outputs/{output_shortname}_checkpoint_info.json"
+        )
+        metadata_persisted = _read_json(
+            f"{output_folder}/intermediate_outputs/{output_shortname}_metadata.json"
+        )
         restart_successful = True
         print("Partially-processed data re-loaded succesfully")
         return (
@@ -199,47 +197,95 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
                                  Optional, default 0.
     Returns: None
     """
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
     if is_final:
-        print("Saving results to CSV...")
-        df_with_search.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
+        print("Saving setup metadata to JSON...")
+        _write_json(
+            metadata,
+            f"{output_folder}/{output_shortname}_metadata.json",
+        )
         print("Saving results to parquet...")
         df_with_search.to_parquet(
             f"{output_folder}/{output_shortname}.parquet", index=False
         )
-        print("Saving setup metadata to JSON...")
-        with open(
-            f"{output_folder}/{output_shortname}_metadata.json",
-            "w",
-            encoding="utf8",
-        ) as output_meta:
-            json.dump(metadata, output_meta)
+        print("Saving results to CSV...")
+        df_with_search.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
+
+        print("Removing intermediate outputs...")
+        _delete_folder_contents(f"{output_folder}/intermediate_outputs")
 
     else:
         output_folder = f"{output_folder}/intermediate_outputs"
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+        _write_json(
+            {
+                "completed_batches": completed_batches,
+                "batch_size": metadata["batch_size"],
+            },
+            f"{output_folder}/{output_shortname}_checkpoint_info.json",
+        )
+        _write_json(
+            metadata,
+            f"{output_folder}/{output_shortname}_metadata.json",
+        )
         df_with_search.to_parquet(
             f"{output_folder}/{output_shortname}.parquet", index=False
         )
-        with open(
-            f"{output_folder}/{output_shortname}_metadata.json", "w", encoding="utf8"
-        ) as temp_meta:
-            json.dump(metadata, temp_meta)
-        with open(
-            f"{output_folder}/{output_shortname}_checkpoint_info.json",
-            "w",
-            encoding="utf8",
-        ) as checkpoint:
-            json.dump(
-                {
-                    "completed_batches": completed_batches,
-                    "batch_size": metadata["batch_size"],
-                },
-                checkpoint,
-            )
+
+
+def _read_json(file_path: str) -> dict:
+    """Reads a JSON file and returns its contents as a dictionary.
+
+    Args:
+        file_path: The path to the input JSON file.
+            Can be a local path or a GCP bucket path (starting with "gs://").
+
+    Returns:
+        dict: The contents of the JSON file as a dictionary.
+    """
+    if file_path.startswith("gs://"):
+        fs = gcsfs.GCSFileSystem()
+        with fs.open(file_path, "r", encoding="utf8") as f:
+            obj = json.load(f)
+    else:
+        with open(file_path, encoding="utf8") as f:
+            obj = json.load(f)
+    return obj
+
+
+def _write_json(obj: dict, file_path: str) -> None:
+    """Writes a dictionary to a JSON file - either local or in gcp bucket.
+
+    Args:
+        obj: The dictionary to be written to the JSON file.
+        file_path: The path to the output JSON file.
+
+
+    Returns:
+        None
+    """
+    if file_path.startswith("gs://"):
+        fs = gcsfs.GCSFileSystem()
+        with fs.open(file_path, "w", encoding="utf8") as f:
+            f.write(json.dumps(obj))
+    else:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w", encoding="utf8") as f:
+            json.dump(obj, f)
+
+
+def _delete_folder_contents(folder_path: str) -> None:
+    """Deletes all files in the specified folder.
+
+    Args:
+        folder_path (str): The path to the folder whose contents are to be deleted.
+
+    Returns:
+        None
+    """
+    if folder_path.startswith("gs://"):
+        fs = gcsfs.GCSFileSystem()
+        fs.rm(folder_path, recursive=True)
+    else:
+        shutil.rmtree(folder_path)
 
 
 def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
@@ -299,8 +345,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             raise
     else:
         try:
-            with open(input_metadata_json, encoding="utf-8") as f:
-                metadata = json.load(f)
+            metadata = _read_json(input_metadata_json)
         except FileNotFoundError:
             print(f"Could not find metadata file {input_metadata_json}")
             raise
