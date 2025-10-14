@@ -81,8 +81,11 @@ def get_followup_answer(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
         "job_title": row[JOB_TITLE_COL],
         "job_description": row[JOB_DESCRIPTION_COL],
     }
-    answer_followup_prompt = SR.construct_prompt(payload, row["followup_question"])
-    llm_response = SR.answer_followup(answer_followup_prompt, payload)
+    if row["followup_question"] is not None:
+        answer_followup_prompt = SR.construct_prompt(payload, row["followup_question"])
+        llm_response = SR.answer_followup(answer_followup_prompt, payload)
+    else:
+        llm_response = ""
     return llm_response
 
 

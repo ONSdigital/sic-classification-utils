@@ -38,7 +38,6 @@ from industrial_classification_utils.models.response_model import (
     OpenFollowUp,
     RerankingResponse,
     SicResponse,
-    SurveyAssistSicResponse,
     UnambiguousResponse,
 )
 from industrial_classification_utils.utils.sic_data_access import (
@@ -192,7 +191,7 @@ Always provide reasoning for your decision.
 """
 
 parser = PydanticOutputParser(
-    pydantic_object=SurveyAssistSicResponse  # type: ignore # Suspect langchain ver bug
+    pydantic_object=SicResponse  # type: ignore # Suspect langchain ver bug
 )
 
 SA_SIC_PROMPT_RAG = PromptTemplate.from_template(

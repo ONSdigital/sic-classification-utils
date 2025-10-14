@@ -112,7 +112,7 @@ class SyntheticResponder:
                 model_name=model_name,
                 max_output_tokens=1_600,
                 temperature=0.0,
-                location="europe-west2",
+                location="europe-west1",
             )
         except Exception as e:
             logger.error("%s" % e)  # Noqa: UP031 # pylint: disable=C0209,W1201
