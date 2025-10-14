@@ -30,6 +30,7 @@ from pydantic import SecretStr
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.llm.prompt import (
+    FIX_PARSING_PROMPT,
     GENERAL_PROMPT_RAG,
     SA_SIC_PROMPT_RAG,
     SIC_PROMPT_CLOSEDFOLLOWUP,
@@ -409,11 +410,7 @@ class ClassificationLLM:
             logger.exception(err)
             logger.warning("Error from chain, exit early")
             validated_answer = SicResponse(
-                codable=False,
                 followup="Follow-up question not available due to error.",
-                sic_code="N/A",
-                sic_descriptive="N/A",
-                sic_candidates=[],
                 reasoning="Error from chain, exit early",
             )
             return validated_answer, short_list, call_dict
@@ -426,21 +423,32 @@ class ClassificationLLM:
         )
         try:
             validated_answer = parser.parse(str(response.content))
-        except ValueError as parse_error:
+        except (ValueError, AttributeError) as parse_error:
             logger.exception(parse_error)
             logger.warning("Failed to parse response:\n%s", response.content)
 
-            reasoning = (
-                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
-            )
-            validated_answer = SicResponse(
-                codable=False,
-                followup="Follow-up question not available due to error.",
-                sic_code="N/A",
-                sic_descriptive="N/A",
-                sic_candidates=[],
-                reasoning=reasoning,
-            )
+            # send another llm request to fix the format (1 attempt)
+            try:
+                chain = FIX_PARSING_PROMPT | self.llm
+                response = chain.invoke(
+                    {
+                        "llm_output": str(response.content),
+                        "format_instructions": parser.get_format_instructions(),
+                    },
+                    return_only_outputs=True,
+                )
+                validated_answer = parser.parse(str(response.content))
+                logger.debug("Successfully parsed reformatted response.")
+            except (ValueError, AttributeError) as parse_error2:
+                logger.exception(parse_error2)
+                logger.warning("Failed to parse response again:\n%s", response.content)
+                reasoning = (
+                    f"ERROR parse_error=<{parse_error2}>, response=<{response.content}>"
+                )
+                validated_answer = SicResponse(
+                    followup="Follow-up question not available due to error.",
+                    reasoning=reasoning,
+                )
 
         return validated_answer, short_list, call_dict
 
