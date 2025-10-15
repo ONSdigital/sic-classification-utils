@@ -17,37 +17,30 @@ output_folder=$2
 input_csv=$3
 input_metadata_json=$4
 batch_size=$5
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "RUNNING: STAGE 1"
-./stage_1_add_semantic_search.py -n "STG1" -b "$batch_size" "$input_csv" "$input_metadata_json" "./$output_folder"
-rm -r "./$output_folder""/intermediate_outputs"
-
+"$SCRIPT_DIR"/stage_1_add_semantic_search.py -n "STG1" -b "$batch_size" "$input_csv" "$input_metadata_json" "$output_folder"
 
 if [ "$pipeline_choice" -eq "1" ]; then
     echo "RUNNING: STAGE 2 (one-prompt pipeline)";
-    ./stage_2_one_prompt_assign_sic_code.py -n "STG2" -b "$batch_size" "./$output_folder""/STG1.parquet" "./$output_folder""/STG1_metadata.json" "./$output_folder"
-    rm -r "./$output_folder""/intermediate_outputs"
+    "$SCRIPT_DIR"/stage_2_one_prompt_assign_sic_code.py -n "STG2" -b "$batch_size" "$output_folder""/STG1.parquet" "$output_folder""/STG1_metadata.json" "$output_folder"
 
     echo "RUNNING: STAGE 4 (one-prompt pipeline)";
-    ./stage_4_add_synthetic_responses.py -n "STG4" -b "$batch_size" "./$output_folder""/STG2.parquet" "./$output_folder""/STG2_metadata.json" "./$output_folder"
-    rm -r "./$output_folder""/intermediate_outputs"
+    "$SCRIPT_DIR"/stage_4_add_synthetic_responses.py -n "STG4" -b "$batch_size" "$output_folder""/STG2.parquet" "$output_folder""/STG2_metadata.json" "$output_folder"
 
 else
     echo "RUNNING: STAGE 2 (two-prompt pipeline)";
-    ./stage_2_add_unambiguously_codable_status.py -n "STG2" -b "$batch_size" "./$output_folder""/STG1.parquet" "./$output_folder""/STG1_metadata.json" "./$output_folder"
-    rm -r "./$output_folder""/intermediate_outputs"
+    "$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -n "STG2" -b "$batch_size" "$output_folder""/STG1.parquet" "$output_folder""/STG1_metadata.json" "$output_folder"
 
     echo "RUNNING: STAGE 3";
-    ./stage_3_add_open_questions.py -n "STG3" -b "$batch_size" "./$output_folder""/STG2.parquet" "./$output_folder""/STG2_metadata.json" "./$output_folder"
-    rm -r "./$output_folder""/intermediate_outputs"
+    "$SCRIPT_DIR"/stage_3_add_open_questions.py -n "STG3" -b "$batch_size" "$output_folder""/STG2.parquet" "$output_folder""/STG2_metadata.json" "$output_folder"
 
     echo "RUNNING: STAGE 4";
-    ./stage_4_add_synthetic_responses.py -n "STG4" -b "$batch_size" "./$output_folder""/STG3.parquet" "./$output_folder""/STG3_metadata.json" "./$output_folder"
-    rm -r "./$output_folder""/intermediate_outputs"
+    "$SCRIPT_DIR"/stage_4_add_synthetic_responses.py -n "STG4" -b "$batch_size" "$output_folder""/STG3.parquet" "$output_folder""/STG3_metadata.json" "$output_folder"
 fi
 
 echo "RUNNING: STAGE 5";
-./stage_5_assign_final_sic_code.py -n "STG5" -b "$batch_size" "./$output_folder""/STG4.parquet" "./$output_folder""/STG4_metadata.json" "./$output_folder"
-rm -r "./$output_folder""/intermediate_outputs"
+"$SCRIPT_DIR"/stage_5_assign_final_sic_code.py -n "STG5" -b "$batch_size" "$output_folder""/STG4.parquet" "$output_folder""/STG4_metadata.json" "$output_folder"
 
 echo "Pipeline Completed Successfully!"
