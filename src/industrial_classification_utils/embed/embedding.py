@@ -57,7 +57,7 @@ def get_config() -> FullConfig:
     """
     return {
         "llm": {
-            "llm_model_name": "gemini-2.5-flash",
+            "llm_model_name": "gemini-1.0-pro",
             "embedding_model_name": "all-MiniLM-L6-v2",  # text-embedding-004
             "db_dir": "src/industrial_classification_utils/data/vector_store",
         },
@@ -80,6 +80,33 @@ def get_config() -> FullConfig:
 
 config = get_config()
 MAX_BATCH_SIZE = 5400
+
+
+class CustomVertexAIEmbeddings(VertexAIEmbeddings):
+    """Custom VertexAIEmbeddings to specify task type for embeddings."""
+
+    def embed_documents(
+        self,
+        texts: list[str],
+        batch_size: int = 0,
+        *,
+        embeddings_task_type="SEMANTIC_SIMILARITY",
+    ) -> list[list[float]]:
+        """Embeds a list of documents using the specified task type."""
+        return super().embed_documents(
+            texts,
+            batch_size=batch_size,
+            embeddings_task_type=embeddings_task_type,
+        )
+
+    def embed_query(
+        self,
+        text: str,
+        *,
+        embeddings_task_type="SEMANTIC_SIMILARITY",
+    ) -> list[float]:
+        """Embeds a single query using the specified task type."""
+        return super().embed_query(text, embeddings_task_type=embeddings_task_type)
 
 
 class EmbeddingHandler:
@@ -112,35 +139,6 @@ class EmbeddingHandler:
         """
         self.embeddings: Any  # Use Any if no common base type exists
         if embedding_model_name.startswith(("textembedding-", "text-embedding-")):
-
-            class CustomVertexAIEmbeddings(VertexAIEmbeddings):
-                """Custom VertexAIEmbeddings to specify task type for embeddings."""
-
-                def embed_documents(
-                    self,
-                    texts: list[str],
-                    batch_size: int = 0,
-                    *,
-                    embeddings_task_type="SEMANTIC_SIMILARITY",
-                ) -> list[list[float]]:
-                    """Embeds a list of documents using the specified task type."""
-                    return super().embed_documents(
-                        texts,
-                        batch_size=batch_size,
-                        embeddings_task_type=embeddings_task_type,
-                    )
-
-                def embed_query(
-                    self,
-                    text: str,
-                    *,
-                    embeddings_task_type="SEMANTIC_SIMILARITY",
-                ) -> list[float]:
-                    """Embeds a single query using the specified task type."""
-                    return super().embed_query(
-                        text, embeddings_task_type=embeddings_task_type
-                    )
-
             self.embeddings = CustomVertexAIEmbeddings(model=embedding_model_name)
         else:
             self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)

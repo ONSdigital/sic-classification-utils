@@ -120,8 +120,8 @@ def test_embed_index_with_sic_object(embedding_handler_sic):
 @pytest.mark.parametrize(
     "model_name, expected_class",
     [
-        ("textembedding-abc", "VertexAIEmbeddings"),
-        ("text-embedding-xyz", "VertexAIEmbeddings"),
+        ("textembedding-abc", "CustomVertexAIEmbeddings"),
+        ("text-embedding-xyz", "CustomVertexAIEmbeddings"),
         ("other", "HuggingFaceEmbeddings"),
     ],
 )
@@ -134,15 +134,15 @@ def test_embedding_handler_initialization(model_name, expected_class):
         expected_class (str): name of embedding.
     """
     with patch(
-        "industrial_classification_utils.embed.embedding.VertexAIEmbeddings"
+        "industrial_classification_utils.embed.embedding.CustomVertexAIEmbeddings"
     ) as mock_google, patch(
         "industrial_classification_utils.embed.embedding.HuggingFaceEmbeddings"
     ) as mock_huggingface:
         EmbeddingHandler(model_name)
 
-        if expected_class == "VertexAIEmbeddings":
-            mock_google.assert_called_once_with(model=model_name)
-            mock_huggingface.assert_not_called()
-        else:
+        if expected_class == "HuggingFaceEmbeddings":
             mock_huggingface.assert_called_once_with(model_name=model_name)
             mock_google.assert_not_called()
+        else:
+            mock_google.assert_called_once_with(model=model_name)
+            mock_huggingface.assert_not_called()
