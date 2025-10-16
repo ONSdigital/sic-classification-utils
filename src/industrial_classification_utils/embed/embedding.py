@@ -5,8 +5,6 @@ It includes functionality for embedding SIC hierarchy data, managing vector stor
 and performing similarity searches.
 """
 
-# ruff: noqa: E402
-
 # Optional but doesn't hurt
 import logging
 import os
@@ -60,7 +58,7 @@ def get_config() -> FullConfig:
     return {
         "llm": {
             "llm_model_name": "gemini-1.0-pro",
-            "embedding_model_name": "all-MiniLM-L6-v2",
+            "embedding_model_name": "all-MiniLM-L6-v2",  # text-embedding-004
             "db_dir": "src/industrial_classification_utils/data/vector_store",
         },
         "lookups": {
@@ -82,6 +80,33 @@ def get_config() -> FullConfig:
 
 config = get_config()
 MAX_BATCH_SIZE = 5400
+
+
+class CustomVertexAIEmbeddings(VertexAIEmbeddings):
+    """Custom VertexAIEmbeddings to specify task type for embeddings."""
+
+    def embed_documents(
+        self,
+        texts: list[str],
+        batch_size: int = 0,
+        *,
+        embeddings_task_type="SEMANTIC_SIMILARITY",
+    ) -> list[list[float]]:
+        """Embeds a list of documents using the specified task type."""
+        return super().embed_documents(
+            texts,
+            batch_size=batch_size,
+            embeddings_task_type=embeddings_task_type,
+        )
+
+    def embed_query(
+        self,
+        text: str,
+        *,
+        embeddings_task_type="SEMANTIC_SIMILARITY",
+    ) -> list[float]:
+        """Embeds a single query using the specified task type."""
+        return super().embed_query(text, embeddings_task_type=embeddings_task_type)
 
 
 class EmbeddingHandler:
@@ -113,10 +138,8 @@ class EmbeddingHandler:
                 Defaults to 20.
         """
         self.embeddings: Any  # Use Any if no common base type exists
-        if embedding_model_name.startswith(
-            "textembedding-"
-        ) or embedding_model_name.startswith("text-embedding-"):
-            self.embeddings = VertexAIEmbeddings(model=embedding_model_name)
+        if embedding_model_name.startswith(("textembedding-", "text-embedding-")):
+            self.embeddings = CustomVertexAIEmbeddings(model=embedding_model_name)
         else:
             self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
 
@@ -154,7 +177,8 @@ class EmbeddingHandler:
         if self.db_dir is None:
             logger.warning("No db_dir provided; using in-memory vector store.")
             return Chroma(  # pylint: disable=not-callable
-                embedding_function=self.embeddings
+                embedding_function=self.embeddings,
+                collection_metadata={"hnsw:space": "l2"},
             )
         # else
 
@@ -167,7 +191,9 @@ class EmbeddingHandler:
 
         try:
             chroma = Chroma(  # pylint: disable=not-callable
-                embedding_function=self.embeddings, persist_directory=self.db_dir
+                embedding_function=self.embeddings,
+                persist_directory=self.db_dir,
+                collection_metadata={"hnsw:space": "l2"},
             )
             logger.info("Vector store created successfully.")
             return chroma
