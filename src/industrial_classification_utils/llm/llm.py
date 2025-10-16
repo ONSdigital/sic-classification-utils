@@ -125,7 +125,7 @@ class ClassificationLLM:
         self.verbose = verbose
 
     @lru_cache  # noqa: B019
-    def get_sic_code(
+    async def get_sic_code(
         self,
         industry_descr: str,
         job_title: str,
@@ -143,7 +143,7 @@ class ClassificationLLM:
             SicResponse: Generated response to the query.
         """
         chain = self.sic_prompt | self.llm
-        response = chain.invoke(
+        response = await chain.ainvoke(
             {
                 "industry_descr": industry_descr,
                 "job_title": job_title,
@@ -330,7 +330,7 @@ class ClassificationLLM:
 
         return "\n".join(sic_candidates)
 
-    def sa_rag_sic_code(  # noqa: PLR0913
+    async def sa_rag_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
@@ -405,7 +405,7 @@ class ClassificationLLM:
         chain = self.sa_sic_prompt_rag | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from chain, exit early")
@@ -430,7 +430,7 @@ class ClassificationLLM:
             # send another llm request to fix the format (1 attempt)
             try:
                 chain = FIX_PARSING_PROMPT | self.llm
-                response = chain.invoke(
+                response = await chain.ainvoke(
                     {
                         "llm_output": str(response.content),
                         "format_instructions": parser.get_format_instructions(),
@@ -452,7 +452,7 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    def unambiguous_sic_code(  # noqa: PLR0913
+    async def unambiguous_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
         semantic_search_results: list[dict],
@@ -511,7 +511,7 @@ class ClassificationLLM:
         chain = self.sic_prompt_unambiguous | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from chain, exit early")
@@ -544,7 +544,7 @@ class ClassificationLLM:
 
         return validated_answer, call_dict
 
-    def reranker_sic(  # noqa: PLR0913
+    async def reranker_sic(  # noqa: PLR0913
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
@@ -627,7 +627,7 @@ class ClassificationLLM:
         chain = self.sic_prompt_reranker | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from chain, exit early")
@@ -664,7 +664,7 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    def final_sic_code(  # noqa: PLR0913
+    async def final_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
@@ -752,7 +752,7 @@ class ClassificationLLM:
         chain = self.sic_prompt_final | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from chain, exit early")
@@ -789,7 +789,7 @@ class ClassificationLLM:
 
         return validated_answer, call_dict
 
-    def formulate_open_question(
+    async def formulate_open_question(
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
@@ -849,7 +849,7 @@ class ClassificationLLM:
         chain = self.sic_prompt_openfollowup | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from LLMChain, exit early")
@@ -880,7 +880,7 @@ class ClassificationLLM:
 
         return validated_answer, call_dict
 
-    def formulate_closed_question(
+    async def formulate_closed_question(
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
@@ -941,7 +941,7 @@ class ClassificationLLM:
         chain = self.sic_prompt_closedfollowup | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from LLMChain, exit early")
