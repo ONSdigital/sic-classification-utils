@@ -519,7 +519,7 @@ Language and Clarity
 - Use plain British English - define or avoid technical jargon and abbreviations.
 - Use concise, grammatically correct phrasing.
 - Specify time frames clearly when relevant (e.g., "currently," "in your main job").
-- Refer to employer as "employer" or "organisation" (e.g. "services your organisation offers").
+- Refer to employer as "employer" or "organisation" (e.g., "services your organisation offers").
     Use "organisation" when talking about non-profits, charities, government bodies, educational institutions,
     "company" when talking about corporations, LTDs, Startups. If it is unknown, use "employer".
 - Be specific about what information is sought - avoid vague terms.
@@ -532,10 +532,11 @@ than the specific job role**.
 - Limit question to one sentence.
 - Questions should not be complex and should not leave any room for misinterpretation.
 - Ask only one thing at a time - avoid double-barreled questions.
-- Acoid binary A/B questions.
+- Avoid binary A/B questions.
 - Avoid "either/or" structures.
 - Provide sufficient context for understanding the question.
 - Focus on factual information rather than hypothetical situations.
+- Provide examples to clarify the question (e.g., ", for example, a, b, c, d, or e?" with up to 5 examples)
 
 Respondent Considerations
 - Formulate questions in such a way that a respondent can answer them easily in a few words.
