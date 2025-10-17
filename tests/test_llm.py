@@ -1,6 +1,7 @@
 # pylint: disable=C0103, C0116, R0913, R0917, W0212, W0612, W0613
 """Tests for industrial_classification_utils.llm.llm.py."""
 
+import asyncio
 import json
 from unittest import mock
 
@@ -59,7 +60,7 @@ def classification_llm_with_sic_reranker(mocker, mock_sic):  # pylint: disable=W
     mock_message = mocker.Mock(spec=AIMessage)
     mock_message.content = mock_object_json
     mock_patcher = mocker.patch(  # noqa: F841
-        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        "industrial_classification_utils.llm.llm.ChatVertexAI.ainvoke",
         return_value=mock_message,
     )
     llm_class = ClassificationLLM(model_name=MODEL_NAME)
@@ -87,7 +88,7 @@ def classification_llm_with_sic_unambiguous(mocker, mock_sic):  # pylint: disabl
     mock_message = mocker.Mock(spec=AIMessage)
     mock_message.content = mock_object_json
     mock_patcher = mocker.patch(  # noqa: F841
-        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        "industrial_classification_utils.llm.llm.ChatVertexAI.ainvoke",
         return_value=mock_message,
     )
     llm_class = ClassificationLLM(model_name=MODEL_NAME)
@@ -100,7 +101,7 @@ def classification_llm_with_sic_unambiguous(mocker, mock_sic):  # pylint: disabl
 def classification_llm_with_sic_sa_rag_sic(mocker, mock_sic):  # pylint: disable=W0621
     mock_llm = mock.MagicMock()  # noqa: F841
     mock_object_dict = {
-        "followup": "",
+        "followup": "example follow-up from the llm. Padded to 50 characters (Pydantic)",  # pylint: disable=C0301
         "sic_code": None,
         "sic_descriptive": None,
         "sic_candidates": [
@@ -110,14 +111,14 @@ def classification_llm_with_sic_sa_rag_sic(mocker, mock_sic):  # pylint: disable
                 "likelihood": 0.5,
             }
         ],
-        "reasoning": "",
+        "reasoning": "example reasoning for the llm answer. Padded to 50 characters (Pydantic)",  # pylint: disable=C0301
     }
 
     mock_object_json = json.dumps(mock_object_dict)
     mock_message = mocker.Mock(spec=AIMessage)
     mock_message.content = mock_object_json
     mock_patcher = mocker.patch(  # noqa: F841
-        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        "industrial_classification_utils.llm.llm.ChatVertexAI.ainvoke",
         return_value=mock_message,
     )
     llm_class = ClassificationLLM(model_name=MODEL_NAME)
@@ -201,12 +202,14 @@ def test_llm_response_mocked_get_sic_code(mocker):
     mock_message.content = mock_object_json
 
     mock_patcher = mocker.patch(  # noqa: F841
-        "industrial_classification_utils.llm.llm.ChatVertexAI.invoke",
+        "industrial_classification_utils.llm.llm.ChatVertexAI.ainvoke",
         return_value=mock_message,
     )
 
-    result = ClassificationLLM(model_name=MODEL_NAME).get_sic_code(
-        industry_descr="", job_description="", job_title=""
+    result = asyncio.run(
+        ClassificationLLM(model_name=MODEL_NAME).get_sic_code(
+            industry_descr="", job_description="", job_title=""
+        )
     )
     assert isinstance(result, SicResponse)
 
@@ -260,11 +263,13 @@ def test_llm_response_mocked_sa_rag_sic_code(
             "two_digit_code": "11",
         }
     ]
-    result = classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
-        industry_descr="school",
-        job_description="educate kids",
-        job_title=title,
-        short_list=short_list,
+    result = asyncio.run(
+        classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
+            industry_descr="school",
+            job_description="educate kids",
+            job_title=title,
+            short_list=short_list,
+        )
     )
     assert isinstance(result[0], SicResponse)
     assert isinstance(result[1], list)
@@ -296,11 +301,13 @@ def test_llm_mocked_sa_rag_sic_code_job_title(
             "two_digit_code": "11",
         }
     ]
-    result = classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
-        "school",
-        title,
-        "educate kids",
-        short_list=short_list,
+    result = asyncio.run(
+        classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
+            "school",
+            title,
+            "educate kids",
+            short_list=short_list,
+        )
     )[2]["job_title"]
     assert result == expected_job_title
 
@@ -310,11 +317,13 @@ def test_llm_response_mocked_unambiguous_sic_code(
     mock_sic_meta_patch, classification_llm_with_sic_unambiguous
 ):
 
-    result = classification_llm_with_sic_unambiguous.unambiguous_sic_code(
-        industry_descr="",
-        semantic_search_results=[],
-        job_description="",
-        job_title="",
+    result = asyncio.run(
+        classification_llm_with_sic_unambiguous.unambiguous_sic_code(
+            industry_descr="",
+            semantic_search_results=[],
+            job_description="",
+            job_title="",
+        )
     )
     assert isinstance(result[0], UnambiguousResponse)
     assert isinstance(result[1], dict)
@@ -404,7 +413,7 @@ def test_llm_response_mocked_final_sic_code(mocker, prompt_candidate_sic):
         return_value=mock_message,
     )
 
-    result = prompt_candidate_sic.final_sic_code(industry_descr="")
+    result = asyncio.run(prompt_candidate_sic.final_sic_code(industry_descr=""))
     assert isinstance(result[0], FinalSICAssignment)
     assert isinstance(result[1], dict)
 
@@ -422,11 +431,13 @@ def test_llm_response_mocked_formulate_open_question(mocker, prompt_candidate_si
         return_value=mock_message,
     )
 
-    result = prompt_candidate_sic.formulate_open_question(
-        industry_descr="",
-        job_title="",
-        job_description="",
-        llm_output="",
+    result = asyncio.run(
+        prompt_candidate_sic.formulate_open_question(
+            industry_descr="",
+            job_title="",
+            job_description="",
+            llm_output="",
+        )
     )
     assert isinstance(result[0], OpenFollowUp)
     assert isinstance(result[1], dict)
@@ -445,11 +456,13 @@ def test_llm_response_mocked_formulate_closed_question(mocker, prompt_candidate_
         return_value=mock_message,
     )
 
-    result = prompt_candidate_sic.formulate_closed_question(
-        industry_descr="",
-        job_title="",
-        job_description="",
-        llm_output="",
+    result = asyncio.run(
+        prompt_candidate_sic.formulate_closed_question(
+            industry_descr="",
+            job_title="",
+            job_description="",
+            llm_output="",
+        )
     )
     assert isinstance(result[0], ClosedFollowUp)
     assert isinstance(result[1], dict)
@@ -546,8 +559,10 @@ def test_sa_rag_sic_code_prep_followup_is_str(
             "two_digit_code": "11xxx",
         }
     ]
-    result = classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
-        "school", "teacher", "educate kids", short_list=short_list
+    result = asyncio.run(
+        classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
+            "school", "teacher", "educate kids", short_list=short_list
+        )
     )[0].followup
     assert isinstance(result, str)
 
@@ -568,8 +583,10 @@ def test_unambiguous_sic_code_call_dict_job_title_correct(
     mock_sic_meta_patch,
     classification_llm_with_sic_unambiguous,
 ):
-    result = classification_llm_with_sic_unambiguous.unambiguous_sic_code(
-        "school", [{"title": "Education", "code": "11111"}], title, "educate kids"
+    result = asyncio.run(
+        classification_llm_with_sic_unambiguous.unambiguous_sic_code(
+            "school", [{"title": "Education", "code": "11111"}], title, "educate kids"
+        )
     )[1]["job_title"]
     assert result == expected_job_title
 
@@ -578,11 +595,13 @@ def test_unambiguous_sic_code_call_dict_job_title_correct(
 def test_unambiguous_sic_code_followup_is_str(
     mock_sic_meta_patch, classification_llm_with_sic_unambiguous
 ):
-    result = classification_llm_with_sic_unambiguous.unambiguous_sic_code(
-        industry_descr="school",
-        semantic_search_results=[{"title": "Education", "code": "11111"}],
-        job_title="teacher",
-        job_description="educate kids",
+    result = asyncio.run(
+        classification_llm_with_sic_unambiguous.unambiguous_sic_code(
+            industry_descr="school",
+            semantic_search_results=[{"title": "Education", "code": "11111"}],
+            job_title="teacher",
+            job_description="educate kids",
+        )
     )[0].reasoning
     assert isinstance(result, str)
 
@@ -603,8 +622,10 @@ def test_reranker_sic_call_dict_job_title_correct(
     title,
     expected_job_title,
 ):
-    result = classification_llm_with_sic_reranker.reranker_sic(
-        "school", title, short_list=[{"title": "Education", "code": "11111"}]
+    result = asyncio.run(
+        classification_llm_with_sic_reranker.reranker_sic(
+            "school", title, short_list=[{"title": "Education", "code": "11111"}]
+        )
     )[2]["job_title"]
     assert result == expected_job_title
 
@@ -614,8 +635,10 @@ def test_reranker_sic_response_is_str(
     mock_sic_meta_patch, classification_llm_with_sic_reranker
 ):
     short_list = [{"title": "Education", "code": "11111"}]
-    result = classification_llm_with_sic_reranker.reranker_sic(
-        "school", short_list=short_list
+    result = asyncio.run(
+        classification_llm_with_sic_reranker.reranker_sic(
+            "school", short_list=short_list
+        )
     )[0].model_dump()["selected_codes"][0]["reasoning"]
     assert isinstance(result, str)
 
@@ -640,8 +663,10 @@ def test_sa_rag_sic_code_short_list_is_none_raise_value_error(
     with pytest.raises(
         ValueError, match="Short list is None - list provided from embedding search."
     ):
-        classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
-            industry_descr="", job_description="", job_title=""
+        asyncio.run(
+            classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
+                industry_descr="", job_description="", job_title=""
+            )
         )
 
 
@@ -652,6 +677,8 @@ def test_reranker_sic_short_list_is_none_raise_value_error(
     with pytest.raises(
         ValueError, match="Short list is None - list provided from embedding search."
     ):
-        classification_llm_with_sic_reranker.reranker_sic(
-            industry_descr="", job_description="", job_title=""
+        asyncio.run(
+            classification_llm_with_sic_reranker.reranker_sic(
+                industry_descr="", job_description="", job_title=""
+            )
         )
