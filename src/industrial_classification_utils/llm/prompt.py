@@ -528,21 +528,24 @@ Language and Clarity
 Question Structure
 - **REQUIRED: Focus on the employer's main business activities, products, or services rather
 than the specific job role**.
-- **REQUIRED: Start questions with open-ended phrases such as "What", "How", "Which", "Where", "Please describe"**.
-- Limit question to one sentence.
+- **REQUIRED: Start questions with open-ended phrases such as "What", "How", "Which", "Where"**.
 - Questions should not be complex and should not leave any room for misinterpretation.
 - Ask only one thing at a time - avoid double-barreled questions.
 - Avoid binary A/B questions.
 - Avoid "either/or" structures.
 - Provide sufficient context for understanding the question.
 - Focus on factual information rather than hypothetical situations.
-- Provide examples to clarify the question (e.g., ", for example, a, b, c, d, or e?" with up to 5 examples)
+- Limit question to one sentence with a question mark at the end.
+- If relevant, provide examples following after the question, as an additional sentence (e.g., "For example, a, b, c, d, or e?" with up to 5 examples).
+- Examples should help to decide between alternative codes.
+- The example should be an additional sentence, after the question with a question mark, begenning with "For example,".
 
 Respondent Considerations
 - Formulate questions in such a way that a respondent can answer them easily in a few words.
 - Only ask for information the respondent would reasonably know.
 - Don't assume knowledge or circumstances that may not apply.
 - Avoid requiring complex mental calculations.
+- If need to decide on primary business focus, avoid asking about providing percentage values, instead ask which is the main business focus.
 
 Neutrality and Bias
 - Use neutral wording that doesn't suggest a "correct" answer.
