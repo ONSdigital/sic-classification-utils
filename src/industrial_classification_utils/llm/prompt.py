@@ -538,6 +538,7 @@ than the specific job role**.
 - Limit question to one sentence with a question mark at the end.
 - If relevant, provide examples following after the question, as an additional sentence (e.g., "For example, a, b, c, d, or e?" with up to 5 examples).
 - Examples should help to decide between alternative codes.
+- Examples should not lead the respondent toward particular response.
 - The example should be an additional sentence, after the question with a question mark, begenning with "For example,".
 
 Respondent Considerations
