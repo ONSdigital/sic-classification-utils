@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
+## [0.1.6] - 2025-10-22
+
+## Added
+- LLM functionality unit tests (`llm` pytest marker).
+
+## Changed
+- methods involving generative LLM calls are now defined asynchronously (`get_sic_code`, `sa_rag_sic_code`, `unambiguous_sic_code`, `reranker_sic`, `final_sic_code`, `formulate_open_question`, `formulate_closed_question`).
+- evaluation pipeline refactored - main changes are to use `gemini-2.5-flash`, use `europe-west1`, extend 1-prompt pipeline, allow reading/writing from/to GCP bucket.
+
+## Fixed
+- `VertexAIEmbeddings` extended by `CustomVertexAIEmbeddings` to enforce same embedder task type for documents and queries.
+- `sa_rag_sic_code` now attempts to retry failed LLM parsing with a new parser.
+
+
 ## [0.1.5] - 2025-09-26
 
 ## Changed
