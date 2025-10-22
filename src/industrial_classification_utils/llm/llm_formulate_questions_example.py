@@ -1,5 +1,5 @@
 # pylint: disable=invalid-name, protected-access, line-too-long, missing-module-docstring, duplicate-code
-
+import asyncio
 from pprint import pprint
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
@@ -436,19 +436,26 @@ EXAMPLE_EMBED_SHORT_LIST = [
     },
 ]
 
-sic_response_unambiguous = uni_chat.unambiguous_sic_code(
-    industry_descr=ORG_DESCRIPTION,
-    semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
-    job_title=JOB_TITLE,
-    job_description=JOB_DESCRIPTION,
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+sic_response_unambiguous = loop.run_until_complete(
+    uni_chat.unambiguous_sic_code(
+        industry_descr=ORG_DESCRIPTION,
+        semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
+        job_title=JOB_TITLE,
+        job_description=JOB_DESCRIPTION,
+    )
 )
 
 # Formulate Open Question
-sic_followup = uni_chat.formulate_open_question(
-    industry_descr=ORG_DESCRIPTION,
-    job_title=JOB_TITLE,
-    job_description=JOB_DESCRIPTION,
-    llm_output=sic_response_unambiguous[0].alt_candidates,  # type: ignore
+sic_followup = loop.run_until_complete(
+    uni_chat.formulate_open_question(
+        industry_descr=ORG_DESCRIPTION,
+        job_title=JOB_TITLE,
+        job_description=JOB_DESCRIPTION,
+        llm_output=sic_response_unambiguous[0].alt_candidates,  # type: ignore
+    )
 )
 
 print("Open Question answer: Follow-up and Reasoning")
@@ -460,11 +467,13 @@ filtered_candidates = uni_chat._prompt_candidate_list_filtered(
 )
 
 # Formulate Closed Quesiton
-sic_closed_followup = uni_chat.formulate_closed_question(
-    industry_descr=ORG_DESCRIPTION,
-    job_title=JOB_TITLE,
-    job_description=JOB_DESCRIPTION,
-    llm_output=filtered_candidates,  # type: ignore
+sic_closed_followup = loop.run_until_complete(
+    uni_chat.formulate_closed_question(
+        industry_descr=ORG_DESCRIPTION,
+        job_title=JOB_TITLE,
+        job_description=JOB_DESCRIPTION,
+        llm_output=filtered_candidates,  # type: ignore
+    )
 )
 print(
     """\nClosed Quesiton answer: Follow-up, Reasoning, and List of simplified SIC options to choose from"""
