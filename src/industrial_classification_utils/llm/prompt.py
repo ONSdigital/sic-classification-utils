@@ -520,31 +520,28 @@ Language and Clarity
 - Use concise, grammatically correct phrasing.
 - Specify time frames clearly when relevant (e.g., "currently," "in your main job").
 - Refer to employer as "employer" or "organisation" (e.g., "services your organisation offers").
-    Use "organisation" when talking about non-profits, charities, government bodies, educational institutions,
-    "company" when talking about corporations, LTDs, Startups. If it is unknown, use "employer".
+    Use "organisation" when talking about non-profits, charities, government bodies, educational institutions;
+    and use "employer" otherwise.
 - Be specific about what information is sought - avoid vague terms.
 - Ask questions that will prompt respondent to providing more relevant information.
 
 Question Structure
-- **REQUIRED: Focus on the employer's main business activities, products, or services rather
-than the specific job role**.
-- **REQUIRED: Start questions with open-ended phrases such as "What", "How", "Which", "Where"**.
-- Questions should not be complex and should not leave any room for misinterpretation.
-- Ask only one thing at a time - avoid double-barreled questions.
+- Focus on the employer's main business activities, products, or services rather
+than the specific job role.
+- Start questions with open-ended phrases such as "What", "How", "Which", "Where".
+- Questions should be straigh-forward, short, and should leave no room for misinterpretation.
+- Ask only about one issue at a time - avoid compound questions.
 - Avoid binary A/B questions.
 - Avoid "either/or" structures.
 - Provide sufficient context for understanding the question.
 - Focus on factual information rather than hypothetical situations.
 - Limit question to one sentence with a question mark at the end.
-- If relevant, provide examples following after the question, as an additional sentence (e.g., "For example, a, b, c, d, or e?" with up to 5 examples).
-- Examples should help to decide between alternative codes.
-- Examples should not lead the respondent toward particular response.
-- The example should be an additional sentence, after the question with a question mark, begenning with "For example,".
+- You may provide examples covering wide range of relevant options after the question, as an additional sentence.
 
 Respondent Considerations
 - Formulate questions in such a way that a respondent can answer them easily in a few words.
 - Only ask for information the respondent would reasonably know.
-- Don't assume knowledge or circumstances that may not apply.
+- Keep the question general, without making any assumptions.
 - Avoid requiring complex mental calculations.
 - If need to decide on primary business focus, avoid asking about providing percentage values, instead ask which is the main business focus.
 
