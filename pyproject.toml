@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sic-classification-utils"
-version = "0.1.6"
+version = "0.1.7"
 description = "Utility functions used for SIC classification"
 authors = ["Steve Gibbard <steve.gibbard@ons.gov.uk>"]
 license = "MIT"
