@@ -539,7 +539,7 @@ Quality standards
 Edge cases
 - If the shortlist is empty or clearly points to one category, ask a general clarifying question about
     the main product/service or value-chain stage to confirm classification.
-- Do not output explanations or reasoning—only the formatted result.
+- Do not output explanations or reasoning; only the formatted result.
 
 Output format
 - Return output that strictly follows:
