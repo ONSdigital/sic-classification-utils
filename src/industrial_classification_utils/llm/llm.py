@@ -1,4 +1,4 @@
-# pylint: disable=logging-not-lazy,logging-fstring-interpolation
+# pylint: disable=logging-not-lazy,logging-fstring-interpolation,too-many-lines
 """This module provides utilities for leveraging Large Language Models (LLMs)
 to classify respondent data into Standard Industrial Classification (SIC) codes.
 
@@ -16,6 +16,7 @@ Functions:
 """
 
 import logging
+import time
 from collections import defaultdict
 from functools import lru_cache
 from typing import Any, Optional, Union
@@ -50,6 +51,7 @@ from industrial_classification_utils.models.response_model import (
     SicResponse,
     UnambiguousResponse,
 )
+from industrial_classification_utils.utils.constants import truncate_identifier
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
@@ -510,6 +512,16 @@ class ClassificationLLM:
 
         chain = self.sic_prompt_unambiguous | self.llm
 
+        # Log LLM request sent
+        logger.info(
+            "Gemini request sent - unambiguous_sic_code - "
+            "job_title=%s job_description=%s industry_descr=%s",
+            truncate_identifier(job_title),
+            truncate_identifier(job_description),
+            truncate_identifier(industry_descr),
+        )
+        llm_start = time.perf_counter()
+
         try:
             response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
@@ -529,9 +541,27 @@ class ClassificationLLM:
         parser = PydanticOutputParser(pydantic_object=UnambiguousResponse)  # type: ignore
         try:
             validated_answer = parser.parse(str(response.content))
+            # Log LLM response received after successful parse
+            alt_candidates_count = len(
+                getattr(validated_answer, "alt_candidates", []) or []
+            )
+            llm_duration_ms = int((time.perf_counter() - llm_start) * 1000)
+            logger.info(
+                "Gemini response received (unambiguous_sic_code) - "
+                "codable=%s alt_candidates_count=%s duration_ms=%s",
+                getattr(validated_answer, "codable", False),
+                alt_candidates_count,
+                llm_duration_ms,
+            )
         except ValueError as parse_error:
             logger.exception(parse_error)
             logger.warning("Failed to parse response:\n%s", response.content)
+            llm_duration_ms = int((time.perf_counter() - llm_start) * 1000)
+            logger.info(
+                "Gemini response received (unambiguous_sic_code) - "
+                "codable=False alt_candidates_count=0 duration_ms=%s",
+                llm_duration_ms,
+            )
 
             reasoning = (
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
@@ -848,6 +878,16 @@ class ClassificationLLM:
 
         chain = self.sic_prompt_openfollowup | self.llm
 
+        # Log LLM request sent
+        logger.info(
+            "Gemini request sent - formulate_open_question - "
+            "job_title=%s job_description=%s industry_descr=%s",
+            truncate_identifier(job_title),
+            truncate_identifier(job_description),
+            truncate_identifier(industry_descr),
+        )
+        llm_start = time.perf_counter()
+
         try:
             response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
@@ -859,16 +899,28 @@ class ClassificationLLM:
             )
             return validated_answer, call_dict
 
-        if self.verbose:
-            logger.debug(f"{response=}")
+        llm_duration_ms = int((time.perf_counter() - llm_start) * 1000)
 
         # Parse the output to the desired format
         parser = PydanticOutputParser(pydantic_object=OpenFollowUp)
         try:
             validated_answer = parser.parse(str(response.content))
+            # Log LLM response received after successful parse
+            has_followup = bool(getattr(validated_answer, "followup", None))
+            logger.info(
+                "Gemini response received (formulate_open_question) - "
+                "has_followup=%s duration_ms=%s",
+                has_followup,
+                llm_duration_ms,
+            )
         except ValueError as parse_error:
             logger.exception(parse_error)
             logger.warning(f"Failed to parse response:\n{response.content}")
+            logger.info(
+                "Gemini response received (formulate_open_question) - "
+                "has_followup=False duration_ms=%s",
+                llm_duration_ms,
+            )
 
             reasoning = (
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
@@ -877,6 +929,9 @@ class ClassificationLLM:
                 followup=None,
                 reasoning=reasoning,
             )
+
+        if self.verbose:
+            logger.debug(f"{response=}")
 
         return validated_answer, call_dict
 
