@@ -45,10 +45,10 @@ sa_response = uni_chat.final_sic_code(
     job_title=JOB_TITLE,
     job_description=JOB_DESCRIPTION,
     sic_candidates=str(SIC_CANDIDATES),
-    open_question=OPEN_QUESTION,
-    answer_to_open_question=ANSWER_TO_OPEN_QUESTION,
-    closed_question=CLOSED_QUESTION,
-    answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
+    # open_question=OPEN_QUESTION,
+    # answer_to_open_question=ANSWER_TO_OPEN_QUESTION,
+    # closed_question=CLOSED_QUESTION,
+    # answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
 )
 
 pprint(sa_response[0].model_dump(), indent=2, width=80)

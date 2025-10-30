@@ -664,16 +664,16 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    def final_sic_code(  # noqa: PLR0913
+    def final_sic_code(
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
         sic_candidates: Optional[str] = None,
-        open_question: Optional[str] = None,
-        answer_to_open_question: Optional[str] = None,
-        closed_question: Optional[str] = None,
-        answer_to_closed_question: Optional[str] = None,
+        # open_question: Optional[str] = None,
+        # answer_to_open_question: Optional[str] = None,
+        # closed_question: Optional[str] = None,
+        # answer_to_closed_question: Optional[str] = None,
     ) -> tuple[FinalSICAssignment, Optional[Any]]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data
             and answers to follow-up questions.
@@ -700,15 +700,15 @@ class ClassificationLLM:
 
         """
 
-        def prep_call_dict(  # noqa: PLR0913
+        def prep_call_dict(
             industry_descr,
             job_title,
             job_description,
             sic_candidates,
-            open_question,
-            answer_to_open_question,
-            closed_question,
-            answer_to_closed_question,
+            # open_question,
+            # answer_to_open_question,
+            # closed_question,
+            # answer_to_closed_question,
         ):
             # Helper function to prepare the call dictionary
             is_job_title_present = job_title is None or job_title in {"", " "}
@@ -727,10 +727,10 @@ class ClassificationLLM:
                 "job_title": job_title,
                 "job_description": job_description,
                 "sic_candidates": sic_candidates,
-                "open_question": open_question,
-                "answer_to_open_question": answer_to_open_question,
-                "closed_question": closed_question,
-                "answer_to_closed_question": answer_to_closed_question,
+                # "open_question": open_question,
+                # "answer_to_open_question": answer_to_open_question,
+                # "closed_question": closed_question,
+                # "answer_to_closed_question": answer_to_closed_question,
             }
             return call_dict
 
@@ -739,10 +739,10 @@ class ClassificationLLM:
             job_title=job_title,
             job_description=job_description,
             sic_candidates=sic_candidates,
-            open_question=open_question,
-            answer_to_open_question=answer_to_open_question,
-            closed_question=closed_question,
-            answer_to_closed_question=answer_to_closed_question,
+            # open_question=open_question,
+            # answer_to_open_question=answer_to_open_question,
+            # closed_question=closed_question,
+            # answer_to_closed_question=answer_to_closed_question,
         )
 
         if self.verbose:

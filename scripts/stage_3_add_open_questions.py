@@ -53,8 +53,8 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Constants:
-MODEL_NAME = "gemini-2.0-flash"
-MODEL_LOCATION = "europe-west9"
+MODEL_NAME = "gemini-2.5-flash"
+MODEL_LOCATION = "europe-west1"
 
 CODE_DIGITS = 5
 CANDIDATES_LIMIT = 10

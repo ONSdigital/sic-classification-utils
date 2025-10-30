@@ -91,10 +91,10 @@ def assign_final_sic_code(row: pd.Series) -> dict:  # pylint: disable=C0103, W06
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
         sic_candidates=row[SIC_CANDIDATES_COL],
-        open_question=row[OPEN_QUESTION_COL],
-        answer_to_open_question=row[ANSWER_TO_OPEN_QUESTION_COL],
-        closed_question=CLOSED_QUESTION,
-        answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
+        # open_question=row[OPEN_QUESTION_COL],
+        # answer_to_open_question=row[ANSWER_TO_OPEN_QUESTION_COL],
+        # closed_question=CLOSED_QUESTION,
+        # answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
     )
     result = {
         "unambiguously_codable_final": sa_final_sic[0].codable,
