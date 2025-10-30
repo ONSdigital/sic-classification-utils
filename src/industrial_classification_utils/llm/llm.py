@@ -51,7 +51,10 @@ from industrial_classification_utils.models.response_model import (
     SicResponse,
     UnambiguousResponse,
 )
-from industrial_classification_utils.utils.constants import truncate_identifier
+from industrial_classification_utils.utils.constants import (
+    hash_identifier,
+    truncate_identifier,
+)
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
@@ -515,10 +518,15 @@ class ClassificationLLM:
         # Log LLM request sent
         logger.info(
             "Gemini request sent - unambiguous_sic_code - "
-            "job_title=%s job_description=%s industry_descr=%s",
-            truncate_identifier(job_title),
-            truncate_identifier(job_description),
-            truncate_identifier(industry_descr),
+            "job_title_hash=%s job_title_len=%s "
+            "job_description_hash=%s job_description_len=%s "
+            "industry_descr_hash=%s industry_descr_len=%s",
+            hash_identifier(job_title),
+            0 if not job_title else len(job_title),
+            hash_identifier(job_description),
+            0 if not job_description else len(job_description),
+            hash_identifier(industry_descr),
+            0 if not industry_descr else len(industry_descr),
         )
         llm_start = time.perf_counter()
 
@@ -881,10 +889,15 @@ class ClassificationLLM:
         # Log LLM request sent
         logger.info(
             "Gemini request sent - formulate_open_question - "
-            "job_title=%s job_description=%s industry_descr=%s",
-            truncate_identifier(job_title),
-            truncate_identifier(job_description),
-            truncate_identifier(industry_descr),
+            "job_title_hash=%s job_title_len=%s "
+            "job_description_hash=%s job_description_len=%s "
+            "industry_descr_hash=%s industry_descr_len=%s",
+            hash_identifier(job_title),
+            0 if not job_title else len(job_title),
+            hash_identifier(job_description),
+            0 if not job_description else len(job_description),
+            hash_identifier(industry_descr),
+            0 if not industry_descr else len(industry_descr),
         )
         llm_start = time.perf_counter()
 
