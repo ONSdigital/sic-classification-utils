@@ -53,7 +53,6 @@ from industrial_classification_utils.models.response_model import (
 )
 from industrial_classification_utils.utils.constants import (
     hash_identifier,
-    truncate_identifier,
 )
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
