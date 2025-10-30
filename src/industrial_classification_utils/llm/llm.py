@@ -464,6 +464,7 @@ class ClassificationLLM:
         job_description: Optional[str] = None,
         candidates_limit: int = 5,
         code_digits: int = 5,
+        correlation_id: Optional[str] = None,
     ) -> tuple[UnambiguousResponse, Optional[Any]]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
@@ -476,6 +477,7 @@ class ClassificationLLM:
                 to include in the prompt. Defaults to 5.
             code_digits (int, optional): The number of digits to consider from
                 the code for filtering candidates. Defaults to 5.
+            correlation_id (str, optional): Optional correlation ID for request tracking.
 
         Returns:
             UnambiguousResponse: The generated response to the query.
@@ -516,16 +518,17 @@ class ClassificationLLM:
 
         # Log LLM request sent
         logger.info(
-            "Gemini request sent - unambiguous_sic_code - "
+            "LLM request sent - unambiguous_sic_code - "
             "job_title_hash=%s job_title_len=%s "
             "job_description_hash=%s job_description_len=%s "
-            "industry_descr_hash=%s industry_descr_len=%s",
+            "industry_descr_hash=%s industry_descr_len=%s correlation_id=%s",
             hash_identifier(job_title),
             0 if not job_title else len(job_title),
             hash_identifier(job_description),
             0 if not job_description else len(job_description),
             hash_identifier(industry_descr),
             0 if not industry_descr else len(industry_descr),
+            correlation_id or "",
         )
         llm_start = time.perf_counter()
 
@@ -533,7 +536,9 @@ class ClassificationLLM:
             response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
-            logger.warning("Error from chain, exit early")
+            logger.warning(
+                "Error from chain, exit early correlation_id=%s", correlation_id or ""
+            )
             validated_answer = UnambiguousResponse(
                 codable=False,
                 alt_candidates=[],
@@ -552,22 +557,35 @@ class ClassificationLLM:
             alt_candidates_count = len(
                 getattr(validated_answer, "alt_candidates", []) or []
             )
+            codable = bool(getattr(validated_answer, "codable", False))
+            selected_code = (
+                str(getattr(validated_answer, "class_code", "")) if codable else ""
+            )
             llm_duration_ms = int((time.perf_counter() - llm_start) * 1000)
             logger.info(
-                "Gemini response received (unambiguous_sic_code) - "
-                "codable=%s alt_candidates_count=%s duration_ms=%s",
-                getattr(validated_answer, "codable", False),
+                "LLM response received for unambiguous sic prompt - "
+                "codable=%s selected_code=%s alt_candidates_count=%s "
+                "duration_ms=%s correlation_id=%s",
+                codable,
+                selected_code,
                 alt_candidates_count,
                 llm_duration_ms,
+                correlation_id or "",
             )
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response.content)
+            logger.warning(
+                "Failed to parse response:\n%s correlation_id=%s",
+                response.content,
+                correlation_id or "",
+            )
             llm_duration_ms = int((time.perf_counter() - llm_start) * 1000)
             logger.info(
-                "Gemini response received (unambiguous_sic_code) - "
-                "codable=False alt_candidates_count=0 duration_ms=%s",
+                "LLM response received for unambiguous sic prompt - "
+                "codable=False selected_code= alt_candidates_count=0 "
+                "duration_ms=%s correlation_id=%s",
                 llm_duration_ms,
+                correlation_id or "",
             )
 
             reasoning = (
@@ -832,6 +850,7 @@ class ClassificationLLM:
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
         llm_output: Optional[SicCandidate] = None,
+        correlation_id: Optional[str] = None,
     ) -> tuple[OpenFollowUp, Any]:
         """Formulates an open-ended question using respondent data and survey design guidelines.
 
@@ -840,6 +859,7 @@ class ClassificationLLM:
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
             llm_output (SicCandidate, optional): The response from the LLM model.
+            correlation_id (str, optional): Optional correlation ID for request tracking.
 
         Returns:
             OpenFollowUp: The generated response to the query.
@@ -887,16 +907,17 @@ class ClassificationLLM:
 
         # Log LLM request sent
         logger.info(
-            "Gemini request sent - formulate_open_question - "
+            "LLM request sent - formulate_open_question - "
             "job_title_hash=%s job_title_len=%s "
             "job_description_hash=%s job_description_len=%s "
-            "industry_descr_hash=%s industry_descr_len=%s",
+            "industry_descr_hash=%s industry_descr_len=%s correlation_id=%s",
             hash_identifier(job_title),
             0 if not job_title else len(job_title),
             hash_identifier(job_description),
             0 if not job_description else len(job_description),
             hash_identifier(industry_descr),
             0 if not industry_descr else len(industry_descr),
+            correlation_id or "",
         )
         llm_start = time.perf_counter()
 
@@ -904,7 +925,10 @@ class ClassificationLLM:
             response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.warning(
+                "Error from LLMChain, exit early correlation_id=%s",
+                correlation_id or "",
+            )
             validated_answer = OpenFollowUp(
                 followup=None,
                 reasoning="Error from LLMChain, exit early",
@@ -920,18 +944,24 @@ class ClassificationLLM:
             # Log LLM response received after successful parse
             has_followup = bool(getattr(validated_answer, "followup", None))
             logger.info(
-                "Gemini response received (formulate_open_question) - "
-                "has_followup=%s duration_ms=%s",
+                "LLM response received for open question prompt - "
+                "has_followup=%s duration_ms=%s correlation_id=%s",
                 has_followup,
                 llm_duration_ms,
+                correlation_id or "",
             )
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning(f"Failed to parse response:\n{response.content}")
+            logger.warning(
+                "Failed to parse response:\n%s correlation_id=%s",
+                response.content,
+                correlation_id or "",
+            )
             logger.info(
-                "Gemini response received (formulate_open_question) - "
-                "has_followup=False duration_ms=%s",
+                "LLM response received for open question prompt - "
+                "has_followup=False duration_ms=%s correlation_id=%s",
                 llm_duration_ms,
+                correlation_id or "",
             )
 
             reasoning = (
