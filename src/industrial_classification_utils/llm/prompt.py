@@ -481,72 +481,60 @@ class PromptTemplates:
         ]
 
 
-_open_follow_up = """"You are an expert survey methodologist tasked with generating
-high-quality questions for an online labour market survey. Your goal is to create an
-open-ended question that will help to assign most relevant UK SIC (Standard Industry
-Classification) code to a given survey response.
+_open_follow_up = """"You are an expert survey methodologist specialising in
+    UK industrial classification (UK SIC). Generate one open-ended follow-up question
+    to help assign the most relevant UK SIC code.
 
-Given:
-1. Respondent data (job_title, job_description, industry_descr)
-2. Large Language Model (LLM) output shortlisting potential occupational or industrial codes
-that respondent can be assigned to.
+Objective
+- Produce exactly one question that elicits the key information needed to distinguish
+    between the shortlisted SIC candidates, focusing on the employer's main business activity.
 
-Your task is to generate a single, well-crafted follow-up question that:
-
-1. Uses clear, simple language.
-2. Makes it possible to disambiguate between SIC code candidates.
-3. Is specific enough to enable assignment of the SIC code with
-a high degree of confidence.
-4. Follows the quality standards below.
-
-===Respondent Data===
+Inputs
+- Respondent data:
 - Company's main activity: {industry_descr}
-- Job Title: {job_title}
-- Job Description: {job_description}
+- Job title: {job_title}
+- Job description: {job_description}
+- Shortlist from previous model: {llm_output}
+- Note: These are candidate SIC categories; do not mention codes or "SIC" to the respondent.
 
-===LLM output===
-{llm_output}
+How to decide what to ask
+- Identify the smallest, most informative difference among the candidates and target that with a single question.
+- Prioritise discriminators in this order:
+1) Stage in the value chain (e.g., manufacture/processing vs wholesale vs retail vs repair/installation vs
+    rental/leasing vs publishing/software vs consultancy/training).
+2) Main product or service category (what goods/services the employer mainly provides).
+3) Main customer type (households vs businesses vs government/health/education).
+4) Delivery mode or setting (on-site vs online; physical goods vs digital; own-brand vs third-party).
+- Ask about only one discriminator—the one most likely to resolve the ambiguity.
 
-===Quality standards===
-Language and Clarity
-- Use simple, natural language that is easy to understand
-- Use plain English - define or avoid technical jargon
-- Be specific about what information is sought - avoid vague terms
-- Use concise, grammatically correct phrasing
-- Specify time frames clearly when relevant (e.g., "currently," "in your main job")
-- Refer to employer as "employer" or "organisation" (e.g. "services your organisation offers")
+Quality standards
+- Language and clarity:
+    - Use plain British English; avoid or define jargon and abbreviations.
+    - Keep the single question concise (max 25 words), grammatically correct, and neutral.
+    - Use "employer" for for-profit; use "organisation" for non-profits, charities, public bodies, and education.
+        Default to "employer", if ambiguous.
+    - Refer to the present situation (e.g., "currently", "main").
+    - Do not mention SIC or any code numbers.
+    - Do not ask for company names, client names, or other personal/sensitive data.
+- Question structure:
+    - Start with "What", "How", "Which", or "Where".
+    - Focus on the employer's main business activities, products, or services—not the respondent's personal tasks.
+    - One issue per question; no A/B or either/or phrasing; avoid binary questions.
+    - Limit to one sentence ending with a question mark.
+    - You may add one additional sentence with broad, non-leading examples covering a wide range of options;
+        omit examples if they would be leading.
+- Respondent considerations:
+    - Make it easy to answer in a few words.
+    - Ask only what a typical employee would reasonably know.
+    - Avoid requiring calculations or percentages.
 
-Question Structure
-- **REQUIRED: Focus on the employer's main business activities, products, or services rather
-than the specific job role**
-- **REQUIRED: Start questions with open-ended phrases such as "What," "How," "Which," "Where,"
-"Please explain," or "Please describe"**
-- Vary your question starters and actively choose from different opening phrases to create
-natural variation
-- Limit question to one sentence
-- Ask only one thing at a time - avoid double-barreled questions
-- AVOID binary A/B questions or "either/or" structures
-- Provide sufficient context for understanding the question
-- Focus on factual information rather than hypothetical situations
+Edge cases
+- If the shortlist is empty or clearly points to one category, ask a general clarifying question about
+    the main product/service or value-chain stage to confirm classification.
+- Do not output explanations or reasoning; only the formatted result.
 
-Respondent Considerations
-- Formulate questions in such a way that a respondent can answer them easily in a few words
-- Only ask for information the respondent would reasonably know
-- Don't assume knowledge or circumstances that may not apply
-- Avoid requiring complex mental calculations
-
-Neutrality and Bias
-- Use neutral wording that doesn't suggest a "correct" answer
-- Avoid leading the respondent toward particular responses
-- Keep phrasing positive and straightforward - don't use double negatives
-
-===Example Questions===
-- "What is the age range of the students that you teach?"
-- "How would you describe the main products your employer manufactures?"
-- "Which types of furniture does your organisation primarily sell?"
-- "Could you describe the main types of legal work your firm specialises in?"
-_fi
-===Output Format===
+Output format
+- Return output that strictly follows:
 {format_instructions}
 """
 parser_followup_open = PydanticOutputParser(pydantic_object=OpenFollowUp)
