@@ -89,11 +89,26 @@ def get_followup_answer(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
     return llm_response
 
 
+# pylint: disable=C0116 # the docstring is below
+def get_rephrased_jd(row: pd.Series) -> str:
+    """Rephrase job description with follow up question and follow up answer as a label.
+
+    Args:
+        row (pd.Series): A row from the input DataFrame containing the survey responses,
+                         and the followup question.
+
+    Returns:
+        str: response (str)
+    """
+    return SR.rephrase_question_and_jd(row)[0]
+
+
 SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
 
 if __name__ == "__main__":
     args = parse_args("STG4")
 
+    job_description_rephrased = []
     df, metadata, start_batch_id, restart_successful = set_up_initial_state(
         args.restart,
         args.output_folder,
@@ -106,6 +121,7 @@ if __name__ == "__main__":
     print("getting synthetic responses to followup questions...")
     if (not args.restart) or (not restart_successful):
         df["followup_answer"] = ""
+        df["job_descriprion_rephrased"] = ""
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -123,6 +139,16 @@ if __name__ == "__main__":
             df.loc[batch.index, "followup_answer"] = batch.apply(
                 get_followup_answer, axis=1
             )
+            df["soc2020_job_description"] = (
+                df["soc2020_job_description"]
+                .str.rstrip(".")
+                .str.cat(df["followup_question"].str.lower(), sep=", Question: ")
+                .str.rstrip(".")
+                .str.cat(df["followup_answer"].str.lower(), sep=", Answer: ")
+            )
+            df.loc[batch.index, "job_descriprion_rephrased"] = batch.apply(
+                get_rephrased_jd, axis=1
+            )
             persist_results(
                 df,
                 metadata,
@@ -131,6 +157,8 @@ if __name__ == "__main__":
                 is_final=False,
                 completed_batches=(batch_id + 1 + start_batch_id),
             )
+    df["soc2020_job_description"] = df["job_descriprion_rephrased"]
+    df.drop(columns=["job_descriprion_rephrased"], inplace=True)
 
     print("synthetic response generation is complete")
 

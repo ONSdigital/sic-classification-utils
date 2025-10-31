@@ -9,7 +9,11 @@ request an LLM to answer a SIC follow-up question.
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts.prompt import PromptTemplate
 
-from .response_models import FollowupAnswerResponse
+from industrial_classification_utils.llm.prompt import _core_prompt
+
+from .response_models import FollowupAnswerResponse, RephraseDescription
+
+# from industrial_classification_utils.models.response_model import RephraseDescription
 
 
 def _persona_prompt(persona) -> str:
@@ -78,3 +82,49 @@ def make_followup_answer_prompt_pydantic(
             "followup_question": followup_question,
         },
     )
+
+
+# pylint: disable=C0103
+_rephrase_job_description = """You are an Expert Editorial Director and Information Synthesis
+Specialist. Your task is to consolidate complex, multi-part descriptions of business activity
+into a single, concise, and comprehensive label (2-10 words) for the main business's activity
+and industry.
+
+Chain of thought (DO NOT OUTPUT):
+1. Extract **core activity**: identify the fundamental function or main business purpose
+    described in the Original response.
+2. Integrate **contextual details**: Identify clarifying details from the "follow up question"
+    and "follow up answer".
+
+Objective:
+- Produce a single response, that integrates the **core activity** and **contextual details**
+    to fully describe the main activity of the business or organisation.
+
+Input:
+- Original response: {job_description}
+Input content: The input consists of three elements:
+1. Original response to question "Describe the main activity of the business or organisation".
+2. Follow up question, which follows after "Question: ".
+3. Follow up answer, which follows after "Answer: ".
+
+Desired output:
+- The output must consist **only** of the rephrased single label, followinng the format instructions.
+- NEVER include the reasoning nor the chain of thought in your response.
+- The final response must be a single label. It must be consise, and capture all details from the input.
+
+Output format:
+- Return output that strictly follows:
+{format_instructions}
+"""
+
+parser_rephrase_job_description = PydanticOutputParser(
+    pydantic_object=RephraseDescription
+)
+
+
+REPHRASE_JOB_DESCRIPTION = PromptTemplate.from_template(
+    template=_core_prompt + _rephrase_job_description,
+    partial_variables={
+        "format_instructions": parser_rephrase_job_description.get_format_instructions(),
+    },
+)
