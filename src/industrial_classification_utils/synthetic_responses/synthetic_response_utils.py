@@ -57,12 +57,16 @@ from typing import Callable, Optional
 
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts.prompt import PromptTemplate
-from langchain_google_vertexai import VertexAI
+from langchain_google_vertexai import ChatVertexAI, VertexAI
 
 from industrial_classification_utils.embed.embedding import get_config
 
-from .prompts import make_followup_answer_prompt_pydantic
-from .response_models import FollowupAnswerResponse
+from .prompts import REPHRASE_JOB_DESCRIPTION, make_followup_answer_prompt_pydantic
+from .response_models import FollowupAnswerResponse, RephraseDescription
+
+# from industrial_classification_utils.models.response_model import RephraseDescription
+
+# from industrial_classification_utils.llm.prompt import REPHRASE_JOB_DESCRIPTION
 
 logger = logging.getLogger(__name__)
 config = get_config()
@@ -103,6 +107,7 @@ class SyntheticResponder:
         self.get_question_function = get_question_function
         self.model_name = model_name
         self.instantiate_llm(model_name=self.model_name)
+        self.rephrase_desc = REPHRASE_JOB_DESCRIPTION
         logger.debug("SyntheticResponder initialised, connection to LLM established.")
 
     def instantiate_llm(self, model_name: str = "gemini-2.5-flash"):
@@ -113,6 +118,13 @@ class SyntheticResponder:
                 max_output_tokens=1_600,
                 temperature=0.0,
                 location="europe-west1",
+            )
+            self.llm_chat = ChatVertexAI(
+                model_name="gemini-2.5-flash",
+                max_output_tokens=1_600,
+                temperature=0.0,
+                location="europe-west1",
+                model_kwargs={"thinking_budget": 0},  # Reduce latency
             )
         except Exception as e:
             logger.error("%s" % e)  # Noqa: UP031 # pylint: disable=C0209,W1201
@@ -173,3 +185,41 @@ class SyntheticResponder:
                 % response  # pylint: disable=C0209,W1201
             )  # pylint: disable=C0209,W1201
         return validated_answer
+
+    # pylint: disable=R0801
+    def rephrase_question_and_jd(
+        self,
+        job_description: str,
+    ) -> tuple[str, Optional[dict[str, str]]]:
+        """Rephrases the description with question and answer, to create an informative string.
+
+        Args:
+            job_description (str, optional): The job description. Defaults to None.
+
+        Returns:
+            ReprhrasedDescription: The generated rephrased description.
+
+        Raises:
+            TODO
+        """
+        call_dict = {"job_description": job_description}
+
+        chain = self.rephrase_desc | self.llm_chat
+        try:
+            response = chain.invoke(call_dict, return_only_outputs=True)
+        except ValueError as err:
+            logger.exception(err)
+            logger.warning("Error from chain, exit early")
+            validated_answer = job_description
+            return validated_answer, call_dict
+        parser = PydanticOutputParser(pydantic_object=RephraseDescription)  # type: ignore
+        try:
+            validated_answer = parser.parse(str(response.content)).job_description
+            # validated_answer = parser.parse(str(response)).job_description
+        except ValueError as parse_error:
+            logger.exception(parse_error)
+            logger.warning("Failed to parse response:\n%s", response.content)
+            validated_answer = RephraseDescription(
+                job_description=job_description
+            ).job_description
+        return validated_answer, call_dict

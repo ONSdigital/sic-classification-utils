@@ -47,3 +47,16 @@ class FollowupAnswerRequest(BaseModel):
     followup_question: Optional[str] = Field(
         description="The LLM-generated followup question."
     )
+
+
+class RephraseDescription(BaseModel):
+    """Represents a response model for rephrasing Job Description and Follow up answer.
+
+    Attributes:
+        job_description (str): Rephrased job description with information
+    """
+
+    job_description: str = Field(
+        description="""Rephrased job description with follow up answer.""",
+        default="",
+    )
