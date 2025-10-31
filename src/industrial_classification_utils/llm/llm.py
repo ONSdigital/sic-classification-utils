@@ -574,16 +574,10 @@ class ClassificationLLM:
             )
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning(
-                "Failed to parse response:\n%s correlation_id=%s",
-                response.content,
-                correlation_id or "",
-            )
             llm_duration_ms = int((time.perf_counter() - llm_start) * 1000)
-            logger.info(
-                "LLM response received for unambiguous sic prompt - "
-                "codable=False selected_code= alt_candidates_count=0 "
-                "duration_ms=%s correlation_id=%s",
+            logger.warning(
+                "Failed to parse response:\n%s duration_ms=%s correlation_id=%s",
+                response.content,
                 llm_duration_ms,
                 correlation_id or "",
             )
