@@ -664,7 +664,7 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    async def final_sic_code(  # noqa: PLR0913
+    async def final_sic_code(
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
