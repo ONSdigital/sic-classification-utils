@@ -24,6 +24,7 @@ langchain-core = "0.3.68"
 langchain-community = "0.3.25"
 langchain-chroma = "0.2.4"
 sic-classification-library = { git = "https://github.com/ONSdigital/sic-classification-library.git", tag = "v0.1.3" }
+survey-assist-utils = { git = "https://github.com/ONSdigital/survey-assist-utils.git", tag = "v0.0.6" }
 autocorrect = "^2.6.1"
 numpy = "^2.3.0"
 torch = "2.7.1"

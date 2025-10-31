@@ -15,7 +15,6 @@ Functions:
     (None at the module level)
 """
 
-import logging
 import time
 from collections import defaultdict
 from functools import lru_cache
@@ -28,6 +27,7 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
+from survey_assist_utils.logging import get_logger
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.llm.prompt import (
@@ -52,14 +52,14 @@ from industrial_classification_utils.models.response_model import (
     UnambiguousResponse,
 )
 from industrial_classification_utils.utils.constants import (
-    hash_identifier,
+    truncate_identifier,
 )
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 config = get_config()
 
 
@@ -518,17 +518,11 @@ class ClassificationLLM:
 
         # Log LLM request sent
         logger.info(
-            "LLM request sent - unambiguous_sic_code - "
-            "job_title_hash=%s job_title_len=%s "
-            "job_description_hash=%s job_description_len=%s "
-            "industry_descr_hash=%s industry_descr_len=%s correlation_id=%s",
-            hash_identifier(job_title),
-            0 if not job_title else len(job_title),
-            hash_identifier(job_description),
-            0 if not job_description else len(job_description),
-            hash_identifier(industry_descr),
-            0 if not industry_descr else len(industry_descr),
-            correlation_id or "",
+            "LLM request sent - unambiguous_sic_code",
+            job_title=truncate_identifier(job_title),
+            job_description=truncate_identifier(job_description),
+            industry_descr=truncate_identifier(industry_descr),
+            correlation_id=correlation_id or "",
         )
         llm_start = time.perf_counter()
 
@@ -901,17 +895,11 @@ class ClassificationLLM:
 
         # Log LLM request sent
         logger.info(
-            "LLM request sent - formulate_open_question - "
-            "job_title_hash=%s job_title_len=%s "
-            "job_description_hash=%s job_description_len=%s "
-            "industry_descr_hash=%s industry_descr_len=%s correlation_id=%s",
-            hash_identifier(job_title),
-            0 if not job_title else len(job_title),
-            hash_identifier(job_description),
-            0 if not job_description else len(job_description),
-            hash_identifier(industry_descr),
-            0 if not industry_descr else len(industry_descr),
-            correlation_id or "",
+            "LLM request sent - formulate_open_question",
+            job_title=truncate_identifier(job_title),
+            job_description=truncate_identifier(job_description),
+            industry_descr=truncate_identifier(industry_descr),
+            correlation_id=correlation_id or "",
         )
         llm_start = time.perf_counter()
 
@@ -977,6 +965,7 @@ class ClassificationLLM:
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
         llm_output: Optional[UnambiguousResponse] = None,
+        correlation_id: Optional[str] = None,
     ) -> tuple[ClosedFollowUp, Any]:
         """Formulates a closed follow-up question using respondent data
             and survey design guidelines.
@@ -986,6 +975,7 @@ class ClassificationLLM:
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
             llm_output (UnambiguousResponse, optional): The response from the LLM model.
+            correlation_id (str, optional): Optional correlation ID for request tracking.
 
         Returns:
             ClosedFollowUp: The generated response to the query.
@@ -1035,7 +1025,10 @@ class ClassificationLLM:
             response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.warning(
+                "Error from LLMChain, exit early correlation_id=%s",
+                correlation_id or "",
+            )
             validated_answer = ClosedFollowUp(
                 followup=None,
                 sic_options=[],
@@ -1052,7 +1045,11 @@ class ClassificationLLM:
             validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.exception(parse_error)
-            logger.warning(f"Failed to parse response:\n{response.content}")
+            logger.warning(
+                "Failed to parse response:\n%s correlation_id=%s",
+                response.content,
+                correlation_id or "",
+            )
 
             reasoning = (
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
