@@ -408,7 +408,6 @@ class ClassificationLLM:
             response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.error(f"Error from chain, exit early: {err}", error=str(err))
-            logger.warning("Error from chain, exit early")
             validated_answer = SicResponse(
                 followup="Follow-up question not available due to error.",
                 reasoning="Error from chain, exit early",
@@ -538,10 +537,6 @@ class ClassificationLLM:
             logger.error(
                 f"Error from chain, exit early: {err}",
                 error=str(err),
-                correlation_id=correlation_id or "",
-            )
-            logger.warning(
-                "Error from chain, exit early",
                 correlation_id=correlation_id or "",
             )
             validated_answer = UnambiguousResponse(
@@ -686,7 +681,6 @@ class ClassificationLLM:
             response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.error(f"Error from chain, exit early: {err}", error=str(err))
-            logger.warning("Error from chain, exit early")
             validated_answer = RerankingResponse(
                 selected_codes=[],
                 excluded_codes=[],
@@ -815,7 +809,6 @@ class ClassificationLLM:
             response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
             logger.error(f"Error from chain, exit early: {err}", error=str(err))
-            logger.warning("Error from chain, exit early")
             validated_answer = FinalSICAssignment(
                 codable=False,
                 unambiguous_code="N/A",
