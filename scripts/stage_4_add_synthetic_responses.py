@@ -100,7 +100,7 @@ def get_rephrased_jd(row: pd.Series) -> str:
     Returns:
         str: response (str)
     """
-    return SR.rephrase_question_and_jd(row)[0]
+    return SR.rephrase_question_and_jd(row["soc2020_job_description"])[0]
 
 
 SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
@@ -139,13 +139,27 @@ if __name__ == "__main__":
             df.loc[batch.index, "followup_answer"] = batch.apply(
                 get_followup_answer, axis=1
             )
-            df["soc2020_job_description"] = (
-                df["soc2020_job_description"]
-                .str.rstrip(".")
-                .str.cat(df["followup_question"].str.lower(), sep=", Question: ")
-                .str.rstrip(".")
-                .str.cat(df["followup_answer"].str.lower(), sep=", Answer: ")
+
+    df["soc2020_job_description"] = (
+        df["soc2020_job_description"]
+        # .str.rstrip(".")
+        # .str.cat(df["followup_question"].str.lower(), sep=", Question: ")
+        .str.rstrip(".").str.cat(df["followup_answer"].str.lower(), sep=", ")
+        # .str.cat(df["followup_answer"].str.lower(), sep=", Answer: ")
+    )
+
+    # rephrase new job description
+    for batch_id, batch in tqdm(
+        enumerate(
+            np.split(
+                df,
+                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
             )
+        )
+    ):
+        if batch_id == 0:
+            pass
+        else:
             df.loc[batch.index, "job_descriprion_rephrased"] = batch.apply(
                 get_rephrased_jd, axis=1
             )
