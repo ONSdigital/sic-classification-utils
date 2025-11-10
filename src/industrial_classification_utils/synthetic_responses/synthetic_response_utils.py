@@ -64,10 +64,6 @@ from industrial_classification_utils.embed.embedding import get_config
 from .prompts import REPHRASE_JOB_DESCRIPTION, make_followup_answer_prompt_pydantic
 from .response_models import FollowupAnswerResponse, RephraseDescription
 
-# from industrial_classification_utils.models.response_model import RephraseDescription
-
-# from industrial_classification_utils.llm.prompt import REPHRASE_JOB_DESCRIPTION
-
 logger = logging.getLogger(__name__)
 config = get_config()
 
@@ -215,7 +211,6 @@ class SyntheticResponder:
         parser = PydanticOutputParser(pydantic_object=RephraseDescription)  # type: ignore
         try:
             validated_answer = parser.parse(str(response.content)).job_description
-            # validated_answer = parser.parse(str(response)).job_description
         except ValueError as parse_error:
             logger.exception(parse_error)
             logger.warning("Failed to parse response:\n%s", response.content)

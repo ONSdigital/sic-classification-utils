@@ -13,8 +13,6 @@ from industrial_classification_utils.llm.prompt import _core_prompt
 
 from .response_models import FollowupAnswerResponse, RephraseDescription
 
-# from industrial_classification_utils.models.response_model import RephraseDescription
-
 
 def _persona_prompt(persona) -> str:
     """Constructs a section of the LLM prompt template, informing it about
