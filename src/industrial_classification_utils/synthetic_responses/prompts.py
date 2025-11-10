@@ -93,8 +93,7 @@ and industry.
 Chain of thought (DO NOT OUTPUT):
 1. Extract **core activity**: identify the fundamental function or main business purpose
     described in the Original response.
-2. Integrate **contextual details**: Identify clarifying details from the "follow up question"
-    and "follow up answer".
+2. Integrate **contextual details**: Identify clarifying details from the "follow up answer".
 
 Objective:
 - Produce a single response, that integrates the **core activity** and **contextual details**
@@ -102,10 +101,9 @@ Objective:
 
 Input:
 - Original response: {job_description}
-Input content: The input consists of three elements:
+Input content: The input consists of two elements:
 1. Original response to question "Describe the main activity of the business or organisation".
-2. Follow up question, which follows after "Question: ".
-3. Follow up answer, which follows after "Answer: ".
+2. Follow up answer.
 
 Desired output:
 - The output must consist **only** of the rephrased single label, followinng the format instructions.
