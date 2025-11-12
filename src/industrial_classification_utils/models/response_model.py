@@ -318,7 +318,8 @@ class UnambiguousResponse(BaseModel):
 
     higher_level_code: Optional[str] = Field(
         description="Classification code with X notation to pad to 5 digits. "
-        "Must be present if codable=False, must be None if codable=True."
+        "Must be present if codable=False, must be None if codable=True.",
+        default=None,
     )
 
     reasoning: str = Field(
