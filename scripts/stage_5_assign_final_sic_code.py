@@ -56,6 +56,7 @@ MODEL_NAME = "gemini-2.5-flash"
 MODEL_LOCATION = "europe-west9"
 
 CODE_DIGITS = 5
+CANDIDATES_LIMIT = 10
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
@@ -86,20 +87,23 @@ def assign_final_sic_code(row: pd.Series) -> dict:  # pylint: disable=C0103, W06
         result (dict): final codability, assigned 5 digit SIC code or a higher level code if
             final sic cannot be assigned unambiguously.
     """
-    sa_final_sic = c_llm.final_sic_code(
+    sa_response = c_llm.unambiguous_sic_code(
         industry_descr=row[MERGED_INDUSTRY_DESC_COL],
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
-        sic_candidates=row[SIC_CANDIDATES_COL],
-        # open_question=row[OPEN_QUESTION_COL],
-        # answer_to_open_question=row[ANSWER_TO_OPEN_QUESTION_COL],
-        # closed_question=CLOSED_QUESTION,
-        # answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
+        semantic_search_results=row["semantic_search_results"],
+        candidates_limit=CANDIDATES_LIMIT,
+        code_digits=CODE_DIGITS,
     )
+
+    final_sic = (
+        sa_response[0].class_code if sa_response[0].class_code is not None else ""
+    )
+
     result = {
-        "unambiguously_codable_final": sa_final_sic[0].codable,
-        "final_sic": sa_final_sic[0].unambiguous_code,
-        "higher_level_final_sic": sa_final_sic[0].higher_level_code,
+        "unambiguously_codable_final": sa_response[0].codable,
+        "final_sic": final_sic,
+        "higher_level_final_sic": sa_response[0].higher_level_code,
     }
     return result
 

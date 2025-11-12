@@ -242,6 +242,10 @@ Assignment logic:
 per cent confidence based on available evidence.
 2. Code as uncodable to 5-digit when multiple candidates are plausible and
 additional information is needed to distinguish between them.
+3. If unable to code to 5-digit code, provide a higher-level code if multiple candidates have
+nearly identical confidence scores (within 0.2 of each other) AND no single can be identified as
+the clear best match. Provide the most granular higher-level code with X padding to 5-digits
+(e.g., 8610X for 4-digit confidence, 86XXX for 3-digit confidence, 8XXXX for 2-digit confidence).
 
 ===Analysis steps===
 Follow these steps in order:
