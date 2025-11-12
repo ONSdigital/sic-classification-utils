@@ -90,8 +90,8 @@ def get_followup_answer(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
 
 
 # pylint: disable=C0116 # the docstring is below
-def get_rephrased_jd(row: pd.Series) -> str:
-    """Rephrase job description with follow up question and follow up answer as a label.
+def get_rephrased_id(row: pd.Series) -> str:
+    """Rephrase industry description with follow up question and follow up answer as a label.
 
     Args:
         row (pd.Series): A row from the input DataFrame containing the survey responses,
@@ -100,7 +100,7 @@ def get_rephrased_jd(row: pd.Series) -> str:
     Returns:
         str: response (str)
     """
-    return SR.rephrase_question_and_jd(row["soc2020_job_description"])[0]
+    return SR.rephrase_question_and_id(row["merged_industry_desc"])[0]
 
 
 SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     print("getting synthetic responses to followup questions...")
     if (not args.restart) or (not restart_successful):
         df["followup_answer"] = ""
-        df["job_descriprion_rephrased"] = ""
+        df["industry_descriprion_rephrased"] = ""
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -140,12 +140,12 @@ if __name__ == "__main__":
                 get_followup_answer, axis=1
             )
 
-    df["soc2020_job_description"] = (
-        df["soc2020_job_description"]
-        # .str.rstrip(".")
-        # .str.cat(df["followup_question"].str.lower(), sep=", Question: ")
-        .str.rstrip(".").str.cat(df["followup_answer"].str.lower(), sep=", ")
-        # .str.cat(df["followup_answer"].str.lower(), sep=", Answer: ")
+    df["merged_industry_desc"] = (
+        df["merged_industry_desc"]
+        .str.rstrip(".")
+        .str.cat(df["followup_question"].str.lower(), sep=", Question: ")
+        .str.cat(df["followup_answer"].str.lower(), sep=", Answer: ")
+        # .str.rstrip(".").str.cat(df["followup_answer"].str.lower(), sep=", ")
     )
 
     # rephrase new job description
@@ -160,8 +160,8 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, "job_descriprion_rephrased"] = batch.apply(
-                get_rephrased_jd, axis=1
+            df.loc[batch.index, "industry_descriprion_rephrased"] = batch.apply(
+                get_rephrased_id, axis=1
             )
             persist_results(
                 df,
@@ -171,8 +171,8 @@ if __name__ == "__main__":
                 is_final=False,
                 completed_batches=(batch_id + 1 + start_batch_id),
             )
-    df["soc2020_job_description"] = df["job_descriprion_rephrased"]
-    df.drop(columns=["job_descriprion_rephrased"], inplace=True)
+    df["merged_industry_desc"] = df["industry_descriprion_rephrased"]
+    df.drop(columns=["industry_descriprion_rephrased"], inplace=True)
 
     print("synthetic response generation is complete")
 

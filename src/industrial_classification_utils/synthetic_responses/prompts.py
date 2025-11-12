@@ -83,7 +83,7 @@ def make_followup_answer_prompt_pydantic(
 
 
 # pylint: disable=C0103
-_rephrase_job_description = """You are an Expert Editorial Director and Information Synthesis
+_rephrase_industry_description = """You are an Expert Editorial Director and Information Synthesis
 Specialist. Your task is to consolidate complex, multi-part descriptions of business activity
 into a single, concise, and comprehensive label (2-10 words) for the main business's activity
 and industry.
@@ -98,7 +98,7 @@ Objective:
     to fully describe the main activity of the business or organisation.
 
 Input:
-- Original response: {job_description}
+- Original response: {industry_description}
 Input content: The input consists of two elements:
 1. Original response to question "Describe the main activity of the business or organisation".
 2. Follow up answer.
@@ -113,14 +113,14 @@ Output format:
 {format_instructions}
 """
 
-parser_rephrase_job_description = PydanticOutputParser(
+parser_rephrase_industry_description = PydanticOutputParser(
     pydantic_object=RephraseDescription
 )
 
 
-REPHRASE_JOB_DESCRIPTION = PromptTemplate.from_template(
-    template=_core_prompt + _rephrase_job_description,
+REPHRASE_INDUSTRY_DESCRIPTION = PromptTemplate.from_template(
+    template=_core_prompt + _rephrase_industry_description,
     partial_variables={
-        "format_instructions": parser_rephrase_job_description.get_format_instructions(),
+        "format_instructions": parser_rephrase_industry_description.get_format_instructions(),
     },
 )

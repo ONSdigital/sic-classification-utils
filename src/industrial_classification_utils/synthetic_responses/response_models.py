@@ -50,13 +50,13 @@ class FollowupAnswerRequest(BaseModel):
 
 
 class RephraseDescription(BaseModel):
-    """Represents a response model for rephrasing Job Description and Follow up answer.
+    """Represents a response model for rephrasing Industry Description and Follow up answer.
 
     Attributes:
-        job_description (str): Rephrased job description with information
+        industry_description (str): Rephrased industry description with information
     """
 
-    job_description: str = Field(
-        description="""Rephrased job description with follow up answer.""",
+    industry_description: str = Field(
+        description="""Rephrased industry description with follow up answer.""",
         default="",
     )

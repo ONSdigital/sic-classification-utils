@@ -61,7 +61,7 @@ from langchain_google_vertexai import ChatVertexAI, VertexAI
 
 from industrial_classification_utils.embed.embedding import get_config
 
-from .prompts import REPHRASE_JOB_DESCRIPTION, make_followup_answer_prompt_pydantic
+from .prompts import REPHRASE_INDUSTRY_DESCRIPTION, make_followup_answer_prompt_pydantic
 from .response_models import FollowupAnswerResponse, RephraseDescription
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,7 @@ class SyntheticResponder:
         self.get_question_function = get_question_function
         self.model_name = model_name
         self.instantiate_llm(model_name=self.model_name)
-        self.rephrase_desc = REPHRASE_JOB_DESCRIPTION
+        self.rephrase_desc = REPHRASE_INDUSTRY_DESCRIPTION
         logger.debug("SyntheticResponder initialised, connection to LLM established.")
 
     def instantiate_llm(self, model_name: str = "gemini-2.5-flash"):
@@ -183,14 +183,14 @@ class SyntheticResponder:
         return validated_answer
 
     # pylint: disable=R0801
-    def rephrase_question_and_jd(
+    def rephrase_question_and_id(
         self,
-        job_description: str,
+        industry_description: str,
     ) -> tuple[str, Optional[dict[str, str]]]:
         """Rephrases the description with question and answer, to create an informative string.
 
         Args:
-            job_description (str, optional): The job description. Defaults to None.
+            industry_description (str, optional): The job description. Defaults to None.
 
         Returns:
             ReprhrasedDescription: The generated rephrased description.
@@ -198,7 +198,7 @@ class SyntheticResponder:
         Raises:
             TODO
         """
-        call_dict = {"job_description": job_description}
+        call_dict = {"industry_description": industry_description}
 
         chain = self.rephrase_desc | self.llm_chat
         try:
@@ -206,15 +206,15 @@ class SyntheticResponder:
         except ValueError as err:
             logger.exception(err)
             logger.warning("Error from chain, exit early")
-            validated_answer = job_description
+            validated_answer = industry_description
             return validated_answer, call_dict
         parser = PydanticOutputParser(pydantic_object=RephraseDescription)  # type: ignore
         try:
-            validated_answer = parser.parse(str(response.content)).job_description
+            validated_answer = parser.parse(str(response.content)).industry_description
         except ValueError as parse_error:
             logger.exception(parse_error)
             logger.warning("Failed to parse response:\n%s", response.content)
             validated_answer = RephraseDescription(
-                job_description=job_description
-            ).job_description
+                industry_description=industry_description
+            ).industry_description
         return validated_answer, call_dict
