@@ -316,12 +316,6 @@ class UnambiguousResponse(BaseModel):
         max_length=10,  # Limit to less than 10 candidates
     )
 
-    higher_level_code: Optional[str] = Field(
-        description="Classification code with X notation to pad to 5 digits. "
-        "Must be present if codable=False, must be None if codable=True.",
-        default=None,
-    )
-
     reasoning: str = Field(
         description="Step by step reasoning behind the classification selected.",
         min_length=50,  # Ensure detailed reasoning is provided

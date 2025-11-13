@@ -103,7 +103,6 @@ def assign_final_sic_code(row: pd.Series) -> dict:  # pylint: disable=C0103, W06
     result = {
         "unambiguously_codable_final": sa_response[0].codable,
         "final_sic": final_sic,
-        "higher_level_final_sic": sa_response[0].higher_level_code,
     }
     return result
 
@@ -138,20 +137,20 @@ def get_final_sic_code(row: pd.Series) -> str:
     return ""
 
 
-def get_higher_level_sic_code(row: pd.Series) -> str:
-    """Gets the higher level SIC code from the intermediate results, if possible.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
+# def get_higher_level_sic_code(row: pd.Series) -> str:
+#     """Gets the higher level SIC code from the intermediate results, if possible.
+#     Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
 
-    Args:
-        row (pd.Series): A row from the input DataFrame containing "intermediate_unambig_results".
+#     Args:
+#         row (pd.Series): A row from the input DataFrame containing "intermediate_unambig_results".
 
-    Returns:
-        higher_level_code (str): the higher level SIC code if final code cannot be assigned
-            unambiguously.
-    """
-    if row["intermediate_unambig_results"]["higher_level_final_sic"] is not None:
-        return row["intermediate_unambig_results"]["higher_level_final_sic"]
-    return ""
+#     Returns:
+#         higher_level_code (str): the higher level SIC code if final code cannot be assigned
+#             unambiguously.
+#     """
+#     if row["intermediate_unambig_results"]["higher_level_final_sic"] is not None:
+#         return row["intermediate_unambig_results"]["higher_level_final_sic"]
+#     return ""
 
 
 c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
@@ -201,9 +200,9 @@ if __name__ == "__main__":
                 get_unambiguous_status_final, axis=1
             )
             df.loc[batch.index, "final_sic"] = batch.apply(get_final_sic_code, axis=1)
-            df.loc[batch.index, "higher_level_final_sic"] = batch.apply(
-                get_higher_level_sic_code, axis=1
-            )
+            # df.loc[batch.index, "higher_level_final_sic"] = batch.apply(
+            #     get_higher_level_sic_code, axis=1
+            # )
             persist_results(
                 df,
                 metadata,

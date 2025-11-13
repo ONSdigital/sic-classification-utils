@@ -519,7 +519,6 @@ class ClassificationLLM:
                 codable=False,
                 alt_candidates=[],
                 reasoning="Error from chain, exit early",
-                higher_level_code=None,
             )
             return validated_answer, call_dict
 
@@ -541,7 +540,6 @@ class ClassificationLLM:
                 codable=False,
                 alt_candidates=[],
                 reasoning=reasoning,
-                higher_level_code=None,
             )
 
         return validated_answer, call_dict
