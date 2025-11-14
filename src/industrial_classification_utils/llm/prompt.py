@@ -430,6 +430,7 @@ differentiate between them.
 ===Follow up question 1===
 {open_question}
 {answer_to_open_question}
+
 ===Follow up question 2===
 {closed_question}
 {answer_to_closed_question}
