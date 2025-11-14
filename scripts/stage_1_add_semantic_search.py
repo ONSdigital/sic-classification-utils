@@ -221,7 +221,8 @@ if __name__ == "__main__":
     )
 
     # Make a merged industry description column:
-    df[MERGED_INDUSTRY_DESC_COL] = df.apply(make_merged_industry_desc, axis=1)
+    if "merged_industry_desc" not in df:
+        df[MERGED_INDUSTRY_DESC_COL] = df.apply(make_merged_industry_desc, axis=1)
     # Clean the Survey Response columns:
     df[INDUSTRY_DESCR_COL] = df[INDUSTRY_DESCR_COL].apply(clean_text)
     df[JOB_DESCRIPTION_COL] = df[JOB_DESCRIPTION_COL].apply(clean_text)
@@ -233,7 +234,10 @@ if __name__ == "__main__":
 
     print("running semantic search...")
     if (not args.restart) or (not restart_successful):
-        df["semantic_search_results"] = np.empty((len(df), 0)).tolist()
+        if "semantic_search_results" not in df:
+            df["semantic_search_results"] = np.empty((len(df), 0)).tolist()
+        else:
+            df["second_semantic_search_results"] = np.empty((len(df), 0)).tolist()
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -248,9 +252,14 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, "semantic_search_results"] = batch.apply(
-                get_semantic_search_results, axis=1
-            )
+            if "second_semantic_search_results" in df:
+                df.loc[batch.index, "second_semantic_search_results"] = batch.apply(
+                    get_semantic_search_results, axis=1
+                )
+            else:
+                df.loc[batch.index, "semantic_search_results"] = batch.apply(
+                    get_semantic_search_results, axis=1
+                )
             persist_results(
                 df,
                 metadata,

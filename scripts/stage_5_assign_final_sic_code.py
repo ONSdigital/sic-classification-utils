@@ -87,11 +87,16 @@ def assign_final_sic_code(row: pd.Series) -> dict:  # pylint: disable=C0103, W06
         result (dict): final codability, assigned 5 digit SIC code or a higher level code if
             final sic cannot be assigned unambiguously.
     """
+    if "second_semantic_search_results" in row:
+        semantic_search = "second_semantic_search_results"
+    else:
+        semantic_search = "semantic_search_results"
+
     sa_response = c_llm.unambiguous_sic_code(
         industry_descr=row[MERGED_INDUSTRY_DESC_COL],
+        semantic_search_results=row[semantic_search],
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
-        semantic_search_results=row["semantic_search_results"],
         candidates_limit=CANDIDATES_LIMIT,
         code_digits=CODE_DIGITS,
     )
