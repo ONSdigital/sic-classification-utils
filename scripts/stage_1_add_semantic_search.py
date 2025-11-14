@@ -98,6 +98,8 @@ def clean_text(text: str) -> str:
     Returns:
         str: The cleaned string.
     """
+    if isinstance(text, float):
+        text = ""
     text = text.replace("\n", " ")
     text = regex_sub(r"\s+", " ", text)
     text = text.lower()
