@@ -427,6 +427,13 @@ differentiate between them.
 ===Short list of UK SIC codes===
 {sic_candidates}
 
+===Follow up question 1===
+{open_question}
+{answer_to_open_question}
+===Follow up question 2===
+{closed_question}
+{answer_to_closed_question}
+
 ===Output Format===
 {format_instructions}
 """
