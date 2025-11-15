@@ -100,8 +100,8 @@ Objective:
 Input:
 - Original response: {industry_description}
 Input content: The input consists of two elements:
-1. Original response to question "Describe the main activity of the business or organisation".
-2. Follow up answer.
+1. Follow up answer.
+2. Follow up question.
 
 Desired output:
 - The output must consist **only** of the rephrased single label, followinng the format instructions.

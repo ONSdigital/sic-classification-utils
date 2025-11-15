@@ -148,31 +148,31 @@ if __name__ == "__main__":
         # .str.rstrip(".").str.cat(df["followup_answer"].str.lower(), sep=", ")
     )
 
-    # rephrase new job description
-    for batch_id, batch in tqdm(
-        enumerate(
-            np.split(
-                df,
-                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
-            )
-        )
-    ):
-        if batch_id == 0:
-            pass
-        else:
-            df.loc[batch.index, "industry_descriprion_rephrased"] = batch.apply(
-                get_rephrased_id, axis=1
-            )
-            persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
-                is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
-            )
-    df["merged_industry_desc"] = df["industry_descriprion_rephrased"]
-    df.drop(columns=["industry_descriprion_rephrased"], inplace=True)
+    # # rephrase new job description
+    # for batch_id, batch in tqdm(
+    #     enumerate(
+    #         np.split(
+    #             df,
+    #             np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+    #         )
+    #     )
+    # ):
+    #     if batch_id == 0:
+    #         pass
+    #     else:
+    #         df.loc[batch.index, "industry_descriprion_rephrased"] = batch.apply(
+    #             get_rephrased_id, axis=1
+    #         )
+    #         persist_results(
+    #             df,
+    #             metadata,
+    #             args.output_folder,
+    #             args.output_shortname,
+    #             is_final=False,
+    #             completed_batches=(batch_id + 1 + start_batch_id),
+    #         )
+    # df["merged_industry_desc"] = df["industry_descriprion_rephrased"]
+    # df.drop(columns=["industry_descriprion_rephrased"], inplace=True)
 
     print("synthetic response generation is complete")
 
