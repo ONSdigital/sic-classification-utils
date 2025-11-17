@@ -598,8 +598,14 @@ class ClassificationLLM:
                 logger.debug("Successfully parsed reformatted response.")
 
             except (ValueError, AttributeError) as parse_error2:
-                logger.exception(parse_error2)
-                logger.warning("Failed to parse response again:\n%s", response.content)
+                logger.error(
+                    f"Failed to parse response again: {parse_error2}",
+                    error=str(parse_error2),
+                )
+                logger.warning(
+                    "Failed to parse response again",
+                    response_content=str(response.content),
+                )
                 reasoning = (
                     f"ERROR parse_error=<{parse_error2}>, response=<{response.content}>"
                 )
