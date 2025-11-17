@@ -533,14 +533,30 @@ class ClassificationLLM:
             logger.exception(parse_error)
             logger.warning("Failed to parse response:\n%s", response.content)
 
-            reasoning = (
-                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
-            )
-            validated_answer = UnambiguousResponse(
-                codable=False,
-                alt_candidates=[],
-                reasoning=reasoning,
-            )
+            # send another llm request to fix the format (1 attempt)
+            try:
+                chain = FIX_PARSING_PROMPT | self.llm
+                response = await chain.ainvoke(
+                    {
+                        "llm_output": str(response.content),
+                        "format_instructions": parser.get_format_instructions(),
+                    },
+                    return_only_outputs=True,
+                )
+                validated_answer = parser.parse(str(response.content))
+                logger.debug("Successfully parsed reformatted response.")
+
+            except (ValueError, AttributeError) as parse_error2:
+                logger.exception(parse_error2)
+                logger.warning("Failed to parse response again:\n%s", response.content)
+                reasoning = (
+                    f"ERROR parse_error=<{parse_error2}>, response=<{response.content}>"
+                )
+                validated_answer = UnambiguousResponse(
+                    codable=False,
+                    alt_candidates=[],
+                    reasoning=reasoning,
+                )
 
         return validated_answer, call_dict
 
