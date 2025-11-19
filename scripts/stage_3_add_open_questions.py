@@ -78,15 +78,17 @@ def get_open_question(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
                          to the survey responses, and the semantic search results.
     Returns: question (str).
     """
-    sic_followup_object, _ = c_llm.formulate_open_question(
-        industry_descr=row[MERGED_INDUSTRY_DESC_COL],
-        job_title=row[JOB_TITLE_COL],
-        job_description=row[JOB_DESCRIPTION_COL],
-        llm_output=row["alt_sic_candidates"],  # type: ignore
-    )
-    if sic_followup_object.followup is None:
-        return ""
-    return sic_followup_object.followup
+    if not row["unambiguously_codable"]:
+        sic_followup_object, _ = c_llm.formulate_open_question(
+            industry_descr=row[MERGED_INDUSTRY_DESC_COL],
+            job_title=row[JOB_TITLE_COL],
+            job_description=row[JOB_DESCRIPTION_COL],
+            llm_output=row["alt_sic_candidates"],  # type: ignore
+        )
+        if sic_followup_object.followup is None:
+            return ""
+        return sic_followup_object.followup
+    return ""
 
 
 c_llm = ClassificationLLM(MODEL_NAME, verbose=False)

@@ -57,7 +57,7 @@ from typing import Callable, Optional
 
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts.prompt import PromptTemplate
-from langchain_google_vertexai import ChatVertexAI, VertexAI
+from langchain_google_vertexai import ChatVertexAI
 
 from industrial_classification_utils.embed.embedding import get_config
 
@@ -109,14 +109,8 @@ class SyntheticResponder:
     def instantiate_llm(self, model_name: str = "gemini-2.5-flash"):
         """Initialises a VertexAI instance."""
         try:
-            self.llm = VertexAI(
+            self.llm = ChatVertexAI(
                 model_name=model_name,
-                max_output_tokens=1_600,
-                temperature=0.0,
-                location="europe-west1",
-            )
-            self.llm_chat = ChatVertexAI(
-                model_name="gemini-2.5-flash",
                 max_output_tokens=1_600,
                 temperature=0.0,
                 location="europe-west1",
@@ -149,7 +143,9 @@ class SyntheticResponder:
         logger.warning("No follow-up question provided")
         raise ValueError("No follow-up question provided.")
 
-    def answer_followup(self, prompt: PromptTemplate, body: dict | str) -> str:
+    def answer_followup(
+        self, prompt: PromptTemplate, body: dict | str
+    ) -> FollowupAnswerResponse:
         """Gets the LLM's response to the followup question,
         as specified in the constructed prompt.
         """
@@ -164,13 +160,13 @@ class SyntheticResponder:
             body = json.load(body)  # type: ignore[arg-type]
         call_dict = body.copy()  # type: ignore
         call_dict["followup_question"] = prompt.partial_variables["followup_question"]
-        chain = prompt | self.llm  # LLMChain(llm=self.llm, prompt=prompt)
+        chain = prompt | self.llm
         response = chain.invoke(call_dict, return_only_outputs=True)
         parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
             pydantic_object=FollowupAnswerResponse
         )
         try:
-            validated_answer = parser.parse(str(response)).answer
+            validated_answer = parser.parse(str(response.content))
             logger.debug("Answer received from LLM, and successfully parsed")
         except ValueError as parse_error:
             logger.error(  # pylint: disable=C0209,W1201
@@ -180,6 +176,7 @@ class SyntheticResponder:
                 "Failed to parse response:\n%s"  # pylint: disable=C0209,W1201 # Noqa: UP031
                 % response  # pylint: disable=C0209,W1201
             )  # pylint: disable=C0209,W1201
+            validated_answer = FollowupAnswerResponse(answer="")
         return validated_answer
 
     # pylint: disable=R0801
@@ -200,7 +197,7 @@ class SyntheticResponder:
         """
         call_dict = {"industry_description": industry_description}
 
-        chain = self.rephrase_desc | self.llm_chat
+        chain = self.rephrase_desc | self.llm
         try:
             response = chain.invoke(call_dict, return_only_outputs=True)
         except ValueError as err:
