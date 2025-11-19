@@ -23,7 +23,7 @@ class FollowupAnswerResponse(BaseModel):
 
     answer: str = Field(
         description="Answer to the followup question.",
-        min_length=2,  # Ensure non-empty response, but it may be possible that
+        # min_length=2,  # Ensure non-empty response, but it may be possible that
         # 'yes' or 'no' are acceptable answers to the question.
     )
 
