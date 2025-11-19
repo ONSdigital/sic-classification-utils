@@ -139,6 +139,14 @@ if __name__ == "__main__":
             df.loc[batch.index, "followup_answer"] = batch.apply(
                 get_followup_answer, axis=1
             )
+            persist_results(
+                df,
+                metadata,
+                args.output_folder,
+                args.output_shortname,
+                is_final=False,
+                completed_batches=(batch_id + 1 + start_batch_id),
+            )
 
     df["merged_industry_desc"] = (
         df["merged_industry_desc"]
