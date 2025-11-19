@@ -1,6 +1,5 @@
 """This module provides illustration for the use of unambiguous prompt with an LLM."""
 
-import asyncio
 from pprint import pprint
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
@@ -440,15 +439,13 @@ EXAMPLE_EMBED_SHORT_LIST = [
 
 uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
 
-sa_response = asyncio.run(
-    uni_chat.unambiguous_sic_code(
-        industry_descr=ORG_DESCRIPTION,
-        semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
-        job_title=JOB_TITLE,
-        job_description=JOB_DESCRIPTION,
-        code_digits=5,
-        candidates_limit=7,
-    )
+sa_response = uni_chat.unambiguous_sic_code(
+    industry_descr=ORG_DESCRIPTION,
+    semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
+    job_title=JOB_TITLE,
+    job_description=JOB_DESCRIPTION,
+    code_digits=5,
+    candidates_limit=7,
 )
 
 pprint(sa_response[0].model_dump(), indent=2, width=80)

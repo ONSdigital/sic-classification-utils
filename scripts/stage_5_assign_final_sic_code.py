@@ -53,10 +53,9 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 #####################################################
 # Constants:
 MODEL_NAME = "gemini-2.5-flash"
-MODEL_LOCATION = "europe-west9"
+MODEL_LOCATION = "europe-west1"
 
 CODE_DIGITS = 5
-CANDIDATES_LIMIT = 10
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
@@ -87,27 +86,20 @@ def assign_final_sic_code(row: pd.Series) -> dict:  # pylint: disable=C0103, W06
         result (dict): final codability, assigned 5 digit SIC code or a higher level code if
             final sic cannot be assigned unambiguously.
     """
-    if "second_semantic_search_results" in row:
-        semantic_search = "second_semantic_search_results"
-    else:
-        semantic_search = "semantic_search_results"
-
-    sa_response = c_llm.unambiguous_sic_code(
+    sa_final_sic = c_llm.final_sic_code(
         industry_descr=row[MERGED_INDUSTRY_DESC_COL],
-        semantic_search_results=row[semantic_search],
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
-        candidates_limit=CANDIDATES_LIMIT,
-        code_digits=CODE_DIGITS,
+        sic_candidates=row[SIC_CANDIDATES_COL],
+        # open_question=row[OPEN_QUESTION_COL],
+        # answer_to_open_question=row[ANSWER_TO_OPEN_QUESTION_COL],
+        # closed_question=CLOSED_QUESTION,
+        # answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
     )
-
-    final_sic = (
-        sa_response[0].class_code if sa_response[0].class_code is not None else ""
-    )
-
     result = {
-        "unambiguously_codable_final": sa_response[0].codable,
-        "final_sic": final_sic,
+        "unambiguously_codable_final": sa_final_sic[0].codable,
+        "final_sic": sa_final_sic[0].unambiguous_code,
+        "higher_level_final_sic": sa_final_sic[0].higher_level_code,
     }
     return result
 
@@ -142,20 +134,20 @@ def get_final_sic_code(row: pd.Series) -> str:
     return ""
 
 
-# def get_higher_level_sic_code(row: pd.Series) -> str:
-#     """Gets the higher level SIC code from the intermediate results, if possible.
-#     Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
+def get_higher_level_sic_code(row: pd.Series) -> str:
+    """Gets the higher level SIC code from the intermediate results, if possible.
+    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
 
-#     Args:
-#         row (pd.Series): A row from the input DataFrame containing "intermediate_unambig_results".
+    Args:
+        row (pd.Series): A row from the input DataFrame containing "intermediate_unambig_results".
 
-#     Returns:
-#         higher_level_code (str): the higher level SIC code if final code cannot be assigned
-#             unambiguously.
-#     """
-#     if row["intermediate_unambig_results"]["higher_level_final_sic"] is not None:
-#         return row["intermediate_unambig_results"]["higher_level_final_sic"]
-#     return ""
+    Returns:
+        higher_level_code (str): the higher level SIC code if final code cannot be assigned
+            unambiguously.
+    """
+    if row["intermediate_unambig_results"]["higher_level_final_sic"] is not None:
+        return row["intermediate_unambig_results"]["higher_level_final_sic"]
+    return ""
 
 
 c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
@@ -205,9 +197,9 @@ if __name__ == "__main__":
                 get_unambiguous_status_final, axis=1
             )
             df.loc[batch.index, "final_sic"] = batch.apply(get_final_sic_code, axis=1)
-            # df.loc[batch.index, "higher_level_final_sic"] = batch.apply(
-            #     get_higher_level_sic_code, axis=1
-            # )
+            df.loc[batch.index, "higher_level_final_sic"] = batch.apply(
+                get_higher_level_sic_code, axis=1
+            )
             persist_results(
                 df,
                 metadata,

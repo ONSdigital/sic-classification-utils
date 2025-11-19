@@ -10,8 +10,6 @@ The example then uses llm from the `industrial_classification_utils.llm.llm_embe
 package to perform a lookup using the embeddings index.
 """
 
-import asyncio
-
 from industrial_classification_utils.llm.llm import ClassificationLLM
 
 # pylint: disable=duplicate-code
@@ -62,35 +60,25 @@ EXAMPLE_EMBED_SHORT_LIST = [
 # This example uses mocked data for the embedding search.
 gemini_llm = ClassificationLLM(model_name=LLM_MODEL)
 
-# Create single event loop for each async method to use
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-
-response_sic_code = loop.run_until_complete(
-    gemini_llm.get_sic_code(ORG_DESCRIPTION, JOB_TITLE, JOB_DESCRIPTION)
-)
+response_sic_code = gemini_llm.get_sic_code(ORG_DESCRIPTION, JOB_TITLE, JOB_DESCRIPTION)
 
 print(response_sic_code)
 
-response, short_list, prompt = loop.run_until_complete(
-    gemini_llm.sa_rag_sic_code(
-        ORG_DESCRIPTION,
-        JOB_TITLE,
-        JOB_DESCRIPTION,
-        candidates_limit=CANDIDATE_LIMIT,
-        short_list=EXAMPLE_EMBED_SHORT_LIST,
-    )
+response, short_list, prompt = gemini_llm.sa_rag_sic_code(
+    ORG_DESCRIPTION,
+    JOB_TITLE,
+    JOB_DESCRIPTION,
+    candidates_limit=CANDIDATE_LIMIT,
+    short_list=EXAMPLE_EMBED_SHORT_LIST,
 )
 # Print the response
 print(response)
 
-query_response, call_dict = loop.run_until_complete(
-    gemini_llm.unambiguous_sic_code(
-        industry_descr=ORG_DESCRIPTION,
-        semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
-        job_title=JOB_TITLE,
-        job_description=JOB_DESCRIPTION,
-    )
+query_response, call_dict = gemini_llm.unambiguous_sic_code(
+    industry_descr=ORG_DESCRIPTION,
+    semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
+    job_title=JOB_TITLE,
+    job_description=JOB_DESCRIPTION,
 )
 
 # Print the response
