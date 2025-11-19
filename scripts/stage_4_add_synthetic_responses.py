@@ -121,7 +121,7 @@ if __name__ == "__main__":
     print("getting synthetic responses to followup questions...")
     if (not args.restart) or (not restart_successful):
         df["followup_answer"] = ""
-        df["industry_descriprion_rephrased"] = ""
+        df["industry_description_rephrased"] = ""
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     #     if batch_id == 0:
     #         pass
     #     else:
-    #         df.loc[batch.index, "industry_descriprion_rephrased"] = batch.apply(
+    #         df.loc[batch.index, "industry_description_rephrased"] = batch.apply(
     #             get_rephrased_id, axis=1
     #         )
     #         persist_results(
@@ -179,8 +179,8 @@ if __name__ == "__main__":
     #             is_final=False,
     #             completed_batches=(batch_id + 1 + start_batch_id),
     #         )
-    # df["merged_industry_desc"] = df["industry_descriprion_rephrased"]
-    # df.drop(columns=["industry_descriprion_rephrased"], inplace=True)
+    # df["merged_industry_desc"] = df["industry_description_rephrased"]
+    # df.drop(columns=["industry_description_rephrased"], inplace=True)
 
     print("synthetic response generation is complete")
 
