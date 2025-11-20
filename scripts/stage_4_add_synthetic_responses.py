@@ -83,10 +83,8 @@ def get_followup_answer(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
     }
     if row["followup_question"] != "":
         answer_followup_prompt = SR.construct_prompt(payload, row["followup_question"])
-        llm_response = SR.answer_followup(answer_followup_prompt, payload).answer
-    else:
-        llm_response = ""
-    return llm_response
+        return SR.answer_followup(answer_followup_prompt, payload).answer
+    return ""
 
 
 # pylint: disable=C0116 # the docstring is below
@@ -100,7 +98,13 @@ def get_rephrased_id(row: pd.Series) -> str:
     Returns:
         str: response (str)
     """
-    return SR.rephrase_question_and_id(row["merged_industry_desc"])[0]
+    if row["followup_question"] != "":
+        return SR.rephrase_question_and_id(
+            row["merged_industry_desc"],
+            row["followup_question"],
+            row["followup_answer"],
+        )[0]
+    return row["merged_industry_desc"]
 
 
 SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
@@ -148,39 +152,39 @@ if __name__ == "__main__":
                 completed_batches=(batch_id + 1 + start_batch_id),
             )
 
-    df["merged_industry_desc"] = (
-        df["merged_industry_desc"]
-        .str.rstrip(".")
-        .str.cat(df["followup_question"].str.lower(), sep=", Question: ")
-        .str.cat(df["followup_answer"].str.lower(), sep=", Answer: ")
-        # .str.rstrip(".").str.cat(df["followup_answer"].str.lower(), sep=", ")
-    )
+    # df["merged_industry_desc"] = (
+    #     df["merged_industry_desc"]
+    #     .str.rstrip(".")
+    #     .str.cat(df["followup_question"].str.lower(), sep=", Question: ")
+    #     .str.cat(df["followup_answer"].str.lower(), sep=", Answer: ")
+    # .str.rstrip(".").str.cat(df["followup_answer"].str.lower(), sep=", ")
+    # )
 
-    # # rephrase new job description
-    # for batch_id, batch in tqdm(
-    #     enumerate(
-    #         np.split(
-    #             df,
-    #             np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
-    #         )
-    #     )
-    # ):
-    #     if batch_id == 0:
-    #         pass
-    #     else:
-    #         df.loc[batch.index, "industry_description_rephrased"] = batch.apply(
-    #             get_rephrased_id, axis=1
-    #         )
-    #         persist_results(
-    #             df,
-    #             metadata,
-    #             args.output_folder,
-    #             args.output_shortname,
-    #             is_final=False,
-    #             completed_batches=(batch_id + 1 + start_batch_id),
-    #         )
-    # df["merged_industry_desc"] = df["industry_description_rephrased"]
-    # df.drop(columns=["industry_description_rephrased"], inplace=True)
+    # rephrase new job description
+    for batch_id, batch in tqdm(
+        enumerate(
+            np.split(
+                df,
+                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+            )
+        )
+    ):
+        if batch_id == 0:
+            pass
+        else:
+            df.loc[batch.index, "industry_description_rephrased"] = batch.apply(
+                get_rephrased_id, axis=1
+            )
+            persist_results(
+                df,
+                metadata,
+                args.output_folder,
+                args.output_shortname,
+                is_final=False,
+                completed_batches=(batch_id + 1 + start_batch_id),
+            )
+    df["merged_industry_desc"] = df["industry_description_rephrased"]
+    df.drop(columns=["industry_description_rephrased"], inplace=True)
 
     print("synthetic response generation is complete")
 

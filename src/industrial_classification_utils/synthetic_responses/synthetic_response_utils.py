@@ -183,11 +183,15 @@ class SyntheticResponder:
     def rephrase_question_and_id(
         self,
         industry_description: str,
+        followup_question: str,
+        followup_answer: str,
     ) -> tuple[str, Optional[dict[str, str]]]:
         """Rephrases the description with question and answer, to create an informative string.
 
         Args:
-            industry_description (str, optional): The job description. Defaults to None.
+            industry_description (str): The industry description.
+            followup_question (str): Follow up question asked to the respondent.
+            followup_answer (str): Follow up answer given by the respondent.
 
         Returns:
             ReprhrasedDescription: The generated rephrased description.
@@ -195,7 +199,11 @@ class SyntheticResponder:
         Raises:
             TODO
         """
-        call_dict = {"industry_description": industry_description}
+        call_dict = {
+            "industry_description": industry_description,
+            "followup_question": followup_question,
+            "followup_answer": followup_answer,
+        }
 
         chain = self.rephrase_desc | self.llm
         try:

@@ -99,9 +99,8 @@ Objective:
 
 Input:
 - Original response: {industry_description}
-Input content: The input consists of two elements:
-1. Follow up answer.
-2. Follow up question.
+- Follow up question: {followup_question}
+- Follow up answer: {followup_answer}
 
 Desired output:
 - The output must consist **only** of the rephrased single label, followinng the format instructions.
