@@ -26,6 +26,7 @@ Example Usage:
    python stage_2_add_unambiguously_codable_status.py \
         -n my_output \
         -b 200 \
+        -s 0 \
         persisted_dataframe.parquet \
         persisted_metadata.json \
         output_folder
@@ -33,6 +34,7 @@ Example Usage:
    where:
      - `-n my_output` sets the output filename prefix to "my_output".
      - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
+     - `-s 0` specifies the first run of the stage.
      - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
      - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
      - `output_folder` is the directory where results will be saved.
@@ -89,9 +91,15 @@ def get_unambiguous_sic(
     Returns:
         result (dict): the codability, assigned code (or None), and the alternatice SIC candidates.
     """
+    semantic_search = (
+        "semantic_search_results"
+        if args.second_run == 0  # pylint: disable=E0606
+        else "second_semantic_search_results"
+    )
+
     sa_response = c_llm.unambiguous_sic_code(
         industry_descr=row[MERGED_INDUSTRY_DESC_COL],
-        semantic_search_results=row["semantic_search_results"],
+        semantic_search_results=row[semantic_search],
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
         candidates_limit=CANDIDATES_LIMIT,
@@ -124,7 +132,7 @@ def get_unambiguous_status(row: pd.Series) -> bool:
     return False
 
 
-def get_initial_sic_code(row: pd.Series) -> str:
+def get_sic_code(row: pd.Series) -> str:
     """Gets the assigned SIC code from the intermediate results, if possible.
     Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
 
@@ -154,6 +162,22 @@ def get_alt_sic_candidates(row: pd.Series) -> list[dict]:
     return []
 
 
+def get_higher_level_sic_code(row: pd.Series) -> str:
+    """Gets the higher level SIC code from the intermediate results, if possible.
+    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
+
+    Args:
+        row (pd.Series): A row from the input DataFrame containing "intermediate_unambig_results".
+
+    Returns:
+        higher_level_code (str): the higher level SIC code if final code cannot be assigned
+            unambiguously.
+    """
+    if row["intermediate_unambig_results"]["higher_level_final_sic"] is not None:
+        return row["intermediate_unambig_results"]["higher_level_final_sic"]
+    return ""
+
+
 c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
 print("Classification LLM loaded.")
 
@@ -171,15 +195,6 @@ if __name__ == "__main__":
     )
 
     print("running unamibuous codability analysis...")
-    if (not args.restart) or (not restart_successful):
-        df["intermediate_unambig_results"] = {
-            "unambiguously_codable": False,
-            "code": "",
-            "alt_candidates": [],
-        }
-        df["unambiguously_codable"] = False
-        df["initial_code"] = ""
-        df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -191,29 +206,73 @@ if __name__ == "__main__":
     ):
         # A quirk of the np.split approach is that the first batch will contain all
         # of the processed rows so far, so can be skipped
-        if batch_id == 0:
-            pass
+        if args.second_run == 0:
+            if (not args.restart) or (not restart_successful):
+                df["intermediate_unambig_results"] = {
+                    "unambiguously_codable": False,
+                    "code": "",
+                    "alt_candidates": [],
+                }
+                df["unambiguously_codable"] = False
+                df["initial_code"] = ""
+                df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
+            print(f" running initial classification, batch {batch_id}")
+            if batch_id == 0:
+                pass
+            else:
+                batch.loc[batch.index, "intermediate_unambig_results"] = batch.apply(
+                    get_unambiguous_sic, axis=1
+                )
+                df.loc[batch.index, "unambiguously_codable"] = batch.apply(
+                    get_unambiguous_status, axis=1
+                )
+                df.loc[batch.index, "initial_code"] = batch.apply(get_sic_code, axis=1)
+                df.loc[batch.index, "alt_sic_candidates"] = batch.apply(
+                    get_alt_sic_candidates, axis=1
+                )
+                persist_results(
+                    df,
+                    metadata,
+                    args.output_folder,
+                    args.output_shortname,
+                    is_final=False,
+                    completed_batches=(batch_id + 1 + start_batch_id),
+                )
         else:
-            batch.loc[batch.index, "intermediate_unambig_results"] = batch.apply(
-                get_unambiguous_sic, axis=1
-            )
-            df.loc[batch.index, "unambiguously_codable"] = batch.apply(
-                get_unambiguous_status, axis=1
-            )
-            df.loc[batch.index, "initial_code"] = batch.apply(
-                get_initial_sic_code, axis=1
-            )
-            df.loc[batch.index, "alt_sic_candidates"] = batch.apply(
-                get_alt_sic_candidates, axis=1
-            )
-            persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
-                is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
-            )
+            # A quirk of the np.split approach is that the first batch will contain all
+            # of the processed rows so far, so can be skipped
+            if (not args.restart) or (not restart_successful):
+                df["intermediate_unambig_results"] = {
+                    "unambiguously_codable": False,
+                    "code": "",
+                    "higher_level_final_sic": "",
+                }
+                df["unambiguously_codable"] = False
+                df["code"] = ""
+                df["higher_level_final_sic"] = ""
+
+            print(f" running final classification, batch {batch_id}")
+            if batch_id == 0:
+                pass
+            else:
+                batch.loc[batch.index, "intermediate_unambig_results"] = batch.apply(
+                    get_unambiguous_sic, axis=1
+                )
+                df.loc[batch.index, "unambiguously_codable_final"] = batch.apply(
+                    get_unambiguous_status, axis=1
+                )
+                df.loc[batch.index, "code"] = batch.apply(get_sic_code, axis=1)
+                # df.loc[batch.index, "higher_level_final_sic"] = batch.apply(
+                #     get_higher_level_sic_code, axis=1
+                # )
+                persist_results(
+                    df,
+                    metadata,
+                    args.output_folder,
+                    args.output_shortname,
+                    is_final=False,
+                    completed_batches=(batch_id + 1 + start_batch_id),
+                )
 
     print("unambiguous coding analysis is complete")
     print("deleting temporary DataFrame column...")

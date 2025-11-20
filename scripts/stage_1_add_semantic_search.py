@@ -23,6 +23,7 @@ Example Usage:
    python stage_1_add_semantic_search.py \
         -n my_output \
         -b 200 \
+        -s 0 \
         input.csv \
         initial_metadata.json \
         output_folder
@@ -30,6 +31,7 @@ Example Usage:
    where:
      - `-n my_output` sets the output filename prefix to "my_output".
      - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
+     - `-s 0` specifies the first run of the stage.
      - `input.csv` is the input CSV file.
      - `initial_metadata.json` is the JSON file containing the initial processing metadata.
        An example is shown below.
@@ -236,7 +238,7 @@ if __name__ == "__main__":
 
     print("running semantic search...")
     if (not args.restart) or (not restart_successful):
-        if "semantic_search_results" not in df:
+        if args.second_run == 0:
             df["semantic_search_results"] = np.empty((len(df), 0)).tolist()
         else:
             df["second_semantic_search_results"] = np.empty((len(df), 0)).tolist()
