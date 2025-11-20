@@ -196,6 +196,25 @@ if __name__ == "__main__":
 
     print("running unamibuous codability analysis...")
 
+    if args.second_run == 0:
+        SIC_CODE = "initial_code"
+        CODABLE = "unambiguously_codable"
+        ALT_CANDIDATES = "alt_sic_candidates"
+    else:
+        SIC_CODE = "final_code"
+        CODABLE = "unambiguously_codable_final"
+        ALT_CANDIDATES = "higher_level_final_sic"
+
+    if (not args.restart) or (not restart_successful):
+        df["intermediate_unambig_results"] = {
+            CODABLE: False,
+            SIC_CODE: "",
+            ALT_CANDIDATES: [],
+        }
+        df[CODABLE] = False
+        df[SIC_CODE] = ""
+        df[ALT_CANDIDATES] = np.empty((len(df), 0)).tolist()
+
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
@@ -207,15 +226,6 @@ if __name__ == "__main__":
         # A quirk of the np.split approach is that the first batch will contain all
         # of the processed rows so far, so can be skipped
         if args.second_run == 0:
-            if (not args.restart) or (not restart_successful):
-                df["intermediate_unambig_results"] = {
-                    "unambiguously_codable": False,
-                    "code": "",
-                    "alt_candidates": [],
-                }
-                df["unambiguously_codable"] = False
-                df["initial_code"] = ""
-                df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
             print(f" running initial classification, batch {batch_id}")
             if batch_id == 0:
                 pass
@@ -241,15 +251,15 @@ if __name__ == "__main__":
         else:
             # A quirk of the np.split approach is that the first batch will contain all
             # of the processed rows so far, so can be skipped
-            if (not args.restart) or (not restart_successful):
-                df["intermediate_unambig_results"] = {
-                    "unambiguously_codable": False,
-                    "code": "",
-                    "higher_level_final_sic": "",
-                }
-                df["unambiguously_codable"] = False
-                df["code"] = ""
-                df["higher_level_final_sic"] = ""
+            # if (not args.restart) or (not restart_successful):
+            #     df["intermediate_unambig_results"] = {
+            #         "unambiguously_codable": False,
+            #         "code": "",
+            #         "higher_level_final_sic": "",
+            #     }
+            #     df["unambiguously_codable"] = False
+            #     df["code"] = ""
+            #     df["higher_level_final_sic"] = ""
 
             print(f" running final classification, batch {batch_id}")
             if batch_id == 0:
