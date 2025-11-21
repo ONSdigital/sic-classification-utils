@@ -213,6 +213,12 @@ if __name__ == "__main__":
     check_vector_store_ready()
     print("Vector store is ready")
 
+    semantic_search = (
+        "semantic_search_results"
+        if args.second_run == 0
+        else "second_semantic_search_results"
+    )
+
     df, metadata, start_batch_id, restart_successful = set_up_initial_state(
         args.restart,
         args.output_folder,
@@ -238,10 +244,7 @@ if __name__ == "__main__":
 
     print("running semantic search...")
     if (not args.restart) or (not restart_successful):
-        if args.second_run == 0:
-            df["semantic_search_results"] = np.empty((len(df), 0)).tolist()
-        else:
-            df["second_semantic_search_results"] = np.empty((len(df), 0)).tolist()
+        df[semantic_search] = np.empty((len(df), 0)).tolist()
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -256,14 +259,9 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            if "second_semantic_search_results" in df:
-                df.loc[batch.index, "second_semantic_search_results"] = batch.apply(
-                    get_semantic_search_results, axis=1
-                )
-            else:
-                df.loc[batch.index, "semantic_search_results"] = batch.apply(
-                    get_semantic_search_results, axis=1
-                )
+            df.loc[batch.index, semantic_search] = batch.apply(
+                get_semantic_search_results, axis=1
+            )
             persist_results(
                 df,
                 metadata,

@@ -41,7 +41,7 @@ else
 fi
 
 echo "RUNNING: STAGE 1"
-"$SCRIPT_DIR"/stage_1_add_semantic_search.py -n "STG1_second_search" -b "$batch_size" "$input_csv" -s 1 "$input_metadata_json" "$output_folder"
+"$SCRIPT_DIR"/stage_1_add_semantic_search.py -n "STG1_second_search" -b "$batch_size" "$output_folder""/STG4.csv" -s 1 "$input_metadata_json" "$output_folder"
 
 echo "RUNNING: STAGE 2 (two-prompt pipeline)";
 "$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -n "STG2_final" -b "$batch_size" -s 1 "$output_folder""/STG1_second_search.parquet" "$output_folder""/STG1_second_search_metadata.json" "$output_folder"
