@@ -1,4 +1,4 @@
-# pylint: disable=logging-not-lazy,logging-fstring-interpolation
+# pylint: disable=logging-not-lazy,logging-fstring-interpolation,too-many-lines
 """This module provides utilities for leveraging Large Language Models (LLMs)
 to classify respondent data into Standard Industrial Classification (SIC) codes.
 
@@ -15,7 +15,7 @@ Functions:
     (None at the module level)
 """
 
-import logging
+import time
 from collections import defaultdict
 from functools import lru_cache
 from typing import Any, Optional, Union
@@ -27,6 +27,7 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain_google_vertexai import ChatVertexAI
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
+from survey_assist_utils.logging import get_logger
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.llm.prompt import (
@@ -50,12 +51,15 @@ from industrial_classification_utils.models.response_model import (
     SicResponse,
     UnambiguousResponse,
 )
+from industrial_classification_utils.utils.constants import (
+    truncate_identifier,
+)
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 config = get_config()
 
 
@@ -125,7 +129,7 @@ class ClassificationLLM:
         self.verbose = verbose
 
     @lru_cache  # noqa: B019
-    def get_sic_code(
+    async def get_sic_code(
         self,
         industry_descr: str,
         job_title: str,
@@ -143,7 +147,7 @@ class ClassificationLLM:
             SicResponse: Generated response to the query.
         """
         chain = self.sic_prompt | self.llm
-        response = chain.invoke(
+        response = await chain.ainvoke(
             {
                 "industry_descr": industry_descr,
                 "job_title": job_title,
@@ -152,7 +156,7 @@ class ClassificationLLM:
             return_only_outputs=True,
         )
         if self.verbose:
-            logger.debug("%s", response)
+            logger.debug(f"LLM response: {response}")
         # Parse the output to desired format with one retry
         parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
             pydantic_object=SicResponse
@@ -161,9 +165,9 @@ class ClassificationLLM:
             validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
             logger.debug(
-                "Retrying llm response parsing due to an error: %s", parse_error
+                f"Retrying llm response parsing due to an error: {parse_error}"
             )
-            logger.error("Unable to parse llm response: %s", parse_error)
+            logger.error(f"Unable to parse llm response: {parse_error}")
 
             reasoning = (
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
@@ -238,12 +242,9 @@ class ClassificationLLM:
         a: defaultdict[Any, list] = defaultdict(list)
 
         logger.debug(
-            "Chars Lmt: %d Candidate Lmt: %d Activities Lmt: %d Short List Len: %d Code Digits: %d",
-            chars_limit,
-            candidates_limit,
-            activities_limit,
-            len(short_list),
-            code_digits,
+            f"Chars Lmt: {chars_limit} Candidate Lmt: {candidates_limit} "
+            f"Activities Lmt: {activities_limit} Short List Len: {len(short_list)} "
+            f"Code Digits: {code_digits}"
         )
 
         for item in short_list:
@@ -261,9 +262,8 @@ class ClassificationLLM:
             # nn = sum([x <= chars_limit for x in chars_count])
             if nn < len(sic_candidates):
                 logger.warning(
-                    "Shortening list of candidates to fit token limit from %d to %d",
-                    len(sic_candidates),
-                    nn,
+                    f"Shortening list of candidates to fit token limit from "
+                    f"{len(sic_candidates)} to {nn}"
                 )
                 sic_candidates = sic_candidates[:nn]
 
@@ -330,7 +330,7 @@ class ClassificationLLM:
 
         return "\n".join(sic_candidates)
 
-    def sa_rag_sic_code(  # noqa: PLR0913
+    async def sa_rag_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
@@ -400,22 +400,21 @@ class ClassificationLLM:
 
         if self.verbose:
             final_prompt = self.sa_sic_prompt_rag.format(**call_dict)
-            logger.debug("%s", final_prompt)
+            logger.debug(f"Final prompt: {final_prompt}")
 
         chain = self.sa_sic_prompt_rag | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
-            logger.exception(err)
-            logger.warning("Error from chain, exit early")
+            logger.error(f"Error from chain, exit early: {err}", error=str(err))
             validated_answer = SicResponse(
                 followup="Follow-up question not available due to error.",
                 reasoning="Error from chain, exit early",
             )
             return validated_answer, short_list, call_dict
         if self.verbose:
-            logger.debug("%s", response)
+            logger.debug(f"LLM response: {response}")
 
         # Parse the output to the desired format
         parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
@@ -424,13 +423,17 @@ class ClassificationLLM:
         try:
             validated_answer = parser.parse(str(response.content))
         except (ValueError, AttributeError) as parse_error:
-            logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response.content)
+            logger.error(
+                f"Failed to parse response: {parse_error}", error=str(parse_error)
+            )
+            logger.warning(
+                "Failed to parse response", response_content=str(response.content)
+            )
 
             # send another llm request to fix the format (1 attempt)
             try:
                 chain = FIX_PARSING_PROMPT | self.llm
-                response = chain.invoke(
+                response = await chain.ainvoke(
                     {
                         "llm_output": str(response.content),
                         "format_instructions": parser.get_format_instructions(),
@@ -440,8 +443,14 @@ class ClassificationLLM:
                 validated_answer = parser.parse(str(response.content))
                 logger.debug("Successfully parsed reformatted response.")
             except (ValueError, AttributeError) as parse_error2:
-                logger.exception(parse_error2)
-                logger.warning("Failed to parse response again:\n%s", response.content)
+                logger.error(
+                    f"Failed to parse response again: {parse_error2}",
+                    error=str(parse_error2),
+                )
+                logger.warning(
+                    "Failed to parse response again",
+                    response_content=str(response.content),
+                )
                 reasoning = (
                     f"ERROR parse_error=<{parse_error2}>, response=<{response.content}>"
                 )
@@ -452,7 +461,7 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    def unambiguous_sic_code(  # noqa: PLR0913
+    async def unambiguous_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
         semantic_search_results: list[dict],
@@ -460,6 +469,7 @@ class ClassificationLLM:
         job_description: Optional[str] = None,
         candidates_limit: int = 5,
         code_digits: int = 5,
+        correlation_id: Optional[str] = None,
     ) -> tuple[UnambiguousResponse, Optional[Any]]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
@@ -472,6 +482,7 @@ class ClassificationLLM:
                 to include in the prompt. Defaults to 5.
             code_digits (int, optional): The number of digits to consider from
                 the code for filtering candidates. Defaults to 5.
+            correlation_id (str, optional): Optional correlation ID for request tracking.
 
         Returns:
             UnambiguousResponse: The generated response to the query.
@@ -510,11 +521,24 @@ class ClassificationLLM:
 
         chain = self.sic_prompt_unambiguous | self.llm
 
+        # Log LLM request sent
+        logger.info(
+            "LLM request sent - unambiguous_sic_code",
+            job_title=truncate_identifier(job_title),
+            job_description=truncate_identifier(job_description),
+            industry_descr=truncate_identifier(industry_descr),
+            correlation_id=correlation_id or "",
+        )
+        llm_start = time.perf_counter()
+
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
-            logger.exception(err)
-            logger.warning("Error from chain, exit early")
+            logger.error(
+                f"Error from chain, exit early: {err}",
+                error=str(err),
+                correlation_id=correlation_id or "",
+            )
             validated_answer = UnambiguousResponse(
                 codable=False,
                 alt_candidates=[],
@@ -523,28 +547,77 @@ class ClassificationLLM:
             return validated_answer, call_dict
 
         if self.verbose:
-            logger.debug("llm_response=%s", response)
+            logger.debug(f"llm_response={response}")
 
         # Parse the output to the desired format
         parser = PydanticOutputParser(pydantic_object=UnambiguousResponse)  # type: ignore
         try:
             validated_answer = parser.parse(str(response.content))
+            # Log LLM response received after successful parse
+            alt_candidates_count = len(
+                getattr(validated_answer, "alt_candidates", []) or []
+            )
+            codable = bool(getattr(validated_answer, "codable", False))
+            selected_code = (
+                str(getattr(validated_answer, "class_code", "")) if codable else ""
+            )
+            llm_duration_ms = int((time.perf_counter() - llm_start) * 1000)
+            logger.info(
+                "LLM response received for unambiguous sic prompt",
+                codable=str(codable),
+                selected_code=selected_code,
+                alt_candidates_count=str(alt_candidates_count),
+                duration_ms=str(llm_duration_ms),
+                correlation_id=correlation_id or "",
+            )
         except ValueError as parse_error:
-            logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response.content)
+            logger.error(
+                f"Failed to parse response: {parse_error}",
+                error=str(parse_error),
+                correlation_id=correlation_id or "",
+            )
+            llm_duration_ms = int((time.perf_counter() - llm_start) * 1000)
+            logger.warning(
+                "Failed to parse response",
+                response_content=str(response.content),
+                duration_ms=str(llm_duration_ms),
+                correlation_id=correlation_id or "",
+            )
 
-            reasoning = (
-                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
-            )
-            validated_answer = UnambiguousResponse(
-                codable=False,
-                alt_candidates=[],
-                reasoning=reasoning,
-            )
+            # send another llm request to fix the format (1 attempt)
+            try:
+                chain = FIX_PARSING_PROMPT | self.llm
+                response = await chain.ainvoke(
+                    {
+                        "llm_output": str(response.content),
+                        "format_instructions": parser.get_format_instructions(),
+                    },
+                    return_only_outputs=True,
+                )
+                validated_answer = parser.parse(str(response.content))
+                logger.debug("Successfully parsed reformatted response.")
+
+            except (ValueError, AttributeError) as parse_error2:
+                logger.error(
+                    f"Failed to parse response again: {parse_error2}",
+                    error=str(parse_error2),
+                )
+                logger.warning(
+                    "Failed to parse response again",
+                    response_content=str(response.content),
+                )
+                reasoning = (
+                    f"ERROR parse_error=<{parse_error2}>, response=<{response.content}>"
+                )
+                validated_answer = UnambiguousResponse(
+                    codable=False,
+                    alt_candidates=[],
+                    reasoning=reasoning,
+                )
 
         return validated_answer, call_dict
 
-    def reranker_sic(  # noqa: PLR0913
+    async def reranker_sic(  # noqa: PLR0913
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
@@ -622,15 +695,14 @@ class ClassificationLLM:
 
         if self.verbose:
             final_prompt = self.sic_prompt_reranker.format(**call_dict)
-            logger.debug("%s", final_prompt)
+            logger.debug(f"Final prompt: {final_prompt}")
 
         chain = self.sic_prompt_reranker | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
-            logger.exception(err)
-            logger.warning("Error from chain, exit early")
+            logger.error(f"Error from chain, exit early: {err}", error=str(err))
             validated_answer = RerankingResponse(
                 selected_codes=[],
                 excluded_codes=[],
@@ -640,7 +712,7 @@ class ClassificationLLM:
             return validated_answer, short_list, call_dict
 
         if self.verbose:
-            logger.debug("%s", response)
+            logger.debug(f"LLM response: {response}")
 
         # Parse the output to the desired format
         parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
@@ -649,8 +721,12 @@ class ClassificationLLM:
         try:
             validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
-            logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response.content)
+            logger.error(
+                f"Failed to parse response: {parse_error}", error=str(parse_error)
+            )
+            logger.warning(
+                "Failed to parse response", response_content=str(response.content)
+            )
 
             reasoning = (
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
@@ -664,7 +740,7 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    def final_sic_code(  # noqa: PLR0913
+    async def final_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
@@ -747,15 +823,14 @@ class ClassificationLLM:
 
         if self.verbose:
             final_prompt = self.sic_prompt_final.format(**call_dict)
-            logger.debug(final_prompt)
+            logger.debug(f"Final prompt: {final_prompt}")
 
         chain = self.sic_prompt_final | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
-            logger.exception(err)
-            logger.warning("Error from chain, exit early")
+            logger.error(f"Error from chain, exit early: {err}", error=str(err))
             validated_answer = FinalSICAssignment(
                 codable=False,
                 unambiguous_code="N/A",
@@ -766,15 +841,19 @@ class ClassificationLLM:
             return validated_answer, call_dict
 
         if self.verbose:
-            logger.debug("llm_response=%s", response)
+            logger.debug(f"llm_response={response}")
 
         # Parse the output to the desired format
         parser = PydanticOutputParser(pydantic_object=FinalSICAssignment)  # type: ignore
         try:
             validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
-            logger.exception(parse_error)
-            logger.warning("Failed to parse response:\n%s", response.content)
+            logger.error(
+                f"Failed to parse response: {parse_error}", error=str(parse_error)
+            )
+            logger.warning(
+                "Failed to parse response", response_content=str(response.content)
+            )
 
             reasoning = (
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
@@ -789,12 +868,13 @@ class ClassificationLLM:
 
         return validated_answer, call_dict
 
-    def formulate_open_question(
+    async def formulate_open_question(
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
         llm_output: Optional[SicCandidate] = None,
+        correlation_id: Optional[str] = None,
     ) -> tuple[OpenFollowUp, Any]:
         """Formulates an open-ended question using respondent data and survey design guidelines.
 
@@ -803,6 +883,7 @@ class ClassificationLLM:
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
             llm_output (SicCandidate, optional): The response from the LLM model.
+            correlation_id (str, optional): Optional correlation ID for request tracking.
 
         Returns:
             OpenFollowUp: The generated response to the query.
@@ -848,27 +929,65 @@ class ClassificationLLM:
 
         chain = self.sic_prompt_openfollowup | self.llm
 
+        # Log LLM request sent
+        logger.info(
+            "LLM request sent - formulate_open_question",
+            job_title=truncate_identifier(job_title),
+            job_description=truncate_identifier(job_description),
+            industry_descr=truncate_identifier(industry_descr),
+            correlation_id=correlation_id or "",
+        )
+        llm_start = time.perf_counter()
+
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
-            logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.error(
+                f"Error from LLMChain, exit early: {err}",
+                error=str(err),
+                correlation_id=correlation_id or "",
+            )
+            logger.warning(
+                "Error from LLMChain, exit early",
+                correlation_id=correlation_id or "",
+            )
             validated_answer = OpenFollowUp(
                 followup=None,
                 reasoning="Error from LLMChain, exit early",
             )
             return validated_answer, call_dict
 
-        if self.verbose:
-            logger.debug(f"{response=}")
+        llm_duration_ms = int((time.perf_counter() - llm_start) * 1000)
 
         # Parse the output to the desired format
         parser = PydanticOutputParser(pydantic_object=OpenFollowUp)
         try:
             validated_answer = parser.parse(str(response.content))
+            # Log LLM response received after successful parse
+            has_followup = bool(getattr(validated_answer, "followup", None))
+            logger.info(
+                "LLM response received for open question prompt",
+                has_followup=str(has_followup),
+                duration_ms=str(llm_duration_ms),
+                correlation_id=correlation_id or "",
+            )
         except ValueError as parse_error:
-            logger.exception(parse_error)
-            logger.warning(f"Failed to parse response:\n{response.content}")
+            logger.error(
+                f"Failed to parse response: {parse_error}",
+                error=str(parse_error),
+                correlation_id=correlation_id or "",
+            )
+            logger.warning(
+                "Failed to parse response",
+                response_content=str(response.content),
+                correlation_id=correlation_id or "",
+            )
+            logger.info(
+                "LLM response received for open question prompt",
+                has_followup="False",
+                duration_ms=str(llm_duration_ms),
+                correlation_id=correlation_id or "",
+            )
 
             reasoning = (
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
@@ -878,14 +997,18 @@ class ClassificationLLM:
                 reasoning=reasoning,
             )
 
+        if self.verbose:
+            logger.debug(f"{response=}")
+
         return validated_answer, call_dict
 
-    def formulate_closed_question(
+    async def formulate_closed_question(
         self,
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
         llm_output: Optional[UnambiguousResponse] = None,
+        correlation_id: Optional[str] = None,
     ) -> tuple[ClosedFollowUp, Any]:
         """Formulates a closed follow-up question using respondent data
             and survey design guidelines.
@@ -895,6 +1018,7 @@ class ClassificationLLM:
             job_title (str, optional): The job title. Defaults to None.
             job_description (str, optional): The job description. Defaults to None.
             llm_output (UnambiguousResponse, optional): The response from the LLM model.
+            correlation_id (str, optional): Optional correlation ID for request tracking.
 
         Returns:
             ClosedFollowUp: The generated response to the query.
@@ -936,15 +1060,22 @@ class ClassificationLLM:
 
         if self.verbose:
             final_prompt = self.sic_prompt_closedfollowup.format(**call_dict)
-            logger.debug(final_prompt)
+            logger.debug(f"Final prompt: {final_prompt}")
 
         chain = self.sic_prompt_closedfollowup | self.llm
 
         try:
-            response = chain.invoke(call_dict, return_only_outputs=True)
+            response = await chain.ainvoke(call_dict, return_only_outputs=True)
         except ValueError as err:
-            logger.exception(err)
-            logger.warning("Error from LLMChain, exit early")
+            logger.error(
+                f"Error from LLMChain, exit early: {err}",
+                error=str(err),
+                correlation_id=correlation_id or "",
+            )
+            logger.warning(
+                "Error from LLMChain, exit early",
+                correlation_id=correlation_id or "",
+            )
             validated_answer = ClosedFollowUp(
                 followup=None,
                 sic_options=[],
@@ -960,8 +1091,16 @@ class ClassificationLLM:
         try:
             validated_answer = parser.parse(str(response.content))
         except ValueError as parse_error:
-            logger.exception(parse_error)
-            logger.warning(f"Failed to parse response:\n{response.content}")
+            logger.error(
+                f"Failed to parse response: {parse_error}",
+                error=str(parse_error),
+                correlation_id=correlation_id or "",
+            )
+            logger.warning(
+                "Failed to parse response",
+                response_content=str(response.content),
+                correlation_id=correlation_id or "",
+            )
 
             reasoning = (
                 f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"

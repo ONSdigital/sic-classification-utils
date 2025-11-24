@@ -1,5 +1,6 @@
 """This module provides illustration for the use of final SIC assignment prompt with an LLM."""
 
+import asyncio
 from pprint import pprint
 
 from industrial_classification_utils.llm.llm import ClassificationLLM
@@ -40,15 +41,17 @@ SIC_CANDIDATES = [
 
 uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
 
-sa_response = uni_chat.final_sic_code(
-    industry_descr=ORG_DESCRIPTION,
-    job_title=JOB_TITLE,
-    job_description=JOB_DESCRIPTION,
-    sic_candidates=str(SIC_CANDIDATES),
-    # open_question=OPEN_QUESTION,
-    # answer_to_open_question=ANSWER_TO_OPEN_QUESTION,
-    # closed_question=CLOSED_QUESTION,
-    # answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
+sa_response = asyncio.run(
+    uni_chat.final_sic_code(
+        industry_descr=ORG_DESCRIPTION,
+        job_title=JOB_TITLE,
+        job_description=JOB_DESCRIPTION,
+        sic_candidates=str(SIC_CANDIDATES),
+        open_question=OPEN_QUESTION,
+        answer_to_open_question=ANSWER_TO_OPEN_QUESTION,
+        closed_question=CLOSED_QUESTION,
+        answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
+    )
 )
 
 pprint(sa_response[0].model_dump(), indent=2, width=80)
