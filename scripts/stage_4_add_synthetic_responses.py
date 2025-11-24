@@ -152,6 +152,7 @@ if __name__ == "__main__":
                 completed_batches=(batch_id + 1 + start_batch_id),
             )
 
+    # # concatenate industry description, follow up question and follow up answer
     # df["merged_industry_desc"] = (
     #     df["merged_industry_desc"]
     #     .str.rstrip(".")

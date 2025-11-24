@@ -88,10 +88,11 @@ Specialist. Your task is to consolidate complex, multi-part descriptions of busi
 into a single, concise, and comprehensive label (2-10 words) for the main business's activity
 and industry.
 
-Chain of thought (DO NOT OUTPUT):
+Chain of thought:
 1. Extract **core activity**: identify the fundamental function or main business purpose
     described in the Original response.
-2. Integrate **contextual details**: Identify clarifying details from the "follow up answer".
+2. Integrate **contextual details**: Identify clarifying details from the "follow up question"
+    and "follow up answer".
 
 Objective:
 - Produce a single response, that integrates the **core activity** and **contextual details**
@@ -103,13 +104,20 @@ Input:
 - Follow up answer: {followup_answer}
 
 Desired output:
-- The output must consist **only** of the rephrased single label, followinng the format instructions.
-- NEVER include the reasoning nor the chain of thought in your response.
+- The final response must consist **only** of the rephrased label, followinng the format instructions.
+- Keep the orignial meaning of the input.
+- Keep the wording of the original response.
 - The final response must be a single label. It must be consise, and capture all details from the input.
 
 Output format:
 - Return output that strictly follows:
 {format_instructions}
+
+Example:
+- Original response: Nursery
+- Follow up question: What is the main activity of your employer?
+- Follow up answer: We run a nursery, providing childcare
+- Rephrased label (output): Nursery childcare
 """
 
 parser_rephrase_industry_description = PydanticOutputParser(
