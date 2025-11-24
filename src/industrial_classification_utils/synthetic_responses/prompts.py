@@ -109,15 +109,15 @@ Desired output:
 - Keep the wording of the original response.
 - The final response must be a single label. It must be consise, and capture all details from the input.
 
-Output format:
-- Return output that strictly follows:
-{format_instructions}
-
 Example:
 - Original response: Nursery
 - Follow up question: What is the main activity of your employer?
-- Follow up answer: We run a nursery, providing childcare
-- Rephrased label (output): Nursery childcare
+- Follow up answer: We run a nursery, providing childcare and early education
+- Rephrased label (output): Nursery childcare with early education
+
+Output format:
+- Return output that strictly follows:
+{format_instructions}
 """
 
 parser_rephrase_industry_description = PydanticOutputParser(
