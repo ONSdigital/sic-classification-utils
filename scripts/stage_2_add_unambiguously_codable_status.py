@@ -26,7 +26,7 @@ Example Usage:
    python stage_2_add_unambiguously_codable_status.py \
         -n my_output \
         -b 200 \
-        -s 0 \
+        -s \
         persisted_dataframe.parquet \
         persisted_metadata.json \
         output_folder
@@ -34,7 +34,7 @@ Example Usage:
    where:
      - `-n my_output` sets the output filename prefix to "my_output".
      - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
-     - `-s 0` specifies the first run of the stage.
+     - `-s` get final_sic (if `-s` absent, run initial stage).
      - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
      - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
      - `output_folder` is the directory where results will be saved.

@@ -31,7 +31,7 @@ Example Usage:
    where:
      - `-n my_output` sets the output filename prefix to "my_output".
      - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
-     - `-s 0` specifies the first run of the stage.
+     - `-s` specifies the second run of the stage. If `-s` absent - first run.
      - `input.csv` is the input CSV file.
      - `initial_metadata.json` is the JSON file containing the initial processing metadata.
        An example is shown below.

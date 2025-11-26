@@ -81,9 +81,9 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
     parser.add_argument(
         "--second_run",
         "-s",
-        type=bool,
+        action="store_true",
         default=False,
-        help="""Select True if running this stage for the second time.
+        help="""Select if running this stage for the second time.
             For STG1 adds second_semantic_search_results, for STG2 runs final classification.""",
     )
     return parser.parse_args()
