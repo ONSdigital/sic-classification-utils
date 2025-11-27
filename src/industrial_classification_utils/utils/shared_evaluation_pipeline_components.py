@@ -298,6 +298,7 @@ def _delete_folder_contents(folder_path: str) -> None:
 
 def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     restart: bool,
+    second_run: bool,
     output_folder: str,
     output_shortname: str,
     input_parquet_file: str,
@@ -305,7 +306,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     batch_size: int,
     stage_id: Optional[str] = "stage_k",
     is_stage_1: Optional[bool] = False,
-) -> tuple[pd.DataFrame, dict, int, bool]:
+) -> tuple[pd.DataFrame, dict, int, bool, bool]:
     """Sets up the initial state for a pipeline stage.
 
     This function handles the logic for starting a processing job, either by
@@ -316,6 +317,7 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     Args:
         restart (bool): Flag to indicate whether to attempt a restart from a
             checkpoint.
+        second_run (bool): Flag to indicate the first or second run of the stage.
         output_folder (str): The path to the specified output folder.
         output_shortname (str): The prefix for the output filenames.
         input_parquet_file (str): The path to the persisted dataframe file from
@@ -369,10 +371,12 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         )
         print("Input loaded")
 
+    second_run_variables = bool(1) if second_run else bool(0)
+
     start_batch_id = (
         0
         if (not restart) or (not restart_successful)
         else checkpoint_info["completed_batches"]  # type: ignore
     )
 
-    return df, metadata, start_batch_id, restart_successful
+    return df, metadata, start_batch_id, restart_successful, second_run_variables

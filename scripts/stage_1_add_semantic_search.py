@@ -23,7 +23,7 @@ Example Usage:
    python stage_1_add_semantic_search.py \
         -n my_output \
         -b 200 \
-        -s 0 \
+        -s \
         input.csv \
         initial_metadata.json \
         output_folder
@@ -213,21 +213,24 @@ if __name__ == "__main__":
     check_vector_store_ready()
     print("Vector store is ready")
 
-    semantic_search = (
-        "semantic_search_results"
-        if args.second_run == 0
-        else "second_semantic_search_results"
+    df, metadata, start_batch_id, restart_successful, second_run_variables = (
+        set_up_initial_state(
+            args.restart,
+            args.second_run,
+            args.output_folder,
+            args.output_shortname,
+            args.input_parquet_file,
+            args.input_metadata_json,
+            args.batch_size,
+            stage_id="stage_1",
+            is_stage_1=True,
+        )
     )
 
-    df, metadata, start_batch_id, restart_successful = set_up_initial_state(
-        args.restart,
-        args.output_folder,
-        args.output_shortname,
-        args.input_parquet_file,
-        args.input_metadata_json,
-        args.batch_size,
-        stage_id="stage_1",
-        is_stage_1=True,
+    semantic_search = (  # pylint: disable=C0103
+        "second_semantic_search_results"
+        if second_run_variables
+        else "semantic_search_results"
     )
 
     # Make a merged industry description column:

@@ -113,14 +113,17 @@ if __name__ == "__main__":
     args = parse_args("STG4")
 
     job_description_rephrased = []
-    df, metadata, start_batch_id, restart_successful = set_up_initial_state(
-        args.restart,
-        args.output_folder,
-        args.output_shortname,
-        args.input_parquet_file,
-        args.input_metadata_json,
-        args.batch_size,
-        stage_id="stage_4",
+    df, metadata, start_batch_id, restart_successful, second_run_variables = (
+        set_up_initial_state(
+            args.restart,
+            args.second_run,
+            args.output_folder,
+            args.output_shortname,
+            args.input_parquet_file,
+            args.input_metadata_json,
+            args.batch_size,
+            stage_id="stage_4",
+        )
     )
     print("getting synthetic responses to followup questions...")
     if (not args.restart) or (not restart_successful):

@@ -160,14 +160,17 @@ def get_alt_sic_candidates(row: pd.Series) -> str:
 
 if __name__ == "__main__":
     args = parse_args("STG2")
-    df, metadata, start_batch_id, restart_successful = set_up_initial_state(
-        args.restart,
-        args.output_folder,
-        args.output_shortname,
-        args.input_parquet_file,
-        args.input_metadata_json,
-        args.batch_size,
-        stage_id="stage_2",
+    df, metadata, start_batch_id, restart_successful, second_run_variables = (
+        set_up_initial_state(
+            args.restart,
+            args.second_run,
+            args.output_folder,
+            args.output_shortname,
+            args.input_parquet_file,
+            args.input_metadata_json,
+            args.batch_size,
+            stage_id="stage_2",
+        )
     )
 
     print("Running RAG SIC allocation...")

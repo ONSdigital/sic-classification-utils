@@ -80,14 +80,10 @@ tqdm.pandas()
 
 
 # This new async function processes a whole batch of rows concurrently.
-async def get_unambiguous_sic_batch_async(batch: pd.DataFrame) -> list[dict[str, Any]]:
+async def get_unambiguous_sic_batch_async(
+    batch: pd.DataFrame, semantic_search
+) -> list[dict[str, Any]]:
     """Processes a batch of rows asynchronously to get unambiguous SIC codability."""
-    semantic_search = (
-        "semantic_search_results"
-        if args.second_run == 0
-        else "second_semantic_search_results"
-    )
-
     # 1. Create a task for each row in the batch
     tasks = []
     for _, row in batch.iterrows():
@@ -192,26 +188,31 @@ async def main():
     print("Classification LLM loaded.")
     args = parse_args("STG2")
 
-    df, metadata, start_batch_id, restart_successful = set_up_initial_state(
-        args.restart,
-        args.output_folder,
-        args.output_shortname,
-        args.input_parquet_file,
-        args.input_metadata_json,
-        args.batch_size,
-        stage_id="stage_2",
+    df, metadata, start_batch_id, restart_successful, second_run_variables = (
+        set_up_initial_state(
+            args.restart,
+            args.second_run,
+            args.output_folder,
+            args.output_shortname,
+            args.input_parquet_file,
+            args.input_metadata_json,
+            args.batch_size,
+            stage_id="stage_2",
+        )
     )
 
     print("running unamibuous codability analysis...")
 
-    if args.second_run == 0:
-        SIC_CODE = "initial_code"  # pylint: disable=invalid-name
-        CODABLE = "unambiguously_codable"  # pylint: disable=invalid-name
-        ALT_CANDIDATES = "alt_sic_candidates"  # pylint: disable=invalid-name
-    else:
+    if second_run_variables:
         SIC_CODE = "final_code"  # pylint: disable=invalid-name
         CODABLE = "unambiguously_codable_final"  # pylint: disable=invalid-name
         ALT_CANDIDATES = "higher_level_final_sic"  # pylint: disable=invalid-name
+        semantic_search = "second_semantic_search_results"
+    else:
+        SIC_CODE = "initial_code"  # pylint: disable=invalid-name
+        CODABLE = "unambiguously_codable"  # pylint: disable=invalid-name
+        ALT_CANDIDATES = "alt_sic_candidates"  # pylint: disable=invalid-name
+        semantic_search = "semantic_search_results"
 
     if (not args.restart) or (not restart_successful):
         df["intermediate_unambig_results"] = {
@@ -231,14 +232,14 @@ async def main():
             )
         )
     ):
-        if args.second_run == 0:
+        if not second_run_variables:
             print(f" running initial classification, batch {batch_id}")
             # A quirk of the np.split approach is that the first batch will contain all
             # of the processed rows so far, so can be skipped
             if batch_id == 0:
                 pass
             else:
-                results = await get_unambiguous_sic_batch_async(batch)
+                results = await get_unambiguous_sic_batch_async(batch, semantic_search)
                 batch.loc[batch.index, "intermediate_unambig_results"] = results
                 df.loc[batch.index, "unambiguously_codable"] = batch.apply(
                     get_unambiguous_status, axis=1
@@ -260,12 +261,12 @@ async def main():
             if batch_id == 0:
                 pass
             else:
-                results = await get_unambiguous_sic_batch_async(batch)
+                results = await get_unambiguous_sic_batch_async(batch, semantic_search)
                 batch.loc[batch.index, "intermediate_unambig_results"] = results
                 df.loc[batch.index, "unambiguously_codable_final"] = batch.apply(
                     get_unambiguous_status, axis=1
                 )
-                df.loc[batch.index, "code"] = batch.apply(get_sic_code, axis=1)
+                df.loc[batch.index, "final_code"] = batch.apply(get_sic_code, axis=1)
                 # df.loc[batch.index, "higher_level_final_sic"] = batch.apply(
                 #     get_higher_level_sic_code, axis=1
                 # )

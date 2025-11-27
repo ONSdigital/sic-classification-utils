@@ -111,8 +111,15 @@ async def main():
 
     args = parse_args("STG3")
 
-    df, metadata, start_batch_id, restart_successful = set_up_initial_state(
+    (
+        df,
+        metadata,
+        start_batch_id,
+        restart_successful,
+        second_run_variables,  # pylint: disable=W0612
+    ) = set_up_initial_state(
         args.restart,
+        args.second_run,
         args.output_folder,
         args.output_shortname,
         args.input_parquet_file,
