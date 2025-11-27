@@ -570,7 +570,7 @@ class ClassificationLLM:
                 duration_ms=str(llm_duration_ms),
                 correlation_id=correlation_id or "",
             )
-        except ValueError as parse_error:
+        except (ValueError, AttributeError) as parse_error:
             logger.error(
                 f"Failed to parse response: {parse_error}",
                 error=str(parse_error),
@@ -847,7 +847,7 @@ class ClassificationLLM:
         parser = PydanticOutputParser(pydantic_object=FinalSICAssignment)  # type: ignore
         try:
             validated_answer = parser.parse(str(response.content))
-        except ValueError as parse_error:
+        except (ValueError, AttributeError) as parse_error:
             logger.error(
                 f"Failed to parse response: {parse_error}", error=str(parse_error)
             )
@@ -855,16 +855,37 @@ class ClassificationLLM:
                 "Failed to parse response", response_content=str(response.content)
             )
 
-            reasoning = (
-                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
-            )
-            validated_answer = FinalSICAssignment(
-                codable=False,
-                unambiguous_code="N/A",
-                unambiguous_code_descriptive="N/A",
-                higher_level_code="N/A",
-                reasoning=reasoning,
-            )
+            try:
+                chain = FIX_PARSING_PROMPT | self.llm
+                response = await chain.ainvoke(
+                    {
+                        "llm_output": str(response.content),
+                        "format_instructions": parser.get_format_instructions(),
+                    },
+                    return_only_outputs=True,
+                )
+                validated_answer = parser.parse(str(response.content))
+                logger.debug("Successfully parsed reformatted response.")
+
+            except (ValueError, AttributeError) as parse_error2:
+                logger.error(
+                    f"Failed to parse response again: {parse_error2}",
+                    error=str(parse_error2),
+                )
+                logger.warning(
+                    "Failed to parse response again",
+                    response_content=str(response.content),
+                )
+                reasoning = (
+                    f"ERROR parse_error=<{parse_error2}>, response=<{response.content}>"
+                )
+                validated_answer = FinalSICAssignment(
+                    codable=False,
+                    unambiguous_code="N/A",
+                    unambiguous_code_descriptive="N/A",
+                    higher_level_code="N/A",
+                    reasoning=reasoning,
+                )
 
         return validated_answer, call_dict
 
@@ -941,7 +962,7 @@ class ClassificationLLM:
 
         try:
             response = await chain.ainvoke(call_dict, return_only_outputs=True)
-        except ValueError as err:
+        except (ValueError, AttributeError) as err:
             logger.error(
                 f"Error from LLMChain, exit early: {err}",
                 error=str(err),
@@ -971,7 +992,7 @@ class ClassificationLLM:
                 duration_ms=str(llm_duration_ms),
                 correlation_id=correlation_id or "",
             )
-        except ValueError as parse_error:
+        except (ValueError, AttributeError) as parse_error:
             logger.error(
                 f"Failed to parse response: {parse_error}",
                 error=str(parse_error),
@@ -988,14 +1009,34 @@ class ClassificationLLM:
                 duration_ms=str(llm_duration_ms),
                 correlation_id=correlation_id or "",
             )
+            try:
+                chain = FIX_PARSING_PROMPT | self.llm
+                response = await chain.ainvoke(
+                    {
+                        "llm_output": str(response.content),
+                        "format_instructions": parser.get_format_instructions(),
+                    },
+                    return_only_outputs=True,
+                )
+                validated_answer = parser.parse(str(response.content))
+                logger.debug("Successfully parsed reformatted response.")
 
-            reasoning = (
-                f"ERROR parse_error=<{parse_error}>, response=<{response.content}>"
-            )
-            validated_answer = OpenFollowUp(
-                followup=None,
-                reasoning=reasoning,
-            )
+            except (ValueError, AttributeError) as parse_error2:
+                logger.error(
+                    f"Failed to parse response again: {parse_error2}",
+                    error=str(parse_error2),
+                )
+                logger.warning(
+                    "Failed to parse response again",
+                    response_content=str(response.content),
+                )
+                reasoning = (
+                    f"ERROR parse_error=<{parse_error2}>, response=<{response.content}>"
+                )
+                validated_answer = OpenFollowUp(
+                    followup=None,
+                    reasoning=reasoning,
+                )
 
         if self.verbose:
             logger.debug(f"{response=}")
