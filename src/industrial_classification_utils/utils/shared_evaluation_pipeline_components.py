@@ -67,9 +67,9 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
         "--batch_size",
         "-b",
         type=int,
-        default=50,
+        default=10,
         help="save the output every X rows, as a checkpoint that can be used to restart the "
-        "processing job if needed (optional, default: 50)",
+        "processing job if needed (optional, default: 10)",
     )
     parser.add_argument(
         "--restart",
