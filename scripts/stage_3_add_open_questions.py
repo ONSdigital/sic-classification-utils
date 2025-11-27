@@ -125,11 +125,15 @@ async def main():
     if (not args.restart) or (not restart_successful):
         df["followup_question"] = ""
 
+    df_uncodable = df[~df["unambiguously_codable"]]
+
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
-                df,
-                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+                df_uncodable,
+                np.arange(
+                    start_batch_id * args.batch_size, len(df_uncodable), args.batch_size
+                ),
             )
         )
     ):
