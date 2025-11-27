@@ -155,15 +155,6 @@ if __name__ == "__main__":
                 completed_batches=(batch_id + 1 + start_batch_id),
             )
 
-    # # concatenate industry description, follow up question and follow up answer
-    # df["merged_industry_desc"] = (
-    #     df["merged_industry_desc"]
-    #     .str.rstrip(".")
-    #     .str.cat(df["followup_question"].str.lower(), sep=", Question: ")
-    #     .str.cat(df["followup_answer"].str.lower(), sep=", Answer: ")
-    # .str.rstrip(".").str.cat(df["followup_answer"].str.lower(), sep=", ")
-    # )
-
     # rephrase new job description
     for batch_id, batch in tqdm(
         enumerate(
