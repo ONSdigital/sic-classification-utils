@@ -234,7 +234,7 @@ if __name__ == "__main__":
     )
 
     # Make a merged industry description column:
-    if "merged_industry_desc" not in df:
+    if MERGED_INDUSTRY_DESC_COL not in df:
         df[MERGED_INDUSTRY_DESC_COL] = df.apply(make_merged_industry_desc, axis=1)
     # Clean the Survey Response columns:
     df[INDUSTRY_DESCR_COL] = df[INDUSTRY_DESCR_COL].apply(clean_text)

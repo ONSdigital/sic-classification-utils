@@ -371,12 +371,10 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         )
         print("Input loaded")
 
-    second_run_variables = bool(1) if second_run else bool(0)
-
     start_batch_id = (
         0
         if (not restart) or (not restart_successful)
         else checkpoint_info["completed_batches"]  # type: ignore
     )
 
-    return df, metadata, start_batch_id, restart_successful, second_run_variables
+    return df, metadata, start_batch_id, restart_successful, second_run

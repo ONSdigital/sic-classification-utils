@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # pylint: disable=duplicate-code
+# pylint: disable=invalid-name
 """This script analyzes a dataset to determine if each record is
 "unambiguously codable" for a Standard Industrial Classification (SIC) code.
 
@@ -110,7 +111,11 @@ async def get_unambiguous_sic_batch_async(
                 "unambiguously_codable": sa_response.codable,
                 "code": sa_response.class_code,
                 "alt_candidates": [
-                    {"code": i.class_code, "title": i.class_descriptive}
+                    {
+                        "code": i.class_code,
+                        "title": i.class_descriptive,
+                        "likelihood": i.likelihood,
+                    }
                     for i in sa_response.alt_candidates
                 ],
             }
@@ -204,14 +209,14 @@ async def main():
     print("running unamibuous codability analysis...")
 
     if second_run_variables:
-        SIC_CODE = "final_code"  # pylint: disable=invalid-name
-        CODABLE = "unambiguously_codable_final"  # pylint: disable=invalid-name
-        ALT_CANDIDATES = "higher_level_final_sic"  # pylint: disable=invalid-name
+        SIC_CODE = "final_code"
+        CODABLE = "unambiguously_codable_final"
+        ALT_CANDIDATES = "alt_sic_candidates_final"
         semantic_search = "second_semantic_search_results"
     else:
-        SIC_CODE = "initial_code"  # pylint: disable=invalid-name
-        CODABLE = "unambiguously_codable"  # pylint: disable=invalid-name
-        ALT_CANDIDATES = "alt_sic_candidates"  # pylint: disable=invalid-name
+        SIC_CODE = "initial_code"
+        CODABLE = "unambiguously_codable"
+        ALT_CANDIDATES = "alt_sic_candidates"
         semantic_search = "semantic_search_results"
 
     if (not args.restart) or (not restart_successful):
@@ -232,52 +237,26 @@ async def main():
             )
         )
     ):
-        if not second_run_variables:
-            print(f" running initial classification, batch {batch_id}")
-            # A quirk of the np.split approach is that the first batch will contain all
-            # of the processed rows so far, so can be skipped
-            if batch_id == 0:
-                pass
-            else:
-                results = await get_unambiguous_sic_batch_async(batch, semantic_search)
-                batch.loc[batch.index, "intermediate_unambig_results"] = results
-                df.loc[batch.index, "unambiguously_codable"] = batch.apply(
-                    get_unambiguous_status, axis=1
-                )
-                df.loc[batch.index, "initial_code"] = batch.apply(get_sic_code, axis=1)
-                df.loc[batch.index, "alt_sic_candidates"] = batch.apply(
-                    get_alt_sic_candidates, axis=1
-                )
-                persist_results(
-                    df,
-                    metadata,
-                    args.output_folder,
-                    args.output_shortname,
-                    is_final=False,
-                    completed_batches=(batch_id + 1 + start_batch_id),
-                )
+        # A quirk of the np.split approach is that the first batch will contain all
+        # of the processed rows so far, so can be skipped
+        if batch_id == 0:
+            pass
         else:
-            print(f" running final classification, batch {batch_id}")
-            if batch_id == 0:
-                pass
-            else:
-                results = await get_unambiguous_sic_batch_async(batch, semantic_search)
-                batch.loc[batch.index, "intermediate_unambig_results"] = results
-                df.loc[batch.index, "unambiguously_codable_final"] = batch.apply(
-                    get_unambiguous_status, axis=1
-                )
-                df.loc[batch.index, "final_code"] = batch.apply(get_sic_code, axis=1)
-                # df.loc[batch.index, "higher_level_final_sic"] = batch.apply(
-                #     get_higher_level_sic_code, axis=1
-                # )
-                persist_results(
-                    df,
-                    metadata,
-                    args.output_folder,
-                    args.output_shortname,
-                    is_final=False,
-                    completed_batches=(batch_id + 1 + start_batch_id),
-                )
+            results = await get_unambiguous_sic_batch_async(batch, semantic_search)
+            batch.loc[batch.index, "intermediate_unambig_results"] = results
+            df.loc[batch.index, CODABLE] = batch.apply(get_unambiguous_status, axis=1)
+            df.loc[batch.index, SIC_CODE] = batch.apply(get_sic_code, axis=1)
+            df.loc[batch.index, ALT_CANDIDATES] = batch.apply(
+                get_alt_sic_candidates, axis=1
+            )
+            persist_results(
+                df,
+                metadata,
+                args.output_folder,
+                args.output_shortname,
+                is_final=False,
+                completed_batches=(batch_id + 1 + start_batch_id),
+            )
 
     print("unambiguous coding analysis is complete")
     print("deleting temporary DataFrame column...")
