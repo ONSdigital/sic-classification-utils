@@ -69,6 +69,7 @@ MODEL_LOCATION = "europe-west9"
 
 CODE_DIGITS = 5
 CANDIDATES_LIMIT = 10
+MAX_BATCH_SIZE = 10
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
@@ -206,6 +207,12 @@ async def main():
         )
     )
 
+    if args.batch_size > MAX_BATCH_SIZE:
+        print(f"batch size too large. lower batch size to {MAX_BATCH_SIZE}")
+        batch_size_async = MAX_BATCH_SIZE
+    else:
+        batch_size_async = args.batch_size
+
     print("running unamibuous codability analysis...")
 
     if second_run_variables:
@@ -233,7 +240,7 @@ async def main():
         enumerate(
             np.split(
                 df,
-                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+                np.arange(start_batch_id * batch_size_async, len(df), batch_size_async),
             )
         )
     ):

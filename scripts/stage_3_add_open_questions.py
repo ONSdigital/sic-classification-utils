@@ -59,6 +59,7 @@ MODEL_LOCATION = "europe-west1"
 
 CODE_DIGITS = 5
 CANDIDATES_LIMIT = 10
+MAX_BATCH_SIZE = 10
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
@@ -128,6 +129,12 @@ async def main():
         stage_id="stage_3",
     )
 
+    if args.batch_size > MAX_BATCH_SIZE:
+        print(f"batch size too large. lower batch size to {MAX_BATCH_SIZE}")
+        batch_size_async = MAX_BATCH_SIZE
+    else:
+        batch_size_async = args.batch_size
+
     print("getting followup questions ...")
     if (not args.restart) or (not restart_successful):
         df["followup_question"] = ""
@@ -139,7 +146,9 @@ async def main():
             np.split(
                 df_uncodable,
                 np.arange(
-                    start_batch_id * args.batch_size, len(df_uncodable), args.batch_size
+                    start_batch_id * batch_size_async,
+                    len(df_uncodable),
+                    batch_size_async,
                 ),
             )
         )
