@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # pylint: disable=duplicate-code
-"""This script answers followup questions and persists the results.
-It reads reloads the output from the previous stage as a DataFrame object,
-answers the question in each row, creates a new column in the DataFrame
+"""This script rephrases industry description with followup questions and follow up answers,
+and persists the results. It reads reloads the output from the previous stage as a DataFrame
+object, rephrases each row, overwrites 'merged_industry_desc' column in the DataFrame
 with this information, and then saves the results to CSV, parquet, and
 JSON metadata files in a user-specified output folder.
 
@@ -57,34 +57,33 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 MODEL_NAME = "gemini-2.5-flash"
 MODEL_LOCATION = "europe-west1"
 
-INDUSTRY_DESCR_COL = "sic2007_employee"
-JOB_TITLE_COL = "soc2020_job_title"
-JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
+FOLLOWUP_QUESTION = "followup_question"
+FOLLOWUP_ANSWER = "followup_answer"
 #####################################################
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
 
 
-def get_followup_answer(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
-    """Answer followup question using the provided row data.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
+# pylint: disable=C0116 # the docstring is below
+def get_rephrased_id(row: pd.Series) -> str:
+    """Rephrase industry description with follow up question and follow up answer as a label.
 
     Args:
         row (pd.Series): A row from the input DataFrame containing the survey responses,
                          and the followup question.
-    Returns: llm_response (str).
+
+    Returns:
+        str: response (str)
     """
-    payload = {
-        "industry_descr": row[MERGED_INDUSTRY_DESC_COL],
-        "job_title": row[JOB_TITLE_COL],
-        "job_description": row[JOB_DESCRIPTION_COL],
-    }
-    if not row["unambiguously_codable"]:
-        answer_followup_prompt = SR.construct_prompt(payload, row["followup_question"])
-        return SR.answer_followup(answer_followup_prompt, payload).answer
-    return ""
+    if row[FOLLOWUP_QUESTION] != "":
+        return SR.rephrase_question_and_id(
+            row[MERGED_INDUSTRY_DESC_COL],
+            row[FOLLOWUP_QUESTION],
+            row[FOLLOWUP_ANSWER],
+        )[0]
+    return row[MERGED_INDUSTRY_DESC_COL]
 
 
 SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
@@ -102,14 +101,16 @@ if __name__ == "__main__":
             args.input_parquet_file,
             args.input_metadata_json,
             args.batch_size,
-            stage_id="stage_4",
+            stage_id="stage_5",
         )
     )
-    print("getting synthetic responses to followup questions...")
+    print(
+        "rephrasing industry description with follow up questions and followup answers..."
+    )
     if (not args.restart) or (not restart_successful):
-        df["followup_answer"] = ""
         df["industry_description_rephrased"] = ""
 
+    # rephrase new job description
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
@@ -118,13 +119,11 @@ if __name__ == "__main__":
             )
         )
     ):
-        # A quirk of the np.split approach is that the first batch will contain all
-        # of the processed rows so far, so can be skipped
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, "followup_answer"] = batch.apply(
-                get_followup_answer, axis=1
+            df.loc[batch.index, "industry_description_rephrased"] = batch.apply(
+                get_rephrased_id, axis=1
             )
             persist_results(
                 df,
@@ -134,6 +133,8 @@ if __name__ == "__main__":
                 is_final=False,
                 completed_batches=(batch_id + 1 + start_batch_id),
             )
+    df[MERGED_INDUSTRY_DESC_COL] = df["industry_description_rephrased"]
+    df.drop(columns=["industry_description_rephrased"], inplace=True)
 
     print("synthetic response generation is complete")
 
