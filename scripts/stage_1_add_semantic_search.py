@@ -233,13 +233,14 @@ if __name__ == "__main__":
         else "semantic_search_results"
     )
 
+    # Clean the Survey Response columns:
+    df[INDUSTRY_DESCR_COL] = df[INDUSTRY_DESCR_COL].apply(clean_text)
+    df[SELF_EMPLOYED_DESC_COL] = df[SELF_EMPLOYED_DESC_COL].apply(clean_text)
+    df[JOB_DESCRIPTION_COL] = df[JOB_DESCRIPTION_COL].apply(clean_text)
+    df[JOB_TITLE_COL] = df[JOB_TITLE_COL].apply(clean_text)
     # Make a merged industry description column:
     if MERGED_INDUSTRY_DESC_COL not in df:
         df[MERGED_INDUSTRY_DESC_COL] = df.apply(make_merged_industry_desc, axis=1)
-    # Clean the Survey Response columns:
-    df[INDUSTRY_DESCR_COL] = df[INDUSTRY_DESCR_COL].apply(clean_text)
-    df[JOB_DESCRIPTION_COL] = df[JOB_DESCRIPTION_COL].apply(clean_text)
-    df[JOB_TITLE_COL] = df[JOB_TITLE_COL].apply(clean_text)
     df[MERGED_INDUSTRY_DESC_COL] = df[MERGED_INDUSTRY_DESC_COL].apply(
         clean_text_industry
     )
