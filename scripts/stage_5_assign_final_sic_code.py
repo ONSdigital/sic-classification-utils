@@ -91,10 +91,10 @@ def assign_final_sic_code(row: pd.Series) -> dict:  # pylint: disable=C0103, W06
         job_title=row[JOB_TITLE_COL],
         job_description=row[JOB_DESCRIPTION_COL],
         sic_candidates=row[SIC_CANDIDATES_COL],
-        open_question=row[OPEN_QUESTION_COL],
-        answer_to_open_question=row[ANSWER_TO_OPEN_QUESTION_COL],
-        closed_question=CLOSED_QUESTION,
-        answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
+        # open_question=row[OPEN_QUESTION_COL],
+        # answer_to_open_question=row[ANSWER_TO_OPEN_QUESTION_COL],
+        # closed_question=CLOSED_QUESTION,
+        # answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
     )
     result = {
         "unambiguously_codable_final": sa_final_sic[0].codable,
@@ -156,14 +156,17 @@ print("Classification LLM loaded.")
 if __name__ == "__main__":
     args = parse_args("STG5")
 
-    df, metadata, start_batch_id, restart_successful = set_up_initial_state(
-        args.restart,
-        args.output_folder,
-        args.output_shortname,
-        args.input_parquet_file,
-        args.input_metadata_json,
-        args.batch_size,
-        stage_id="stage_k",
+    df, metadata, start_batch_id, restart_successful, second_run_variables = (
+        set_up_initial_state(
+            args.restart,
+            args.second_run,
+            args.output_folder,
+            args.output_shortname,
+            args.input_parquet_file,
+            args.input_metadata_json,
+            args.batch_size,
+            stage_id="stage_k",
+        )
     )
 
     print("running final SIC code assignment...")

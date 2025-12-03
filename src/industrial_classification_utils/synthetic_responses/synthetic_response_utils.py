@@ -57,12 +57,12 @@ from typing import Callable, Optional
 
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts.prompt import PromptTemplate
-from langchain_google_vertexai import VertexAI
+from langchain_google_vertexai import ChatVertexAI
 
 from industrial_classification_utils.embed.embedding import get_config
 
-from .prompts import make_followup_answer_prompt_pydantic
-from .response_models import FollowupAnswerResponse
+from .prompts import REPHRASE_INDUSTRY_DESCRIPTION, make_followup_answer_prompt_pydantic
+from .response_models import FollowupAnswerResponse, RephraseDescription
 
 logger = logging.getLogger(__name__)
 config = get_config()
@@ -103,16 +103,18 @@ class SyntheticResponder:
         self.get_question_function = get_question_function
         self.model_name = model_name
         self.instantiate_llm(model_name=self.model_name)
+        self.rephrase_desc = REPHRASE_INDUSTRY_DESCRIPTION
         logger.debug("SyntheticResponder initialised, connection to LLM established.")
 
     def instantiate_llm(self, model_name: str = "gemini-2.5-flash"):
         """Initialises a VertexAI instance."""
         try:
-            self.llm = VertexAI(
+            self.llm = ChatVertexAI(
                 model_name=model_name,
                 max_output_tokens=1_600,
                 temperature=0.0,
                 location="europe-west1",
+                model_kwargs={"thinking_budget": 0},  # Reduce latency
             )
         except Exception as e:
             logger.error("%s" % e)  # Noqa: UP031 # pylint: disable=C0209,W1201
@@ -141,7 +143,9 @@ class SyntheticResponder:
         logger.warning("No follow-up question provided")
         raise ValueError("No follow-up question provided.")
 
-    def answer_followup(self, prompt: PromptTemplate, body: dict | str) -> str:
+    def answer_followup(
+        self, prompt: PromptTemplate, body: dict | str
+    ) -> FollowupAnswerResponse:
         """Gets the LLM's response to the followup question,
         as specified in the constructed prompt.
         """
@@ -156,13 +160,13 @@ class SyntheticResponder:
             body = json.load(body)  # type: ignore[arg-type]
         call_dict = body.copy()  # type: ignore
         call_dict["followup_question"] = prompt.partial_variables["followup_question"]
-        chain = prompt | self.llm  # LLMChain(llm=self.llm, prompt=prompt)
+        chain = prompt | self.llm
         response = chain.invoke(call_dict, return_only_outputs=True)
         parser = PydanticOutputParser(  # type: ignore # Suspect langchain ver bug
             pydantic_object=FollowupAnswerResponse
         )
         try:
-            validated_answer = parser.parse(str(response)).answer
+            validated_answer = parser.parse(str(response.content))
             logger.debug("Answer received from LLM, and successfully parsed")
         except ValueError as parse_error:
             logger.error(  # pylint: disable=C0209,W1201
@@ -172,4 +176,50 @@ class SyntheticResponder:
                 "Failed to parse response:\n%s"  # pylint: disable=C0209,W1201 # Noqa: UP031
                 % response  # pylint: disable=C0209,W1201
             )  # pylint: disable=C0209,W1201
+            validated_answer = FollowupAnswerResponse(answer="")
         return validated_answer
+
+    # pylint: disable=R0801
+    def rephrase_question_and_id(
+        self,
+        industry_description: str,
+        followup_question: str,
+        followup_answer: str,
+    ) -> tuple[str, Optional[dict[str, str]]]:
+        """Rephrases the description with question and answer, to create an informative string.
+
+        Args:
+            industry_description (str): The industry description.
+            followup_question (str): Follow up question asked to the respondent.
+            followup_answer (str): Follow up answer given by the respondent.
+
+        Returns:
+            ReprhrasedDescription: The generated rephrased description.
+
+        Raises:
+            TODO
+        """
+        call_dict = {
+            "industry_description": industry_description,
+            "followup_question": followup_question,
+            "followup_answer": followup_answer,
+        }
+
+        chain = self.rephrase_desc | self.llm
+        try:
+            response = chain.invoke(call_dict, return_only_outputs=True)
+        except ValueError as err:
+            logger.exception(err)
+            logger.warning("Error from chain, exit early")
+            validated_answer = industry_description
+            return validated_answer, call_dict
+        parser = PydanticOutputParser(pydantic_object=RephraseDescription)  # type: ignore
+        try:
+            validated_answer = parser.parse(str(response.content)).industry_description
+        except ValueError as parse_error:
+            logger.exception(parse_error)
+            logger.warning("Failed to parse response:\n%s", response.content)
+            validated_answer = RephraseDescription(
+                industry_description=industry_description
+            ).industry_description
+        return validated_answer, call_dict

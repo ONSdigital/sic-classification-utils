@@ -9,7 +9,9 @@ request an LLM to answer a SIC follow-up question.
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts.prompt import PromptTemplate
 
-from .response_models import FollowupAnswerResponse
+from industrial_classification_utils.llm.prompt import _core_prompt
+
+from .response_models import FollowupAnswerResponse, RephraseDescription
 
 
 def _persona_prompt(persona) -> str:
@@ -78,3 +80,54 @@ def make_followup_answer_prompt_pydantic(
             "followup_question": followup_question,
         },
     )
+
+
+# pylint: disable=C0103
+_rephrase_industry_description = """You are an Expert Editorial Director and Information Synthesis
+Specialist. Your task is to consolidate complex, multi-part descriptions of business activity
+into a single, concise, and comprehensive label (2-10 words) for the main business's activity
+and industry.
+
+Chain of thought:
+1. Extract **core activity**: identify the fundamental function or main business purpose
+    described in the Original response.
+2. Integrate **contextual details**: Identify clarifying details from the "follow up question"
+    and "follow up answer".
+
+Objective:
+- Produce a single response, that integrates the **core activity** and **contextual details**
+    to fully describe the main activity of the business or organisation.
+
+Input:
+- Original response: {industry_description}
+- Follow up question: {followup_question}
+- Follow up answer: {followup_answer}
+
+Desired output:
+- The final response must consist **only** of the rephrased label, followinng the format instructions.
+- Keep the orignial meaning of the input.
+- Keep the wording of the original response.
+- The final response must be a single label. It must be consise, and capture all details from the input.
+
+Example:
+- Original response: Nursery
+- Follow up question: What is the main activity of your employer?
+- Follow up answer: We run a nursery, providing childcare and early education
+- Rephrased label (output): Nursery childcare with early education
+
+Output format:
+- Return output that strictly follows:
+{format_instructions}
+"""
+
+parser_rephrase_industry_description = PydanticOutputParser(
+    pydantic_object=RephraseDescription
+)
+
+
+REPHRASE_INDUSTRY_DESCRIPTION = PromptTemplate.from_template(
+    template=_core_prompt + _rephrase_industry_description,
+    partial_variables={
+        "format_instructions": parser_rephrase_industry_description.get_format_instructions(),
+    },
+)

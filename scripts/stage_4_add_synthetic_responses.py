@@ -81,12 +81,30 @@ def get_followup_answer(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
         "job_title": row[JOB_TITLE_COL],
         "job_description": row[JOB_DESCRIPTION_COL],
     }
-    if row["followup_question"] is not None:
+    if not row["unambiguously_codable"]:
         answer_followup_prompt = SR.construct_prompt(payload, row["followup_question"])
-        llm_response = SR.answer_followup(answer_followup_prompt, payload)
-    else:
-        llm_response = ""
-    return llm_response
+        return SR.answer_followup(answer_followup_prompt, payload).answer
+    return ""
+
+
+# pylint: disable=C0116 # the docstring is below
+def get_rephrased_id(row: pd.Series) -> str:
+    """Rephrase industry description with follow up question and follow up answer as a label.
+
+    Args:
+        row (pd.Series): A row from the input DataFrame containing the survey responses,
+                         and the followup question.
+
+    Returns:
+        str: response (str)
+    """
+    if row["followup_question"] != "":
+        return SR.rephrase_question_and_id(
+            row["merged_industry_desc"],
+            row["followup_question"],
+            row["followup_answer"],
+        )[0]
+    return row["merged_industry_desc"]
 
 
 SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
@@ -94,18 +112,23 @@ SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MOD
 if __name__ == "__main__":
     args = parse_args("STG4")
 
-    df, metadata, start_batch_id, restart_successful = set_up_initial_state(
-        args.restart,
-        args.output_folder,
-        args.output_shortname,
-        args.input_parquet_file,
-        args.input_metadata_json,
-        args.batch_size,
-        stage_id="stage_4",
+    job_description_rephrased = []
+    df, metadata, start_batch_id, restart_successful, second_run_variables = (
+        set_up_initial_state(
+            args.restart,
+            args.second_run,
+            args.output_folder,
+            args.output_shortname,
+            args.input_parquet_file,
+            args.input_metadata_json,
+            args.batch_size,
+            stage_id="stage_4",
+        )
     )
     print("getting synthetic responses to followup questions...")
     if (not args.restart) or (not restart_successful):
         df["followup_answer"] = ""
+        df["industry_description_rephrased"] = ""
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -131,6 +154,32 @@ if __name__ == "__main__":
                 is_final=False,
                 completed_batches=(batch_id + 1 + start_batch_id),
             )
+
+    # rephrase new job description
+    for batch_id, batch in tqdm(
+        enumerate(
+            np.split(
+                df,
+                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+            )
+        )
+    ):
+        if batch_id == 0:
+            pass
+        else:
+            df.loc[batch.index, "industry_description_rephrased"] = batch.apply(
+                get_rephrased_id, axis=1
+            )
+            persist_results(
+                df,
+                metadata,
+                args.output_folder,
+                args.output_shortname,
+                is_final=False,
+                completed_batches=(batch_id + 1 + start_batch_id),
+            )
+    df["merged_industry_desc"] = df["industry_description_rephrased"]
+    df.drop(columns=["industry_description_rephrased"], inplace=True)
 
     print("synthetic response generation is complete")
 

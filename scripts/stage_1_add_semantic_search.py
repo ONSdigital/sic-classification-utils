@@ -23,6 +23,7 @@ Example Usage:
    python stage_1_add_semantic_search.py \
         -n my_output \
         -b 200 \
+        -s \
         input.csv \
         initial_metadata.json \
         output_folder
@@ -30,6 +31,7 @@ Example Usage:
    where:
      - `-n my_output` sets the output filename prefix to "my_output".
      - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
+     - `-s` specifies the second run of the stage. If `-s` absent - first run.
      - `input.csv` is the input CSV file.
      - `initial_metadata.json` is the JSON file containing the initial processing metadata.
        An example is shown below.
@@ -98,6 +100,8 @@ def clean_text(text: str) -> str:
     Returns:
         str: The cleaned string.
     """
+    if isinstance(text, float):
+        text = ""
     text = text.replace("\n", " ")
     text = regex_sub(r"\s+", " ", text)
     text = text.lower()
@@ -209,23 +213,34 @@ if __name__ == "__main__":
     check_vector_store_ready()
     print("Vector store is ready")
 
-    df, metadata, start_batch_id, restart_successful = set_up_initial_state(
-        args.restart,
-        args.output_folder,
-        args.output_shortname,
-        args.input_parquet_file,
-        args.input_metadata_json,
-        args.batch_size,
-        stage_id="stage_1",
-        is_stage_1=True,
+    df, metadata, start_batch_id, restart_successful, second_run_variables = (
+        set_up_initial_state(
+            args.restart,
+            args.second_run,
+            args.output_folder,
+            args.output_shortname,
+            args.input_parquet_file,
+            args.input_metadata_json,
+            args.batch_size,
+            stage_id="stage_1",
+            is_stage_1=True,
+        )
     )
 
-    # Make a merged industry description column:
-    df[MERGED_INDUSTRY_DESC_COL] = df.apply(make_merged_industry_desc, axis=1)
+    semantic_search = (  # pylint: disable=C0103
+        "second_semantic_search_results"
+        if second_run_variables
+        else "semantic_search_results"
+    )
+
     # Clean the Survey Response columns:
     df[INDUSTRY_DESCR_COL] = df[INDUSTRY_DESCR_COL].apply(clean_text)
+    df[SELF_EMPLOYED_DESC_COL] = df[SELF_EMPLOYED_DESC_COL].apply(clean_text)
     df[JOB_DESCRIPTION_COL] = df[JOB_DESCRIPTION_COL].apply(clean_text)
     df[JOB_TITLE_COL] = df[JOB_TITLE_COL].apply(clean_text)
+    # Make a merged industry description column:
+    if MERGED_INDUSTRY_DESC_COL not in df:
+        df[MERGED_INDUSTRY_DESC_COL] = df.apply(make_merged_industry_desc, axis=1)
     df[MERGED_INDUSTRY_DESC_COL] = df[MERGED_INDUSTRY_DESC_COL].apply(
         clean_text_industry
     )
@@ -233,7 +248,7 @@ if __name__ == "__main__":
 
     print("running semantic search...")
     if (not args.restart) or (not restart_successful):
-        df["semantic_search_results"] = np.empty((len(df), 0)).tolist()
+        df[semantic_search] = np.empty((len(df), 0)).tolist()
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -248,7 +263,7 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, "semantic_search_results"] = batch.apply(
+            df.loc[batch.index, semantic_search] = batch.apply(
                 get_semantic_search_results, axis=1
             )
             persist_results(

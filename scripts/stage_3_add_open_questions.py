@@ -20,14 +20,14 @@ Example Usage:
    ```bash
    python stage_3_add_open_questions.py \
         -n my_output \
-        -b 200 \
+        -b 10 \
         persisted_dataframe.parquet \
         persisted_metadata.json \
         output_folder
    ```
    where:
      - `-n my_output` sets the output filename prefix to "my_output".
-     - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
+     - `-b 10` specifies to process in batches of 10 rows, checkpointing between batches.
      - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
      - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
      - `output_folder` is the directory where results will be saved.
@@ -39,6 +39,7 @@ Example Usage:
    (expect to see my_output.csv, my_output.parquet, and my_output_metadata.json)
 
 """
+import asyncio
 
 import numpy as np
 import pandas as pd
@@ -53,11 +54,12 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Constants:
-MODEL_NAME = "gemini-2.0-flash"
-MODEL_LOCATION = "europe-west9"
+MODEL_NAME = "gemini-2.5-flash"
+MODEL_LOCATION = "europe-west1"
 
 CODE_DIGITS = 5
 CANDIDATES_LIMIT = 10
+MAX_BATCH_SIZE = 10
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
@@ -69,42 +71,56 @@ MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
 tqdm.pandas()
 
 
-def get_open_question(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
-    """Using the provided row data, call an LLM to generate an open follow-up question.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
+async def get_open_question_batch_async(batch: pd.DataFrame) -> list[str]:
+    """Process a batch of rows asynchronously to generate an open follow-up question for each row.
 
     Args:
-        row (pd.Series): A row from the input DataFrame containing the columns corresponding
+        batch (pd.DataFrame): A batch of DataFrame containing rows with columns corresponding
                          to the survey responses, and the semantic search results.
     Returns: question (str).
     """
-    sa_sic_rag = c_llm.sa_rag_sic_code(
-        industry_descr=row[MERGED_INDUSTRY_DESC_COL],
-        job_title=row[JOB_TITLE_COL],
-        job_description=row[JOB_DESCRIPTION_COL],
-        candidates_limit=10,
-        short_list=row["semantic_search_results"],
-    )
+    tasks = []
+    for _, row in batch.iterrows():
+        task = asyncio.create_task(
+            c_llm.formulate_open_question(
+                industry_descr=row[MERGED_INDUSTRY_DESC_COL],
+                job_title=row[JOB_TITLE_COL],
+                job_description=row[JOB_DESCRIPTION_COL],
+                llm_output=row["alt_sic_candidates"],  # type: ignore
+            )
+        )
+        tasks.append(task)
 
-    sic_followup_object, _ = c_llm.formulate_open_question(
-        industry_descr=row[MERGED_INDUSTRY_DESC_COL],
-        job_title=row[JOB_TITLE_COL],
-        job_description=row[JOB_DESCRIPTION_COL],
-        llm_output=sa_sic_rag[0].sic_candidates,  # type: ignore
-    )
-    if sic_followup_object.followup is None:
-        return ""
-    return sic_followup_object.followup
+    responses = await asyncio.gather(*tasks)
+
+    results = []
+    for sic_followup_object, _ in responses:
+        if sic_followup_object.followup is None:
+            results.append("")
+        else:
+            results.append(sic_followup_object.followup)
+    return results
 
 
-c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
-print("Classification LLM loaded.")
+async def main():
+    """Main function to generate follow up questions.
+    Deviates from the stage_k template to enable async processing.
+    """
+    global c_llm, args  # noqa: PLW0603 # pylint: disable=global-statement, global-variable-undefined
+    c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
+    print("Classification LLM loaded.")
 
-if __name__ == "__main__":
     args = parse_args("STG3")
 
-    df, metadata, start_batch_id, restart_successful = set_up_initial_state(
+    (
+        df,
+        metadata,
+        start_batch_id,
+        restart_successful,
+        second_run_variables,  # pylint: disable=W0612
+    ) = set_up_initial_state(
         args.restart,
+        args.second_run,
         args.output_folder,
         args.output_shortname,
         args.input_parquet_file,
@@ -113,15 +129,27 @@ if __name__ == "__main__":
         stage_id="stage_3",
     )
 
+    if args.batch_size > MAX_BATCH_SIZE:
+        print(f"batch size too large. lower batch size to {MAX_BATCH_SIZE}")
+        batch_size_async = MAX_BATCH_SIZE
+    else:
+        batch_size_async = args.batch_size
+
     print("getting followup questions ...")
     if (not args.restart) or (not restart_successful):
         df["followup_question"] = ""
 
+    df_uncodable = df[~df["unambiguously_codable"]]
+
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
-                df,
-                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+                df_uncodable,
+                np.arange(
+                    start_batch_id * batch_size_async,
+                    len(df_uncodable),
+                    batch_size_async,
+                ),
             )
         )
     ):
@@ -130,9 +158,9 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, "followup_question"] = batch.apply(
-                get_open_question, axis=1
-            )
+            results = await get_open_question_batch_async(batch)
+            df.loc[batch.index, "followup_question"] = results
+
             persist_results(
                 df,
                 metadata,
@@ -149,3 +177,7 @@ if __name__ == "__main__":
         df, metadata, args.output_folder, args.output_shortname, is_final=True
     )
     print("Done!")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

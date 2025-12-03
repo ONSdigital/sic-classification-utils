@@ -23,7 +23,7 @@ class FollowupAnswerResponse(BaseModel):
 
     answer: str = Field(
         description="Answer to the followup question.",
-        min_length=2,  # Ensure non-empty response, but it may be possible that
+        # min_length=2,  # Ensure non-empty response, but it may be possible that
         # 'yes' or 'no' are acceptable answers to the question.
     )
 
@@ -46,4 +46,17 @@ class FollowupAnswerRequest(BaseModel):
     )
     followup_question: Optional[str] = Field(
         description="The LLM-generated followup question."
+    )
+
+
+class RephraseDescription(BaseModel):
+    """Represents a response model for rephrasing Industry Description and Follow up answer.
+
+    Attributes:
+        industry_description (str): Rephrased industry description with information
+    """
+
+    industry_description: str = Field(
+        description="""Rephrased industry description with follow up answer.""",
+        default="",
     )
