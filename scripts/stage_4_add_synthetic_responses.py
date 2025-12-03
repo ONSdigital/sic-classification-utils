@@ -57,7 +57,6 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 MODEL_NAME = "gemini-2.5-flash"
 MODEL_LOCATION = "europe-west1"
 
-INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"

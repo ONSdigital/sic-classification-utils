@@ -67,17 +67,31 @@ tqdm.pandas()
 
 
 # pylint: disable=C0116 # the docstring is below
-def get_rephrased_id(row: pd.Series) -> str:
+
+
+def get_rephrased_id(row: pd.Series, method: str = "concatenate") -> str:
     """Rephrase industry description with follow up question and follow up answer as a label.
 
     Args:
         row (pd.Series): A row from the input DataFrame containing the survey responses,
                          and the followup question.
+        method (str): method to use for rephrasing. Options are 'concatenate' and 'rephrase'.
 
-    Returns:
-        str: response (str)
+    Returns: response (str)
     """
-    if row[FOLLOWUP_QUESTION] != "":
+    if row[FOLLOWUP_ANSWER] == "":
+        return row[MERGED_INDUSTRY_DESC_COL]
+    if method == "concatenate":
+        return (
+            row[MERGED_INDUSTRY_DESC_COL]
+            + """
+- Followup Question: """
+            + row[FOLLOWUP_QUESTION]
+            + """
+- Followup Answer: """
+            + row[FOLLOWUP_ANSWER]
+        )
+    if method == "rephrase" and row[FOLLOWUP_QUESTION] != "":
         return SR.rephrase_question_and_id(
             row[MERGED_INDUSTRY_DESC_COL],
             row[FOLLOWUP_QUESTION],
