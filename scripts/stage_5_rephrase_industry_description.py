@@ -9,7 +9,7 @@ JSON metadata files in a user-specified output folder.
 Clarification On Script Arguments:
 
 ```bash
-python stage_4_add_snthetic_responses.py --help
+python stage_5_rephrase_industry_description.py --help
 ```
 
 Example Usage:
@@ -18,7 +18,7 @@ Example Usage:
 
 2. Run the script:
    ```bash
-   python stage_4_add_snthetic_responses.py \
+   python stage_5_rephrase_industry_description.py \
         -n my_output \
         -b 200 \
         persisted_dataframe.parquet \
@@ -60,6 +60,7 @@ MODEL_LOCATION = "europe-west1"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
 FOLLOWUP_QUESTION = "followup_question"
 FOLLOWUP_ANSWER = "followup_answer"
+MERGED_INDUSTRY_MATHOD = "concatenate"
 #####################################################
 
 # Enable progress bar for semantic-search
@@ -137,7 +138,7 @@ if __name__ == "__main__":
             pass
         else:
             df.loc[batch.index, "industry_description_rephrased"] = batch.apply(
-                get_rephrased_id, axis=1
+                get_rephrased_id, method=MERGED_INDUSTRY_MATHOD, axis=1
             )
             persist_results(
                 df,
