@@ -44,11 +44,11 @@ echo "RUNNING: STAGE 5"
 "$SCRIPT_DIR"/stage_5_rephrase_industry_description.py -n "STG5" -b "$batch_size" "$output_folder""/STG4.parquet" "$output_folder""/STG4_metadata.json" "$output_folder"
 
 
-echo "RUNNING: STAGE 1 (second search)"
-"$SCRIPT_DIR"/stage_1_add_semantic_search.py -n "STG1_second_search" -b "$batch_size" "$output_folder""/STG5.csv" -s "$input_metadata_json" "$output_folder"
+echo "RUNNING: STAGE 6"
+"$SCRIPT_DIR"/stage_1_add_semantic_search.py -n "STG6" -b "$batch_size" "$output_folder""/STG5.csv" -s "$input_metadata_json" "$output_folder"
 
-echo "RUNNING: STAGE 2 (final classification)"
-"$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -n "STG2_final" -b 10 -s "$output_folder""/STG1_second_search.parquet" "$output_folder""/STG1_second_search_metadata.json" "$output_folder"
+echo "RUNNING: STAGE 7"
+"$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -n "STG7" -b 10 -s "$output_folder""/STG6.parquet" "$output_folder""/STG6_metadata.json" "$output_folder"
 
 # echo "RUNNING: STAGE 5";
 # "$SCRIPT_DIR"/stage_5_assign_final_sic_code.py -n "STG5" -b "$batch_size" "$output_folder""/STG4.parquet" "$output_folder""/STG4_metadata.json" "$output_folder"
