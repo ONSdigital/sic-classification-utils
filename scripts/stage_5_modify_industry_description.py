@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # pylint: disable=duplicate-code
-"""This script rephrases industry description with followup questions and follow up answers,
+"""This script modifies industry description with followup questions and follow up answers,
 and persists the results. It reads reloads the output from the previous stage as a DataFrame
-object, rephrases each row, overwrites 'merged_industry_desc' column in the DataFrame
-with this information, and then saves the results to CSV, parquet, and
+object, modifies each row with selected method, overwrites 'merged_industry_desc' column in
+the DataFrame with this information, and then saves the results to CSV, parquet, and
 JSON metadata files in a user-specified output folder.
 
 Clarification On Script Arguments:
 
 ```bash
-python stage_5_rephrase_industry_description.py --help
+python stage_5_modify_industry_description.py --help
 ```
 
 Example Usage:
@@ -18,7 +18,7 @@ Example Usage:
 
 2. Run the script:
    ```bash
-   python stage_5_rephrase_industry_description.py \
+   python stage_5_modify_industry_description.py \
         -n my_output \
         -b 200 \
         persisted_dataframe.parquet \

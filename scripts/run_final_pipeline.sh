@@ -19,7 +19,7 @@ batch_size=$4
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "RUNNING: STAGE 5"
-"$SCRIPT_DIR"/stage_5_rephrase_industry_description.py -n "STG5" -b "$batch_size" "$input_parquet" "$input_metadata_json" "$output_folder"
+"$SCRIPT_DIR"/stage_5_modify_industry_description.py -n "STG5" -b "$batch_size" "$input_parquet" "$input_metadata_json" "$output_folder"
 
 echo "RUNNING: STAGE 6"
 "$SCRIPT_DIR"/stage_1_add_semantic_search.py -n "STG6" -b "$batch_size" "$output_folder""/STG5.csv" -s "$input_metadata_json" "$output_folder"
