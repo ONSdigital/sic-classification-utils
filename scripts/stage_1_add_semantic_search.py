@@ -146,6 +146,11 @@ def clean_text_industry(text: str) -> str:
     text = regex_sub(r"\s+", " ", text)
     text = text.lower()
     text = text.capitalize()
+    text = text.replace(
+        "- followup",
+        """
+- Followup""",
+    )
     return text
 
 
