@@ -92,7 +92,7 @@ class ClassificationLLM:
         openai_api_key: Optional[SecretStr] = None,
     ):
         """Initialises the ClassificationLLM object."""
-        print(f"model_name: {model_name}")
+        logger.info(f"Initialising LLM llm:{llm} model_name: {model_name} max_tokens: {max_tokens} temperature: {temperature}")
         if llm is not None:
             self.llm = llm
         elif model_name.startswith("text-") or model_name.startswith("gemini"):
@@ -241,7 +241,7 @@ class ClassificationLLM:
         """
         a: defaultdict[Any, list] = defaultdict(list)
 
-        logger.debug(
+        logger.info(
             f"Chars Lmt: {chars_limit} Candidate Lmt: {candidates_limit} "
             f"Activities Lmt: {activities_limit} Short List Len: {len(short_list)} "
             f"Code Digits: {code_digits}"
@@ -517,7 +517,7 @@ class ClassificationLLM:
 
         if self.verbose:
             final_prompt = self.sic_prompt_unambiguous.format(**call_dict)
-            logger.debug(final_prompt)
+            logger.info(final_prompt)
 
         chain = self.sic_prompt_unambiguous | self.llm
 
