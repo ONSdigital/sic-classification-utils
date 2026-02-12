@@ -7883,13 +7883,13 @@ files = [
 
 [[package]]
 name = "survey-assist-utils"
-version = "0.0.6"
+version = "0.0.7"
 description = "Utility module for Survey Assist"
 optional = false
 python-versions = "^3.12"
 groups = ["main"]
 files = []
-develop = true
+develop = false
 
 [package.dependencies]
 firebase-admin = "6.9.0"
@@ -7910,8 +7910,10 @@ seaborn = "^0.13.2"
 toml = "^0.10.2"
 
 [package.source]
-type = "directory"
-url = "../survey-assist-utils"
+type = "git"
+url = "https://github.com/ONSdigital/survey-assist-utils.git"
+reference = "v0.0.7"
+resolved_reference = "9602f5d31057cfab99af4302bc7cbeb1aa77d0ce"
 
 [[package]]
 name = "sympy"
@@ -9137,4 +9139,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "e6c3dd6b3ab599d9be0ab192e13adb07ae0f82a221cb353618934d551831e98c"
+content-hash = "a62e6e6e8288b644b505b826f9ef6bcc1a250a0e05202f2eb65781ef24c3abea"
