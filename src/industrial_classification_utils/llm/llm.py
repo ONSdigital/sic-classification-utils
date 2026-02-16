@@ -92,7 +92,9 @@ class ClassificationLLM:
         openai_api_key: Optional[SecretStr] = None,
     ):
         """Initialises the ClassificationLLM object."""
-        print(f"model_name: {model_name}")
+        logger.info(
+            f"Init LLM {llm} model: {model_name} max_tokens: {max_tokens} temp: {temperature}"
+        )
         if llm is not None:
             self.llm = llm
         elif model_name.startswith("text-") or model_name.startswith("gemini"):
