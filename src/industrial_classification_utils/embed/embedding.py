@@ -7,6 +7,7 @@ and performing similarity searches.
 
 # Optional but doesn't hurt
 import logging
+import numpy as np
 import os
 import sqlite3  # noqa: F401 # pylint: disable=unused-import
 
@@ -20,6 +21,10 @@ from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarch
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
+from classifai.vectorisers import (
+    HuggingFaceVectoriser,
+)
+
 # from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_google_vertexai import VertexAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -31,6 +36,21 @@ from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
 )
+
+class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
+
+    def embed_documents(self, texts: list[str])->list[list[float]]:
+        return self.transform(texts).tolist()
+
+    def embed_query(self, text: str)->list[float]:
+        return self.transform([text]).tolist()[0]
+
+    def aembed_documents(self, texts: list[str])->list[list[float]]:
+        return self.embed_documents(texts)
+
+    def aembed_query(self, text: str)->list[float]:
+        return self.embed_query(text)
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -141,9 +161,9 @@ class EmbeddingHandler:
         if embedding_model_name.startswith(("textembedding-", "text-embedding-")):
             self.embeddings = CustomVertexAIEmbeddings(model=embedding_model_name)
         else:
-            self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
+            self.embeddings = ChromaDBesqueHFVectoriser(model_name=f"sentence-transformers/{embedding_model_name}")
 
-        logger.info("Using embedding model: %s", embedding_model_name)
+        logger.info("updated - Using embedding model: %s", embedding_model_name)
 
         self.db_dir = db_dir
         self.vector_store = self._create_vector_store()
