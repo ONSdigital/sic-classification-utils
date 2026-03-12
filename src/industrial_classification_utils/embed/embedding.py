@@ -38,12 +38,19 @@ from industrial_classification_utils.utils.sic_data_access import (
 )
 
 class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
+    def _normalize(self, vectors):
+        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        return vectors / norms
 
     def embed_documents(self, texts: list[str])->list[list[float]]:
-        return self.transform(texts).tolist()
+        vectors = self.transform(texts)
+        vectors = self._normalize(vectors)
+        return vectors.tolist()
 
     def embed_query(self, text: str)->list[float]:
-        return self.transform([text]).tolist()[0]
+        vector = self.transform([text])
+        vector = self._normalize(vector)
+        return vector.tolist()[0]
 
     def aembed_documents(self, texts: list[str])->list[list[float]]:
         return self.embed_documents(texts)
@@ -134,7 +141,7 @@ class EmbeddingHandler:
 
     Attributes:
         embeddings (Any): The embedding model used for vectorization.
-        db_dir (str): Directory where the vector store database is located.
+        db_dir (str): Directory where the (classifai) vector store database is located.
         vector_store (Chroma): The Chroma vector store instance.
         k_matches (int): Number of nearest matches to retrieve during search.
         spell (Speller): Autocorrect spell checker instance.
