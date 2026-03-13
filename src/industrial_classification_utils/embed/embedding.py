@@ -4,7 +4,10 @@ using Chroma vector stores and language models.
 It includes functionality for embedding SIC hierarchy data, managing vector stores,
 and performing similarity searches.
 """
-
+import csv
+import shutil
+import tempfile
+import uuid
 # Optional but doesn't hurt
 import logging
 import numpy as np
@@ -21,6 +24,7 @@ from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarch
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
+from classifai.indexers import VectorStore, VectorStoreSearchInput
 from classifai.vectorisers import (
     HuggingFaceVectoriser,
 )
@@ -37,27 +41,37 @@ from industrial_classification_utils.utils.sic_data_access import (
     load_sic_structure,
 )
 
+
 class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
     def _normalize(self, vectors):
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1.0, norms)
         return vectors / norms
 
-    def embed_documents(self, texts: list[str])->list[list[float]]:
-        vectors = self.transform(texts)
+    def transform(self, texts):
+        single_input = isinstance(texts, str)
+        if single_input:
+            texts = [texts]
+
+        vectors = super().transform(texts)
         vectors = self._normalize(vectors)
-        return vectors.tolist()
 
-    def embed_query(self, text: str)->list[float]:
-        vector = self.transform([text])
-        vector = self._normalize(vector)
-        return vector.tolist()[0]
+        if single_input:
+            return vectors[0:1]
+        return vectors
 
-    def aembed_documents(self, texts: list[str])->list[list[float]]:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self.transform(texts).tolist()
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.transform([text]).tolist()[0]
+
+    def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         return self.embed_documents(texts)
 
-    def aembed_query(self, text: str)->list[float]:
+    def aembed_query(self, text: str) -> list[float]:
         return self.embed_query(text)
-
+    
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -152,7 +166,11 @@ class EmbeddingHandler:
         self,
         embedding_model_name: str = config["llm"]["embedding_model_name"],
         db_dir: str = config["llm"]["db_dir"],
+        knowledgebase_csv: Optional[str] = None,
+        meta_data: Optional[dict[str, type]] = None,
         k_matches: int = 20,
+        sic_index_file=None,
+        sic_structure_file=None,
     ):
         """Initializes the EmbeddingHandler.
 
@@ -161,23 +179,34 @@ class EmbeddingHandler:
                 Defaults to the value in the configuration file.
             db_dir (str, optional): Directory for the vector store database.
                 Defaults to the value in the configuration file.
+            knowledgebase_csv (str, optional): Path to a CSV file containing the knowledge base.
+            meta_data (dict[str, type], optional): Metadata schema for the vector store.
             k_matches (int, optional): Number of nearest matches to retrieve.
                 Defaults to 20.
+            sic_index_file (optional): Optional override for the SIC index source.
+            sic_structure_file (optional): Optional override for the SIC structure source.
         """
-        self.embeddings: Any  # Use Any if no common base type exists
+        self.embeddings: Any
         if embedding_model_name.startswith(("textembedding-", "text-embedding-")):
             self.embeddings = CustomVertexAIEmbeddings(model=embedding_model_name)
         else:
-            self.embeddings = ChromaDBesqueHFVectoriser(model_name=f"sentence-transformers/{embedding_model_name}")
+            self.embeddings = ChromaDBesqueHFVectoriser(
+                model_name=f"sentence-transformers/{embedding_model_name}"
+            )
 
-        logger.info("updated - Using embedding model: %s", embedding_model_name)
+        logger.info("Using embedding model: %s", embedding_model_name)
 
         self.db_dir = db_dir
-        self.vector_store = self._create_vector_store()
-
+        self.knowledgebase_csv = knowledgebase_csv
+        self.meta_data = meta_data or {}
         self.k_matches = k_matches
         self.spell = Speller()
-        self._index_size = self.vector_store._client.get_collection("langchain").count()
+
+        self.sic_index_file = sic_index_file or config["lookups"]["sic_index"]
+        self.sic_structure_file = sic_structure_file or config["lookups"]["sic_structure"]
+
+        self.vector_store = self._load_or_build_vector_store()
+        self._index_size = self.vector_store.num_vectors
 
         logger.info(
             "Vector store created in: %s containing %s entries.",
@@ -185,7 +214,6 @@ class EmbeddingHandler:
             self._index_size,
         )
 
-        # 🔄 Update shared config
         embedding_config["embedding_model_name"] = embedding_model_name
         embedding_config["llm_model_name"] = config["llm"].get(
             "llm_model_name", "unknown"
@@ -193,42 +221,109 @@ class EmbeddingHandler:
         embedding_config["db_dir"] = db_dir
         embedding_config["matches"] = self.k_matches
         embedding_config["index_size"] = self._index_size
+        embedding_config["sic_index"] = self.sic_index_file
+        embedding_config["sic_structure"] = self.sic_structure_file
+
         logger.debug("EmbeddingHandler initialised with config: %s", embedding_config)
 
-    def _create_vector_store(self) -> Chroma:
-        """Initializes the Chroma vector store.
+    def _load_or_build_vector_store(self) -> VectorStore:
+        """Load an existing ClassifAI vector store, or build one from SIC source files."""
 
-        Returns:
-            Chroma: The LangChain vector store object for Chroma.
-        """
-        if self.db_dir is None:
-            logger.warning("No db_dir provided; using in-memory vector store.")
-            return Chroma(  # pylint: disable=not-callable
-                embedding_function=self.embeddings,
-                collection_metadata={"hnsw:space": "l2"},
+        if not self.db_dir:
+            raise ValueError("db_dir must be provided.")
+
+        metadata_path = os.path.join(self.db_dir, "metadata.json")
+        vectors_path = os.path.join(self.db_dir, "vectors.parquet")
+
+        has_existing_store = (
+            os.path.isdir(self.db_dir)
+            and os.path.exists(metadata_path)
+            and os.path.exists(vectors_path)
+        )
+
+        if has_existing_store:
+            logger.info("Loading existing ClassifAI vector store from %s", self.db_dir)
+            return VectorStore.from_filespace(
+                folder_path=self.db_dir,
+                vectoriser=self.embeddings,
+                hooks=None,
             )
-        # else
 
-        if not os.path.exists(self.db_dir):
-            logger.warning("Persist directory does not exist: %s", self.db_dir)
-        else:
-            logger.debug("Persist directory exists: %s", self.db_dir)
-            logger.debug("Readable: %s", os.access(self.db_dir, os.R_OK))
-            logger.debug("Writable: %s", os.access(self.db_dir, os.W_OK))
+        logger.info(
+            "No existing vector store found in %s. Building from SIC source files.",
+            self.db_dir,
+        )
 
-        try:
-            chroma = Chroma(  # pylint: disable=not-callable
-                embedding_function=self.embeddings,
-                persist_directory=self.db_dir,
-                collection_metadata={"hnsw:space": "l2"},
+        sic_index_file = self.sic_index_file
+        sic_structure_file = self.sic_structure_file
+
+        logger.info("Loading SIC index file: %s", sic_index_file)
+        logger.info("Loading SIC structure file: %s", sic_structure_file)
+
+        sic_index_df = load_sic_index(sic_index_file)
+        sic_df = load_sic_structure(sic_structure_file)
+        sic = load_hierarchy(sic_df, sic_index_df)
+
+        rows: list[dict[str, str]] = []
+        for _, row in sic.all_leaf_text().iterrows():
+            code = (row["code"].replace(".", "").replace("/", "") + "0")[:5]
+            rows.append(
+                {
+                    "id": str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])),
+                    "text": row["text"],
+                    "code": code,
+                    "four_digit_code": code[0:4],
+                    "two_digit_code": code[0:2],
+                }
             )
-            logger.info("Vector store created successfully.")
-            return chroma
-        except Exception as e:
-            logger.exception("Failed to create vector store: %s", e)
-            raise
 
-    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals # noqa: C901
+        if not rows:
+            raise ValueError("No SIC rows were generated for vector store build.")
+
+        meta_data = self.meta_data or {
+            "code": str,
+            "four_digit_code": str,
+            "two_digit_code": str,
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            csv_path = os.path.join(tmp_dir, "sic_vectors.csv")
+
+            with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
+                writer = csv.DictWriter(
+                    csvfile,
+                    fieldnames=[
+                        "id",
+                        "text",
+                        "code",
+                        "four_digit_code",
+                        "two_digit_code",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerows(rows)
+
+            logger.info(
+                "Building new ClassifAI vector store in %s from temporary CSV %s",
+                self.db_dir,
+                csv_path,
+            )
+
+            vector_store = VectorStore(
+                file_name=csv_path,
+                data_type="csv",
+                vectoriser=self.embeddings,
+                batch_size=8,
+                meta_data=meta_data,
+                output_dir=self.db_dir,
+                overwrite=False,
+                hooks=None,
+            )
+
+        return vector_store
+
+
+    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
         self,
         from_empty: bool = True,
         sic: Optional[SIC] = None,
@@ -238,20 +333,22 @@ class EmbeddingHandler:
     ):
         """Embeds the index entries into the vector store.
 
+        For ClassifAI, this rebuilds the vector store from source data by first
+        generating a CSV knowledgebase and then creating a new VectorStore from it.
+
         Args:
-            from_empty (bool, optional): Whether to drop the current vector store
-                content and start fresh. Defaults to True.
+            from_empty (bool, optional): Whether to rebuild the vector store from scratch.
+                Defaults to True.
             sic (Optional[SIC], optional): The SIC hierarchy object. If None, the hierarchy
                 is loaded from files specified in the config. Defaults to None.
             file_object (StringIO object, optional): The index file as a StringIO object.
-                If provided, the file will be read line by line and embedded.
+                If provided, the file will be read line by line.
                 Each line should have the format **code**: **description**.
             sic_index_file (optional): Custom path or file-like object to override
                 default SIC index source.
             sic_structure_file (optional): Custom path or file-like object to override
                 default SIC structure source.
         """
-        # Log parameters
         logger.info(
             "Embedding index: from_empty=%s, sic=%s, file_object=%s, "
             "sic_index_file=%s, sic_structure_file=%s",
@@ -261,30 +358,31 @@ class EmbeddingHandler:
             sic_index_file,
             sic_structure_file,
         )
-        if from_empty:
-            logger.info("Dropping existing vector store content.")
-            self.vector_store._client.delete_collection(  # pylint: disable=protected-access
-                "langchain"
-            )
-            self.vector_store = self._create_vector_store()
 
-        docs = []
-        ids = []
+        rows: list[dict[str, str]] = []
+
         if file_object is not None:
             for line in file_object:
-                if line:
-                    bits = line.split(":", 1)
-                    docs.append(
-                        Document(
-                            page_content=bits[1],
-                            metadata={
-                                "code": bits[0],
-                                "four_digit_code": bits[0][0:4],
-                                "two_digit_code": bits[0][0:2],
-                            },
-                        )
-                    )
-                    ids.append(str(uuid.uuid3(uuid.NAMESPACE_URL, line)))
+                if not line:
+                    continue
+
+                bits = line.split(":", 1)
+                if len(bits) != 2:
+                    logger.warning("Skipping malformed line: %s", line)
+                    continue
+
+                code = bits[0].strip()
+                text = bits[1].strip()
+
+                rows.append(
+                    {
+                        "id": str(uuid.uuid3(uuid.NAMESPACE_URL, line.strip())),
+                        "text": text,
+                        "code": code,
+                        "four_digit_code": code[0:4],
+                        "two_digit_code": code[0:2],
+                    }
+                )
 
         else:
             if sic is None:
@@ -301,40 +399,72 @@ class EmbeddingHandler:
                 if sic_structure_file is None:
                     sic_structure_file = config["lookups"]["sic_structure"]
                 sic_df = load_sic_structure(sic_structure_file)
+
                 sic = load_hierarchy(sic_df, sic_index_df)
 
             for _, row in sic.all_leaf_text().iterrows():
                 code = (row["code"].replace(".", "").replace("/", "") + "0")[:5]
-                docs.append(
-                    Document(
-                        page_content=row["text"],
-                        metadata={
-                            "code": code,
-                            "four_digit_code": code[0:4],
-                            "two_digit_code": code[0:2],
-                        },
-                    )
+
+                rows.append(
+                    {
+                        "id": str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])),
+                        "text": row["text"],
+                        "code": code,
+                        "four_digit_code": code[0:4],
+                        "two_digit_code": code[0:2],
+                    }
                 )
-                ids.append(str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])))
 
-        def split_into_batches(data, batch_size):
-            for i in range(0, len(data), batch_size):
-                yield data[i : i + batch_size]
+        if not rows:
+            logger.warning("No rows were generated for embedding.")
+            self._index_size = 0
+            return
 
-        for batch_docs, batch_ids in zip(
-            split_into_batches(docs, MAX_BATCH_SIZE),
-            split_into_batches(ids, MAX_BATCH_SIZE),
-        ):
-            self.vector_store.add_documents(batch_docs, ids=batch_ids)
-        self._index_size = self.vector_store._client.get_collection(  # pylint: disable=protected-access
-            "langchain"
-        ).count()
+        if from_empty and os.path.isdir(self.db_dir):
+            logger.info("Removing existing vector store directory: %s", self.db_dir)
+            shutil.rmtree(self.db_dir)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            csv_path = os.path.join(tmp_dir, "sic_vectors.csv")
+
+            with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
+                writer = csv.DictWriter(
+                    csvfile,
+                    fieldnames=[
+                        "id",
+                        "text",
+                        "code",
+                        "four_digit_code",
+                        "two_digit_code",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerows(rows)
+
+            self.knowledgebase_csv = csv_path
+            self.meta_data = {
+                "code": str,
+                "four_digit_code": str,
+                "two_digit_code": str,
+            }
+
+            self.vector_store = VectorStore(
+                file_name=csv_path,
+                data_type="csv",
+                vectoriser=self.embeddings,
+                batch_size=8,
+                meta_data=self.meta_data,
+                output_dir=self.db_dir,
+                overwrite=from_empty,
+                hooks=None,
+            )
+
+        self._index_size = self.vector_store.num_vectors
 
         logger.debug(
-            "Inserted %s entries into vector embedding database.", f"{len(docs):,}"
+            "Inserted %s entries into vector embedding database.", f"{len(rows):,}"
         )
 
-        # Update shared config
         embedding_config["index_size"] = self._index_size
         embedding_config["sic_index"] = sic_index_file or config["lookups"]["sic_index"]
         embedding_config["sic_structure"] = (
@@ -343,39 +473,59 @@ class EmbeddingHandler:
         embedding_config["sic_condensed"] = config["lookups"]["sic_condensed"]
         embedding_config["matches"] = self.k_matches
         embedding_config["db_dir"] = self.db_dir
-        embedding_config["embedding_model_name"] = self.embeddings.model_name
+        embedding_config["embedding_model_name"] = getattr(
+            self.embeddings, "model_name", type(self.embeddings).__name__
+        )
         embedding_config["llm_model_name"] = config["llm"].get(
             "llm_model_name", "unknown"
         )
+
         logger.info("Embedding config updated: %s", embedding_config)
 
     def search_index(
         self, query: str, return_dicts: bool = True
-    ) -> Union[list[dict], list[tuple[Document, float]]]:
-        """Returns k document chunks with the highest relevance to the query.
+    ) -> Union[list[dict], list[tuple[str, float]]]:
+        """Returns k index entries with the highest relevance to the query.
 
         Args:
             query (str): Query string for which the most relevant index entries
                 will be returned.
             return_dicts (bool, optional): If True, returns data as a list of
-                dictionaries. Otherwise, returns document tuples. Defaults to True.
+                dictionaries. Otherwise, returns simple tuples. Defaults to True.
 
         Returns:
-            Union[list[dict], list[tuple[Document, float]]]: List of top k index entries
+            Union[list[dict], list[tuple[str, float]]]: List of top k index entries
             by relevance.
         """
-        top_matches = self.vector_store.similarity_search_with_score(
-            query=query, k=self.k_matches
+        search_input = VectorStoreSearchInput(
+            {"id": ["q1"], "query": [query]}
         )
+        results = self.vector_store.search(search_input, n_results=self.k_matches)
+
+        # ClassifAI returns a dataframe-like object.
+        # Depending on the exact backend/version, one of these usually works.
+        if hasattr(results, "to_dicts"):
+            rows = results.to_dicts()
+        else:
+            rows = results.to_dict(orient="records")
 
         if return_dicts:
             return [
-                {"distance": float(doc[1])}
-                | {"title": doc[0].page_content}
-                | doc[0].metadata
-                for doc in top_matches
+                {
+                    "distance": float(1.0 - row["score"]),
+                    "title": row["doc_text"],
+                    "code": row.get("code"),
+                    "four_digit_code": row.get("four_digit_code"),
+                    "two_digit_code": row.get("two_digit_code"),
+                }
+                for row in rows
             ]
-        return top_matches
+
+        return [
+            (row["doc_text"], float(row["score"]))
+            for row in rows
+        ]
+
 
     def search_index_multi(self, query: list[str]) -> list[dict]:
         """Returns k document chunks with the highest relevance to a list of query fields.
