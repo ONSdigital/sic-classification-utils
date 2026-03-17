@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""This script performs semantic search on a dataset using a vector store
+"""This script performs semantic search on a dataset using a local vector store
 and persists the results. It reads in a CSV file as a DataFrame object,
-interacts with a vector store to obtain semantic search results for each
-row, creates a new column in the DataFrame with this information, and
-then saves the results to CSV, parquet, and JSON metadata files in a
-user-specified output folder.
-
-The script requires a running vector store service.
+uses :class:`industrial_classification_utils.embed.embedding.EmbeddingHandler`
+to obtain semantic search results for each row, creates a new column in the
+DataFrame with this information, and then saves the results to CSV, parquet,
+and JSON metadata files in a user-specified output folder.
 
 Clarification On Script Arguments:
 
@@ -16,9 +14,7 @@ python stage_1_add_semantic_search.py --help
 
 Example Usage:
 
-1. Ensure the vector store is running at http://0.0.0.0:8088.
-
-2. Run the script:
+1. Run the script:
    ```bash
    python stage_1_add_semantic_search.py \
         -n my_output \
@@ -63,10 +59,9 @@ from re import sub as regex_sub
 
 import numpy as np
 import pandas as pd
-import requests
-from requests.exceptions import HTTPError, RequestException
 from tqdm import tqdm
 
+from industrial_classification_utils.embed.embedding import EmbeddingHandler
 from industrial_classification_utils.utils.shared_evaluation_pipeline_components import (
     parse_args,
     persist_results,
@@ -75,9 +70,12 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Constants:
-VECTOR_STORE_URL_BASE = "http://0.0.0.0:8088"
-STATUS_ENDPOINT = "/v1/sic-vector-store/status"
-SEARCH_ENDPOINT = "/v1/sic-vector-store/search-index"
+EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+DB_DIR = "src/industrial_classification_utils/data/vector_store"
+K_MATCHES = 20
+EMBEDDING_SIC_INDEX_FILE = "extended_SIC_index.xlsx"
+EMBEDDING_SIC_STRUCTURE_FILE = "publisheduksicsummaryofstructureworksheet.xlsx"
+
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
@@ -88,6 +86,61 @@ MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"  # created in this script
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
+
+
+def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
+    """Updates the metadata dictionary with values from the command-line arguments,
+    using defaults where necessary.
+
+    Args:
+        parsed_args: The command-line arguments parsed by `parse_args()`.
+        in_metadata: The initial metadata dictionary loaded from the input JSON file.
+
+    Returns:
+        dict: The updated metadata dictionary with values from args and defaults.
+    """
+    updated_metadata = in_metadata.copy() if in_metadata else {}
+
+    if updated_metadata.get("original_dataset_name") != parsed_args.input_file:
+        print(
+            f"""Warning: The original dataset name in the input metadata ({
+                updated_metadata.get('original_dataset_name')}) """
+            f"does not match the input file specified in the arguments ({parsed_args.input_file}). "
+            "The metadata will be updated with the input file name."
+        )
+        updated_metadata["original_dataset_name"] = parsed_args.input_file
+    updated_metadata = in_metadata.copy() if in_metadata else {}
+
+    if updated_metadata.get("original_dataset_name") != parsed_args.input_file:
+        print(
+            f"""Warning: The original dataset name in the input metadata ({
+                in_metadata.get('original_dataset_name')}) """
+            f"does not match the input file specified in the arguments ({parsed_args.input_file}). "
+            "The metadata will be updated with the input file name."
+        )
+        updated_metadata["original_dataset_name"] = parsed_args.input_file
+
+    if updated_metadata.get("batch_size") != parsed_args.batch_size:
+        print(
+            f"Warning: The batch size in the input metadata ({in_metadata.get('batch_size')}) "
+            f"does not match the batch size specified in the arguments ({parsed_args.batch_size}). "
+            "The metadata will be updated with the batch size."
+        )
+        updated_metadata["batch_size"] = parsed_args.batch_size
+
+    updated_metadata["embedding_model_name"] = updated_metadata.get(
+        "embedding_model_name", EMBEDDING_MODEL_NAME
+    )
+    updated_metadata["db_dir"] = updated_metadata.get("db_dir", DB_DIR)
+    updated_metadata["k_matches"] = updated_metadata.get("k_matches", K_MATCHES)
+    updated_metadata["sic_index_file"] = updated_metadata.get(
+        "sic_index_file", EMBEDDING_SIC_INDEX_FILE
+    )
+    updated_metadata["sic_structure_file"] = updated_metadata.get(
+        "sic_structure_file", EMBEDDING_SIC_STRUCTURE_FILE
+    )
+
+    return updated_metadata
 
 
 def clean_text(text: str) -> str:
@@ -154,85 +207,90 @@ def clean_text_industry(text: str) -> str:
     return text
 
 
-def check_vector_store_ready():
-    """Checks if the vector store is ready by querying its status endpoint.
-    Raises an exception if the service is unavailable or not ready.
-    Exits silently if the vector store is ready.
-    """
-    try:
-        response = requests.get(f"{VECTOR_STORE_URL_BASE}{STATUS_ENDPOINT}", timeout=10)
-        response.raise_for_status()
-        if response.json()["status"] != "ready":
-            raise OSError("The vector store is still loading, re-try in a few minutes")
-    except (HTTPError, ConnectionError, RequestException):
-        print("Bad response from locally-running vector store")
-        raise
-    except Exception:
-        print("Could not interact with locally-running vector store")
-        raise
-
-
-def get_semantic_search_results(row: pd.Series) -> list[dict]:
-    """Performs a semantic search using the provided row data.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
-
-    Args:
-        row (pd.Series): A row from the input DataFrame containing the merged industry
-                         description, job title, and job description.
-    Returns: A list of dictionaries containing the title, code and distance for each search
-    result.
-    """
-    payload = {
-        "industry_descr": row[MERGED_INDUSTRY_DESC_COL],
-        "job_title": row[JOB_TITLE_COL],
-        "job_description": row[JOB_DESCRIPTION_COL],
-    }
-
-    # Prevent undefined behaviour from VectorStore by
-    # sanitising non-string inputs (e.g. None)
-    for k, v in payload.items():
-        if not isinstance(v, str):
-            payload[k] = ""
-
-    response = requests.post(
-        f"{VECTOR_STORE_URL_BASE}{SEARCH_ENDPOINT}", json=payload, timeout=25
+def _make_embedding_handler(in_metadata: dict) -> EmbeddingHandler:
+    """Create an :class:`EmbeddingHandler` using settings from metadata where possible."""
+    new_embedding_handler = EmbeddingHandler(
+        embedding_model_name=in_metadata.get(
+            "embedding_model_name", "all-MiniLM-L6-v2"
+        ),
+        db_dir=in_metadata.get(
+            "db_dir", "src/industrial_classification_utils/data/vector_store"
+        ),
+        k_matches=in_metadata.get("k_matches", 20),
     )
-    response.raise_for_status()
-    response_json = response.json()
-    try:
-        results = response_json["results"]
-    except (KeyError, AttributeError):
-        print("results key missing from JSON response from vector store", response_json)
-        raise
 
-    reduced_results = [
-        {"title": r["title"], "code": r["code"], "distance": r["distance"]}
-        for r in results
-    ]
-    return reduced_results
+    new_embedding_handler.embed_index(
+        from_empty=True,
+        sic_index_file=(
+            "industrial_classification_utils.data.sic_index",
+            in_metadata.get("sic_index_file", "extended_SIC_index.xlsx"),
+        ),
+        sic_structure_file=(
+            "industrial_classification_utils.data.sic_index",
+            in_metadata.get(
+                "sic_structure_file", "publisheduksicsummaryofstructureworksheet.xlsx"
+            ),
+        ),
+    )
+
+    return new_embedding_handler
+
+
+def _make_semantic_search_fn(one_embedding_handler: EmbeddingHandler):
+    def _get_semantic_search_results(row: pd.Series) -> list[dict]:
+        """Performs a semantic search using the provided row data.
+
+        Intended for use as a `.apply()` operation to create a new column in a
+        pd.DataFrame.
+
+        Returns:
+            list[dict]: List of dictionaries with `title`, `code`, `distance`.
+        """
+        industry_descr = (
+            row[MERGED_INDUSTRY_DESC_COL]
+            if isinstance(row.get(MERGED_INDUSTRY_DESC_COL), str)
+            else ""
+        )
+        job_title = (
+            row[JOB_TITLE_COL] if isinstance(row.get(JOB_TITLE_COL), str) else ""
+        )
+        job_description = (
+            row[JOB_DESCRIPTION_COL]
+            if isinstance(row.get(JOB_DESCRIPTION_COL), str)
+            else ""
+        )
+
+        results = one_embedding_handler.search_index_multi(
+            [industry_descr, job_title, job_description]
+        )
+
+        reduced_results = [
+            {
+                "title": r.get("title", ""),
+                "code": r.get("code", ""),
+                "distance": float(r.get("distance", 0.0)),
+            }
+            for r in results
+        ]
+        return reduced_results
+
+    return _get_semantic_search_results
 
 
 if __name__ == "__main__":
     args = parse_args("STG1")
 
-    check_vector_store_ready()
-    print("Vector store is ready")
+    df, metadata, start_batch_id, second_run_variables = set_up_initial_state(args)
 
-    df, metadata, start_batch_id, restart_successful, second_run_variables = (
-        set_up_initial_state(
-            args.restart,
-            args.second_run,
-            args.output_folder,
-            args.output_shortname,
-            args.input_parquet_file,
-            args.input_metadata_json,
-            args.batch_size,
-            stage_id="stage_1",
-            is_stage_1=True,
-        )
+    metadata = _update_metadata_with_args_and_defaults(args, metadata)
+
+    embedding_handler = _make_embedding_handler(metadata)
+    print(
+        f"Vector store ready (in-process): {embedding_handler._index_size} entries"  # pylint: disable=protected-access
     )
+    get_semantic_search_results = _make_semantic_search_fn(embedding_handler)
 
-    semantic_search = (  # pylint: disable=C0103
+    semantic_search_output_col = (  # pylint: disable=C0103
         "second_semantic_search_results"
         if second_run_variables
         else "semantic_search_results"
@@ -252,8 +310,8 @@ if __name__ == "__main__":
     print("Input loaded")
 
     print("running semantic search...")
-    if (not args.restart) or (not restart_successful):
-        df[semantic_search] = np.empty((len(df), 0)).tolist()
+    if semantic_search_output_col not in df:
+        df[semantic_search_output_col] = np.empty((len(df), 0)).tolist()
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -268,7 +326,7 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, semantic_search] = batch.apply(
+            df.loc[batch.index, semantic_search_output_col] = batch.apply(
                 get_semantic_search_results, axis=1
             )
             persist_results(
@@ -277,7 +335,7 @@ if __name__ == "__main__":
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
+                completed_batches=(batch_id + start_batch_id),
             )
 
     print("semantic search complete")

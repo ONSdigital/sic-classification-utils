@@ -107,22 +107,12 @@ if __name__ == "__main__":
     args = parse_args("STG4")
 
     job_description_rephrased = []
-    df, metadata, start_batch_id, restart_successful, second_run_variables = (
-        set_up_initial_state(
-            args.restart,
-            args.second_run,
-            args.output_folder,
-            args.output_shortname,
-            args.input_parquet_file,
-            args.input_metadata_json,
-            args.batch_size,
-            stage_id="stage_5",
-        )
-    )
+    df, metadata, start_batch_id, second_run_variables = set_up_initial_state(args)
+
     print(
         "rephrasing industry description with follow up questions and followup answers..."
     )
-    if (not args.restart) or (not restart_successful):
+    if "industry_description_rephrased" not in df.columns:
         df["industry_description_rephrased"] = ""
 
     # rephrase new job description
@@ -146,7 +136,7 @@ if __name__ == "__main__":
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
+                completed_batches=(batch_id + start_batch_id),
             )
     df[MERGED_INDUSTRY_DESC_COL] = df["industry_description_rephrased"]
     df.drop(columns=["industry_description_rephrased"], inplace=True)

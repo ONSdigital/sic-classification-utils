@@ -107,21 +107,12 @@ if __name__ == "__main__":
     check_y()
     print("Requirement Y is met")
 
-    df, metadata, start_batch_id, restart_successful, second_run_variables = (
-        set_up_initial_state(
-            args.restart,
-            args.second_run,
-            args.output_folder,
-            args.output_shortname,
-            args.input_parquet_file,
-            args.input_metadata_json,
-            args.batch_size,
-            stage_id="stage_k",
-        )
+    df, metadata, start_batch_id, second_run_variables = set_up_initial_state(
+        parsed_args=args
     )
 
     print("running X...")
-    if (not args.restart) or (not restart_successful):
+    if "new_column" not in df.columns:
         df["new_column"] = 0
 
     for batch_id, batch in tqdm(
@@ -144,7 +135,7 @@ if __name__ == "__main__":
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
+                completed_batches=(batch_id + start_batch_id),
             )
 
     print("X is complete")

@@ -21,8 +21,7 @@ The main components provided are:
 import json
 import os
 import shutil
-from argparse import ArgumentParser as AP
-from argparse import Namespace
+from argparse import ArgumentParser, Namespace
 from datetime import UTC, datetime
 from typing import Optional
 
@@ -39,19 +38,23 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
     Returns:
         Namespace: The parsed command-line arguments.
     """
-    parser = AP()
+    parser = ArgumentParser()
     parser.add_argument(
-        "input_parquet_file",
+        "--input_file",
+        "-i",
         type=str,
         help="relative path to the persisted DataFrame from previous stage",
     )
     parser.add_argument(
-        "input_metadata_json",
+        "--metadata_json",
+        "-m",
         type=str,
+        default=None,
         help="relative path to the persisted metadata from previous stage",
     )
     parser.add_argument(
-        "output_folder",
+        "--output_folder",
+        "-o",
         type=str,
         help="relative path to the output folder location (will be created if it doesn't exist)",
     )
@@ -89,14 +92,8 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
     return parser.parse_args()
 
 
-def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
-    output_folder: str,
-    output_shortname: str,
-    input_parquet_file: str,
-    input_metadata_json: str,
-    batch_size: int,
-    stage_id: Optional[str] = "stage_k",
-    is_stage_1: Optional[bool] = False,
+def _try_to_restart(
+    parsed_args: Namespace,
 ):
     """Attempts to restart a processing job by loading checkpoint data.
 
@@ -109,82 +106,41 @@ def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     initial input data and metadata, and prepares new checkpoint information.
 
     Args:
-        output_folder (str): The path to the specified output folder.
-        output_shortname (str): The prefix for the output filenames.
-        input_parquet_file (str): The path to the (previous stage's) persisted dataframe file, used
-            only if starting from scratch after failure to restart.
-        input_metadata_json (str): The path to the (previous stage's) metadata JSON file,
-            used only if starting from scratch after failure to restart.
-        batch_size (int): The size of processing batches, used only if starting
-            from scratch after failure to restart.
-        stage_id (str): A prefix used for per-stage fields in the metadata.
-        is_stage_1 (bool): A flag to indicate the incoming data is .csv not .parquet.
+        parsed_args (Namespace): The namespace of parsed command-line arguments.
 
     Returns:
         tuple: A tuple containing:
             - pd.DataFrame: The loaded or newly created DataFrame.
             - dict: The loaded or newly created metadata dictionary.
             - dict: The loaded or newly created checkpoint information.
-            - bool: True if the restart from a checkpoint was successful,
-              False otherwise.
 
     Raises:
         FileNotFoundError: If starting from scratch and the initial data
-            file (`input_parquet_file`) or metadata file (`input_metadata_json`)
+            file (`input_file`) or metadata file (`input_metadata_json`)
             cannot be found.
     """
-    try:
-        df_persisted = pd.read_parquet(
-            f"{output_folder}/intermediate_outputs/{output_shortname}.parquet"
-        )
-        checkpoint_info_persisted = _read_json(
-            f"{output_folder}/intermediate_outputs/{output_shortname}_checkpoint_info.json"
-        )
-        metadata_persisted = _read_json(
-            f"{output_folder}/intermediate_outputs/{output_shortname}_metadata.json"
-        )
-        restart_successful = True
-        print("Partially-processed data re-loaded succesfully")
-        return (
-            df_persisted,
-            metadata_persisted,
-            checkpoint_info_persisted,
-            restart_successful,
-        )
-    except (FileNotFoundError, Exception):  # pylint: disable=W0718
-        print("Could not re-load checkpointed results, restarting from scratch...")
-        restart_successful = False
-        try:
-            with open(input_metadata_json, encoding="utf-8") as input_meta:
-                metadata_persisted = json.load(input_meta)
-        except FileNotFoundError:
-            print(f"Could not find metadata file {input_metadata_json}")
-            raise
-        metadata_persisted[f"{stage_id}_start_timestamp"] = datetime.now(
-            UTC
-        ).timestamp()
-        metadata_persisted[f"{stage_id}_start_time_readable"] = datetime.now(
-            UTC
-        ).strftime("%Y/%m/%d_%H:%M:%S")
-        metadata_persisted["batch_size"] = batch_size
-        df_persisted = (
-            pd.read_csv(input_parquet_file)
-            if is_stage_1
-            else pd.read_parquet(input_parquet_file)
-        )
-        checkpoint_info_persisted = {
-            "completed_batches": 0,
-            "batch_size": batch_size,
-        }
-        return (
-            df_persisted,
-            metadata_persisted,
-            checkpoint_info_persisted,
-            restart_successful,
-        )
+    output_folder = parsed_args.output_folder
+    output_shortname = parsed_args.output_shortname
+
+    df_persisted = pd.read_parquet(
+        f"{output_folder}/intermediate_outputs/{output_shortname}.parquet"
+    )
+    checkpoint_info_persisted = _read_json(
+        f"{output_folder}/intermediate_outputs/{output_shortname}_checkpoint_info.json"
+    )
+    metadata_persisted = _read_json(
+        f"{output_folder}/intermediate_outputs/{output_shortname}_metadata.json"
+    )
+
+    print("Partially-processed data re-loaded succesfully")
+    return (
+        df_persisted,
+        metadata_persisted,
+        checkpoint_info_persisted,
+    )
 
 
-def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
+def persist_results(  # noqa:PLR0913, pylint: disable=too-many-arguments, too-many-positional-arguments
     df_with_search: pd.DataFrame,
     metadata: dict,
     output_folder: str,
@@ -296,17 +252,9 @@ def _delete_folder_contents(folder_path: str) -> None:
         shutil.rmtree(folder_path)
 
 
-def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
-    restart: bool,
-    second_run: bool,
-    output_folder: str,
-    output_shortname: str,
-    input_parquet_file: str,
-    input_metadata_json: str,
-    batch_size: int,
-    stage_id: Optional[str] = "stage_k",
-    is_stage_1: Optional[bool] = False,
-) -> tuple[pd.DataFrame, dict, int, bool, bool]:
+def set_up_initial_state(
+    parsed_args: Namespace,
+) -> tuple[pd.DataFrame, dict, int, bool]:
     """Sets up the initial state for a pipeline stage.
 
     This function handles the logic for starting a processing job, either by
@@ -315,18 +263,8 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     determines the starting point for batch processing.
 
     Args:
-        restart (bool): Flag to indicate whether to attempt a restart from a
-            checkpoint.
-        second_run (bool): Flag to indicate the first or second run of the stage.
-        output_folder (str): The path to the specified output folder.
-        output_shortname (str): The prefix for the output filenames.
-        input_parquet_file (str): The path to the persisted dataframe file from
-            the previous stage.
-        input_metadata_json (str): The path to the persisted metadata JSON file
-            from the previous stage.
-        batch_size (int): The size of processing batches.
+        parsed_args (Namespace): The namespace of parsed command-line arguments.
         stage_id (str): A prefix used for per-stage fields in the metadata.
-        is_stage_1 (bool): A flag to indicate the incoming data is .csv not .parquet.
 
     Returns:
         tuple: A tuple containing:
@@ -336,45 +274,42 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             - bool: True if a restart from a checkpoint was successful,
               False otherwise.
     """
-    restart_successful = True
-    if restart:
+    if parsed_args.restart:
         try:
-            df, metadata, checkpoint_info, restart_successful = _try_to_restart(  # type: ignore
-                output_folder,
-                output_shortname,
-                input_parquet_file,
-                input_metadata_json,
-                batch_size,
-                stage_id=stage_id,
-                is_stage_1=is_stage_1,
+            df, metadata, checkpoint_info = _try_to_restart(  # type: ignore
+                parsed_args,
             )
-        except Exception:
-            print(
-                "Could not load persisted output, and ran into an issue starting from scratch"
+            return (
+                df,
+                metadata,
+                checkpoint_info["completed_batches"],
+                parsed_args.second_run,
             )
-            raise
-    else:
-        try:
-            metadata = _read_json(input_metadata_json)
         except FileNotFoundError:
-            print(f"Could not find metadata file {input_metadata_json}")
-            raise
-        metadata[f"{stage_id}_start_timestamp"] = datetime.now(UTC).timestamp()
-        metadata[f"{stage_id}_start_time_readable"] = datetime.now(UTC).strftime(
-            "%Y/%m/%d_%H:%M:%S"
-        )
-        metadata["batch_size"] = batch_size
-        df = (
-            pd.read_csv(input_parquet_file)
-            if is_stage_1
-            else pd.read_parquet(input_parquet_file)
-        )
-        print("Input loaded")
+            print("Could not load persisted output, starting from scratch")
 
-    start_batch_id = (
-        0
-        if (not restart) or (not restart_successful)
-        else checkpoint_info["completed_batches"]  # type: ignore
+    try:
+        metadata = _read_json(parsed_args.metadata_json)
+    except FileNotFoundError:
+        print(
+            f"Could not find metadata file {parsed_args.metadata_json}"
+            ", will use default values for metadata fields"
+        )
+        metadata = {}
+
+    metadata[f"{parsed_args.output_shortname}_input_file"] = parsed_args.input_file
+    metadata[f"{parsed_args.output_shortname}_start_timestamp"] = datetime.now(
+        UTC
+    ).timestamp()
+    metadata[f"{parsed_args.output_shortname}_start_time_readable"] = datetime.now(
+        UTC
+    ).strftime("%Y/%m/%d_%H:%M:%S")
+    df = (
+        pd.read_csv(parsed_args.input_file)
+        if parsed_args.input_file.endswith(".csv")
+        else pd.read_parquet(parsed_args.input_file)
     )
 
-    return df, metadata, start_batch_id, restart_successful, second_run
+    print("Input loaded")
+
+    return df, metadata, 0, parsed_args.second_run

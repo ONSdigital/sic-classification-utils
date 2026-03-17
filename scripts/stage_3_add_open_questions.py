@@ -112,22 +112,7 @@ async def main():
 
     args = parse_args("STG3")
 
-    (
-        df,
-        metadata,
-        start_batch_id,
-        restart_successful,
-        second_run_variables,  # pylint: disable=W0612
-    ) = set_up_initial_state(
-        args.restart,
-        args.second_run,
-        args.output_folder,
-        args.output_shortname,
-        args.input_parquet_file,
-        args.input_metadata_json,
-        args.batch_size,
-        stage_id="stage_3",
-    )
+    df, metadata, start_batch_id, _ = set_up_initial_state(args)
 
     if args.batch_size > MAX_BATCH_SIZE:
         print(f"batch size too large. lower batch size to {MAX_BATCH_SIZE}")
@@ -136,7 +121,7 @@ async def main():
         batch_size_async = args.batch_size
 
     print("getting followup questions ...")
-    if (not args.restart) or (not restart_successful):
+    if "followup_question" not in df.columns:
         df["followup_question"] = ""
 
     df_uncodable = df[~df["unambiguously_codable"]]
@@ -167,7 +152,7 @@ async def main():
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
+                completed_batches=(batch_id + start_batch_id),
             )
 
     print("Followup question retrieval is complete")

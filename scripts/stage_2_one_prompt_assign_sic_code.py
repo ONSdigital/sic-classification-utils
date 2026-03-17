@@ -160,30 +160,16 @@ def get_alt_sic_candidates(row: pd.Series) -> str:
 
 if __name__ == "__main__":
     args = parse_args("STG2")
-    df, metadata, start_batch_id, restart_successful, second_run_variables = (
-        set_up_initial_state(
-            args.restart,
-            args.second_run,
-            args.output_folder,
-            args.output_shortname,
-            args.input_parquet_file,
-            args.input_metadata_json,
-            args.batch_size,
-            stage_id="stage_2",
-        )
-    )
+    df, metadata, start_batch_id, second_run_variables = set_up_initial_state(args)
 
     print("Running RAG SIC allocation...")
-    if (not args.restart) or (not restart_successful):
-        df["sa_rag_sic_response"] = {
-            "unambiguously_codable": False,
-            "initial_sic": "",
-            "alt_sic_candidates": [],
-            "followup": "",
-        }
+    if "unambiguously_codable" not in df.columns:
         df["unambiguously_codable"] = False
+    if "initial_code" not in df.columns:
         df["initial_code"] = ""
+    if "alt_sic_candidates" not in df.columns:
         df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
+    if "followup_question" not in df.columns:
         df["followup_question"] = ""
 
     uni_chat = ClassificationLLM(model_name=MODEL_NAME)
@@ -219,7 +205,7 @@ if __name__ == "__main__":
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
+                completed_batches=(batch_id + start_batch_id),
             )
     df.drop("sa_rag_sic_response", axis=1, inplace=True)
     print("RAG SIC allocation is complete")

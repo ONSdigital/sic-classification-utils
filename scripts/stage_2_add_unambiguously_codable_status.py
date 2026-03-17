@@ -178,17 +178,8 @@ async def main():
     print("Classification LLM loaded.")
     args = parse_args("STG2")
 
-    df, metadata, start_batch_id, restart_successful, second_run_variables = (
-        set_up_initial_state(
-            args.restart,
-            args.second_run,
-            args.output_folder,
-            args.output_shortname,
-            args.input_parquet_file,
-            args.input_metadata_json,
-            args.batch_size,
-            stage_id="stage_2",
-        )
+    df, metadata, start_batch_id, second_run_variables = set_up_initial_state(
+        parsed_args=args
     )
 
     if args.batch_size > MAX_BATCH_SIZE:
@@ -210,14 +201,11 @@ async def main():
         ALT_CANDIDATES = "alt_sic_candidates"
         semantic_search = "semantic_search_results"
 
-    if (not args.restart) or (not restart_successful):
-        df["intermediate_unambig_results"] = {
-            CODABLE: False,
-            SIC_CODE: "",
-            ALT_CANDIDATES: [],
-        }
+    if CODABLE not in df.columns:
         df[CODABLE] = False
+    if SIC_CODE not in df.columns:
         df[SIC_CODE] = ""
+    if ALT_CANDIDATES not in df.columns:
         df[ALT_CANDIDATES] = np.empty((len(df), 0)).tolist()
 
     for batch_id, batch in tqdm(
@@ -246,7 +234,7 @@ async def main():
                 args.output_folder,
                 args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
+                completed_batches=(batch_id + start_batch_id),
             )
 
     print("unambiguous coding analysis is complete")
