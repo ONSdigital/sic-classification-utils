@@ -70,9 +70,9 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
         "--batch_size",
         "-b",
         type=int,
-        default=10,
+        default=100,
         help="save the output every X rows, as a checkpoint that can be used to restart the "
-        "processing job if needed (optional, default: 10)",
+        "processing job if needed (optional, default: 100)",
     )
     parser.add_argument(
         "--restart",
@@ -140,8 +140,9 @@ def _try_to_restart(
     )
 
 
-def persist_results(  # noqa:PLR0913, pylint: disable=too-many-arguments, too-many-positional-arguments
-    df_with_search: pd.DataFrame,
+def persist_results(  # noqa:PLR0913, pylint: disable=too-many-arguments
+    *,
+    df: pd.DataFrame,
     metadata: dict,
     output_folder: str,
     output_shortname: str,
@@ -151,7 +152,7 @@ def persist_results(  # noqa:PLR0913, pylint: disable=too-many-arguments, too-ma
     """Persists the results DataFrame to CSV, parquet, and saves metadata to JSON.
 
     Args:
-        df_with_search (pd.DataFrame): The DataFrame containing the results to be persisted.
+        df (pd.DataFrame): The DataFrame containing the results to be persisted.
         metadata (dict): The additional metadata surrounding this processing job.
         output_folder (str): The path to the output folder where the files will be saved.
         output_shortname (str): The prefix given to each file to be saved.
@@ -168,11 +169,9 @@ def persist_results(  # noqa:PLR0913, pylint: disable=too-many-arguments, too-ma
             f"{output_folder}/{output_shortname}_metadata.json",
         )
         print("Saving results to parquet...")
-        df_with_search.to_parquet(
-            f"{output_folder}/{output_shortname}.parquet", index=False
-        )
+        df.to_parquet(f"{output_folder}/{output_shortname}.parquet", index=False)
         print("Saving results to CSV...")
-        df_with_search.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
+        df.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
 
         print("Removing intermediate outputs...")
         _delete_folder_contents(f"{output_folder}/intermediate_outputs")
@@ -183,6 +182,7 @@ def persist_results(  # noqa:PLR0913, pylint: disable=too-many-arguments, too-ma
             {
                 "completed_batches": completed_batches,
                 "batch_size": metadata["batch_size"],
+                "batch_size_async": metadata.get("batch_size_async"),
             },
             f"{output_folder}/{output_shortname}_checkpoint_info.json",
         )
@@ -190,9 +190,7 @@ def persist_results(  # noqa:PLR0913, pylint: disable=too-many-arguments, too-ma
             metadata,
             f"{output_folder}/{output_shortname}_metadata.json",
         )
-        df_with_search.to_parquet(
-            f"{output_folder}/{output_shortname}.parquet", index=False
-        )
+        df.to_parquet(f"{output_folder}/{output_shortname}.parquet", index=False)
 
 
 def _read_json(file_path: str) -> dict:

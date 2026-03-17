@@ -200,10 +200,10 @@ if __name__ == "__main__":
                 get_followup_question, axis=1
             )
             persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
+                df=df,
+                metadata=metadata,
+                output_folder=args.output_folder,
+                output_shortname=args.output_shortname,
                 is_final=False,
                 completed_batches=(batch_id + start_batch_id),
             )
@@ -212,6 +212,10 @@ if __name__ == "__main__":
 
     print("persisting results...")
     persist_results(
-        df, metadata, args.output_folder, args.output_shortname, is_final=True
+        df=df,
+        metadata=metadata,
+        output_folder=args.output_folder,
+        output_shortname=args.output_shortname,
+        is_final=True,
     )
     print("Done!")

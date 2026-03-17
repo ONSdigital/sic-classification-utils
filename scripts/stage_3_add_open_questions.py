@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code, redefined-outer-name
 """This script retrieves followup questions and persists the results.
 It reads reloads the output from the previous stage as a DataFrame object,
 retireves a follow-up question for each row, creates a new column in the
@@ -53,7 +53,7 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 )
 
 #####################################################
-# Constants:
+# Default values and constants:
 MODEL_NAME = "gemini-2.5-flash"
 MODEL_LOCATION = "europe-west1"
 
@@ -61,7 +61,6 @@ CODE_DIGITS = 5
 CANDIDATES_LIMIT = 10
 MAX_BATCH_SIZE = 10
 
-INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
@@ -71,12 +70,47 @@ MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
 tqdm.pandas()
 
 
-async def get_open_question_batch_async(batch: pd.DataFrame) -> list[str]:
+def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
+    """Updates the metadata dictionary with values from the command-line arguments,
+    using defaults where necessary.
+
+    Args:
+        parsed_args: The command-line arguments parsed by `parse_args()`.
+        in_metadata: The initial metadata dictionary loaded from the input JSON file.
+
+    Returns:
+        dict: The updated metadata dictionary with values from args and defaults.
+    """
+    updated_metadata = in_metadata.copy() if in_metadata else {}
+
+    # Update metadata with values from parsed_args, using defaults where necessary
+    updated_metadata["model_name"] = updated_metadata.get("model_name", MODEL_NAME)
+    updated_metadata["model_location"] = updated_metadata.get(
+        "model_location", MODEL_LOCATION
+    )
+    updated_metadata["code_digits"] = updated_metadata.get("code_digits", CODE_DIGITS)
+    updated_metadata["candidates_limit"] = updated_metadata.get(
+        "candidates_limit", CANDIDATES_LIMIT
+    )
+
+    if parsed_args.batch_size > MAX_BATCH_SIZE:
+        print(f"batch size too large. lower batch size to {MAX_BATCH_SIZE}")
+
+    updated_metadata["batch_size_async"] = min(parsed_args.batch_size, MAX_BATCH_SIZE)
+
+    return updated_metadata
+
+
+async def get_open_question_batch_async(
+    batch: pd.DataFrame, c_llm: ClassificationLLM
+) -> list[str]:
     """Process a batch of rows asynchronously to generate an open follow-up question for each row.
 
     Args:
         batch (pd.DataFrame): A batch of DataFrame containing rows with columns corresponding
                          to the survey responses, and the semantic search results.
+        c_llm (ClassificationLLM): An initialised instance of the ClassificationLLM class.
+
     Returns: question (str).
     """
     tasks = []
@@ -102,27 +136,11 @@ async def get_open_question_batch_async(batch: pd.DataFrame) -> list[str]:
     return results
 
 
-async def main():
+async def main_async(df, metadata, start_batch_id, args, c_llm):
     """Main function to generate follow up questions.
     Deviates from the stage_k template to enable async processing.
     """
-    global c_llm, args  # noqa: PLW0603 # pylint: disable=global-statement, global-variable-undefined
-    c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
-    print("Classification LLM loaded.")
-
-    args = parse_args("STG3")
-
-    df, metadata, start_batch_id, _ = set_up_initial_state(args)
-
-    if args.batch_size > MAX_BATCH_SIZE:
-        print(f"batch size too large. lower batch size to {MAX_BATCH_SIZE}")
-        batch_size_async = MAX_BATCH_SIZE
-    else:
-        batch_size_async = args.batch_size
-
     print("getting followup questions ...")
-    if "followup_question" not in df.columns:
-        df["followup_question"] = ""
 
     df_uncodable = df[~df["unambiguously_codable"]]
 
@@ -131,9 +149,9 @@ async def main():
             np.split(
                 df_uncodable,
                 np.arange(
-                    start_batch_id * batch_size_async,
+                    start_batch_id * metadata["batch_size_async"],
                     len(df_uncodable),
-                    batch_size_async,
+                    metadata["batch_size_async"],
                 ),
             )
         )
@@ -143,14 +161,14 @@ async def main():
         if batch_id == 0:
             pass
         else:
-            results = await get_open_question_batch_async(batch)
+            results = await get_open_question_batch_async(batch, c_llm)
             df.loc[batch.index, "followup_question"] = results
 
             persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
+                df=df,
+                metadata=metadata,
+                output_folder=args.output_folder,
+                output_shortname=args.output_shortname,
                 is_final=False,
                 completed_batches=(batch_id + start_batch_id),
             )
@@ -159,10 +177,38 @@ async def main():
 
     print("persisting results...")
     persist_results(
-        df, metadata, args.output_folder, args.output_shortname, is_final=True
+        df=df,
+        metadata=metadata,
+        output_folder=args.output_folder,
+        output_shortname=args.output_shortname,
+        is_final=True,
     )
     print("Done!")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    args = parse_args("STG3")
+
+    df, metadata, start_batch_id, _ = set_up_initial_state(args)
+
+    metadata = _update_metadata_with_args_and_defaults(args, metadata)
+
+    c_llm = ClassificationLLM(
+        model_name=metadata["model_name"],
+        model_location=metadata["model_location"],
+        verbose=False,
+    )
+    print("Classification LLM loaded.")
+
+    if "followup_question" not in df.columns:
+        df["followup_question"] = ""
+
+    asyncio.run(
+        main_async(
+            df=df,
+            metadata=metadata,
+            start_batch_id=start_batch_id,
+            args=args,
+            c_llm=c_llm,
+        )
+    )

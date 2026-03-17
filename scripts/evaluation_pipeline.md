@@ -32,50 +32,36 @@ Stage 1 -> Stage 2 -> Stage 3 -> Stage 4 -> Stage 5 -> Stage 6 (use the script f
 ### Prerequsites
 - Python 3.12
 - Poetry (This project uses Poetry for dependency management)
-- Start up the vector store form `sic-classification-vector-store` repo. Run:
-<br>
-```bash
-make run-vector-store
-```
-- Authenticate/reauthenticate gcloud:
-```bash
-gcloud auth application-default login
-```
-- Create `metadata.json` file (template available in `scripts/stage_1_add_semantic_search.py` within the module-level docstring)
+- Authentication to gcloud with gcloud `gcloud auth application-default login`
 
 ### Running the pipeline
 To run the whole pipeline (two prompts approach), use `run_full_pipeline.sh`, available in `sic_classification_utils/scripts`:
 
 ```bash
-./run_full_pipeline.sh 2 output/file/path /path/to/tlfs_data.csv /path/to/tlfs_data_metadata.json 20
+./run_full_pipeline.sh [-p <1|2>] -i </path/to/tlfs_data.{csv|parquet}> -o </path/to/output/folder> [-m </path/to/tlfs_data_metadata.json>] [-b 20]
 ```
-### Running script stage 1 (Stages 1 and 6):
-Running Stage 1 differs from running other stages.
-1. Start vector store
-2. Run:
-```bash
-poetry run python path/to/stage_1_add_semantic_search.py [-n output/file/name] -b <batch size> path/to/input.csv path/to/initial_metadata.json path/to/output_folder [-s]
-```
-Where:
-- `path/to/stage_1_add_semantic_search.py`: relative path to the script.
-- `-n output/file/name` (optional): Optional output file name. Default: `STG1`.
-- `-b <batch size>`: The size of processing batch.
-- `path/to/input.csv`: Relative path to the input file in .csv format. Requires columns as specified above.
-- `path/to/initial_metadata.json`: The path to the persisted metadata JSON file.
-- `path/to/output_folder`: The path to the specified output folder.
-- `-s`(optional): Flag indicating first or second semantic search. If flag is present, returns `secons_semantic_search_results`.
 
-### Running scripts stages 2-5 (Stages 2-5 and 7):
-1. (re-)authenicate with gcloud `gcloud auth application-default login`
+Where:
+- `-p 2` (optional): Flag indicating whether to run one-prompt (1) or two-prompt (2) version of the pipeline. Default is 2.
+- `-i </path/to/tlfs_data.{csv|parquet}>`: Relative path to the input file in .csv or .parquet format. Requires columns as specified above.
+- `-o </path/to/output/folder>`: The path to the specified output folder.
+- `-m </path/to/tlfs_data_metadata.json>` (optional): The path to the persisted metadata JSON file. If not provided, default values for metadata fields will be used.
+- `-b 20` (optional): The size of processing batch. Default is 20. For stages 2 and 3 the maximum batch size is 10.
+
+
+
+### Running individual scripts (Stages 1 to 7):
+
 2. Run:
 ```bash
-poetry run python path/to/stage/to/run.py [-n <output/file/name>] -b <batch size> path/to/input/file.parquet path/to/metadata.json path/to/output/folder [-s]
+poetry run python path/to/stage/to/run.py -i <path/to/input/file.{csv|parquet}>  -o <path/to/output/folder> [-m <path/to/metadata.json>] [-n <output_shortname>] [-b <batch_size>] [-s] [-r]
 ```
 Where:
 - `path/to/stage/to/run.py`: relative path to the script.
-- `-n output/file/name` (optional): Optional output file name. Default: `STG[#]`, where # is the stage number.
-- `-b <batch size>`: The size of processing batch. For stages 2 and 3 the maximum batch size is 10.
-- `path/to/input.parquet`: Relative path to the input file in .parquet format. Requires columns as specified above.
-- `path/to/initial_metadata.json`: The path to the persisted metadata JSON file from the previous stage.
-- `path/to/output_folder`: The path to the specified output folder.
-- `-s` (optional) **only in stage 2**: Flag indicating initial or final classification. If flag is present, returns results for final classification.
+- `-i <path/to/input/file.{csv|parquet}>`: Relative path to the input file in .csv or .parquet format. Requires columns as specified above.
+- `-m <path/to/metadata.json>` (optional): The path to the persisted metadata JSON file from the previous stage.
+- `-o <path/to/output/folder>`: The path to the specified output folder.
+- `-n <output_shortname>` (optional): Optional output file name. Default: `STG[#]`, where # is the stage number.
+- `-b <batch_size>` (optional): The size of processing batch. For stages using LLM (2,3,4 and 7) the maximum batch size is 10.
+- `-s` (optional): Flag indicating second run of classification steps. If flag is present, returns results for final classification using modified output column names to avoid conflicts with initial classification outputs.
+- `-r` (optional): Flag indicating whether to resume from the last completed batch. If flag is present, the script will attempt to load persisted output and resume from the last completed batch. If not present, the script will start from the beginning, even if there is persisted output available.

@@ -18,11 +18,13 @@ class LLMConfig(TypedDict):
 
     Attributes:
         llm_model_name (str): Name of the language model.
+        model_location (str): Location of the model.
         embedding_model_name (str): Name of the embedding model.
         db_dir (str): Directory for the database.
     """
 
     llm_model_name: str
+    model_location: str
     embedding_model_name: str
     db_dir: str
 

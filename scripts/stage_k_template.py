@@ -111,10 +111,10 @@ if __name__ == "__main__":
         parsed_args=args
     )
 
-    print("running X...")
     if "new_column" not in df.columns:
         df["new_column"] = 0
 
+    print("running X...")
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
@@ -130,10 +130,10 @@ if __name__ == "__main__":
         else:
             df.loc[batch.index, "new_column"] = batch.apply(get_x, axis=1)
             persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
+                df=df,
+                metadata=metadata,
+                output_folder=args.output_folder,
+                output_shortname=args.output_shortname,
                 is_final=False,
                 completed_batches=(batch_id + start_batch_id),
             )
@@ -142,6 +142,10 @@ if __name__ == "__main__":
 
     print("persisting results...")
     persist_results(
-        df, metadata, args.output_folder, args.output_shortname, is_final=True
+        df=df,
+        metadata=metadata,
+        output_folder=args.output_folder,
+        output_shortname=args.output_shortname,
+        is_final=True,
     )
     print("Done!")

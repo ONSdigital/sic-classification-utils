@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-echo "USAGE: ./run_full_pipeline.sh <1 for one-prompt, 2 for 2-prompt> <output_folder> <input_csv> <input_metadata_json> <batch_size>"
+echo "USAGE: ./run_full_pipeline.sh -p <1 for one-prompt, 2 for 2-prompt> -i <input_csv> -o <output_folder> -m <input_metadata_json> -b <batch_size>"
 echo ""
-echo "Keep in mind - you need a local vector store running for stage 1, and gcloud authentication for later stages."
+echo "Keep in mind - gcloud authentication needed for later stages."
 echo ""
 
 set -e
@@ -42,7 +42,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "RUNNING: STAGE 1"
-"$SCRIPT_DIR"/stage_1_add_semantic_search.py -n "STG1" -b "$batch_size" -i "$input_file" -m "$input_metadata_json" -o "$output_folder"
+"$SCRIPT_DIR"/stage_1_add_semantic_search.py -r -n "STG1" -b "$batch_size" -i "$input_file" -m "$input_metadata_json" -o "$output_folder"
 
 if [ "$pipeline_choice" -eq "1" ]; then
     echo "RUNNING: STAGE 2 (one-prompt pipeline)";
@@ -53,10 +53,10 @@ if [ "$pipeline_choice" -eq "1" ]; then
 
 else
     echo "RUNNING: STAGE 2 (initial classification)";
-    "$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -n "STG2" -b "$batch_size" -i "$output_folder""/STG1.parquet" -m "$output_folder""/STG1_metadata.json" -o "$output_folder"
+    "$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -r -n "STG2" -b "$batch_size" -i "$output_folder""/STG1.parquet" -m "$output_folder""/STG1_metadata.json" -o "$output_folder"
 
     echo "RUNNING: STAGE 3";
-    "$SCRIPT_DIR"/stage_3_add_open_questions.py -n "STG3" -b "$batch_size" -i "$output_folder""/STG2.parquet" -m "$output_folder""/STG2_metadata.json" -o "$output_folder"
+    "$SCRIPT_DIR"/stage_3_add_open_questions.py -r -n "STG3" -b "$batch_size" -i "$output_folder""/STG2.parquet" -m "$output_folder""/STG2_metadata.json" -o "$output_folder"
 
     echo "RUNNING: STAGE 4";
     "$SCRIPT_DIR"/stage_4_add_synthetic_responses.py -n "STG4" -b "$batch_size" -i "$output_folder""/STG3.parquet" -m "$output_folder""/STG3_metadata.json" -o "$output_folder"

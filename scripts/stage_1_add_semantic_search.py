@@ -111,7 +111,9 @@ def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
         updated_metadata["original_dataset_name"] = parsed_args.input_file
     updated_metadata = in_metadata.copy() if in_metadata else {}
 
-    if updated_metadata.get("original_dataset_name") != parsed_args.input_file:
+    if "original_dataset_name" not in updated_metadata:
+        updated_metadata["original_dataset_name"] = parsed_args.input_file
+    elif updated_metadata.get("original_dataset_name") != parsed_args.input_file:
         print(
             f"""Warning: The original dataset name in the input metadata ({
                 in_metadata.get('original_dataset_name')}) """
@@ -120,7 +122,9 @@ def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
         )
         updated_metadata["original_dataset_name"] = parsed_args.input_file
 
-    if updated_metadata.get("batch_size") != parsed_args.batch_size:
+    if "batch_size" not in updated_metadata:
+        updated_metadata["batch_size"] = parsed_args.batch_size
+    elif updated_metadata.get("batch_size") != parsed_args.batch_size:
         print(
             f"Warning: The batch size in the input metadata ({in_metadata.get('batch_size')}) "
             f"does not match the batch size specified in the arguments ({parsed_args.batch_size}). "
@@ -330,10 +334,10 @@ if __name__ == "__main__":
                 get_semantic_search_results, axis=1
             )
             persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
+                df=df,
+                metadata=metadata,
+                output_folder=args.output_folder,
+                output_shortname=args.output_shortname,
                 is_final=False,
                 completed_batches=(batch_id + start_batch_id),
             )
@@ -341,6 +345,10 @@ if __name__ == "__main__":
     print("semantic search complete")
     print("persisting results...")
     persist_results(
-        df, metadata, args.output_folder, args.output_shortname, is_final=True
+        df=df,
+        metadata=metadata,
+        output_folder=args.output_folder,
+        output_shortname=args.output_shortname,
+        is_final=True,
     )
     print("Done!")

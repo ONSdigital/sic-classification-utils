@@ -57,7 +57,8 @@ def get_config() -> FullConfig:
     """
     return {
         "llm": {
-            "llm_model_name": "gemini-1.0-pro",
+            "llm_model_name": "gemini-2.5-flash",
+            "model_location": "europe-west1",
             "embedding_model_name": "all-MiniLM-L6-v2",  # text-embedding-004
             "db_dir": "src/industrial_classification_utils/data/vector_store",
         },

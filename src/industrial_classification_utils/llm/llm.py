@@ -75,6 +75,8 @@ class ClassificationLLM:
     Args:
         model_name (str): Name of the model. Defaults to the value in the `config` file.
             Used if no LLM object is passed.
+        model_location (str): Location of the model. Defaults to the value in the `config` file.
+            Used if no LLM object is passed.
         llm (LLM): LLM to use. Optional.
         max_tokens (int): Maximum number of tokens to generate. Defaults to 1600.
         temperature (float): Temperature of the LLM model. Defaults to 0.0.
@@ -85,6 +87,7 @@ class ClassificationLLM:
     def __init__(  # noqa: PLR0913
         self,
         model_name: str = config["llm"]["llm_model_name"],
+        model_location: str = config["llm"].get("model_location", "europe-west2"),
         llm: Optional[Union[ChatVertexAI, ChatOpenAI]] = None,
         max_tokens: int = 1600,
         temperature: float = 0.0,
@@ -102,7 +105,7 @@ class ClassificationLLM:
                 model_name=model_name,
                 max_output_tokens=max_tokens,
                 temperature=temperature,
-                location="europe-west1",
+                location=model_location,
                 model_kwargs={"thinking_budget": 0},  # Reduce latency
             )
         elif model_name.startswith("gpt"):
