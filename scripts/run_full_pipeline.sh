@@ -27,7 +27,7 @@ done
 pipeline_choice="${pipeline_choice:-2}"
 
 # Set default for batch_size if not provided
-batch_size="${batch_size:-10}"
+batch_size="${batch_size:-100}"
 
 # input_metadata_json is optional, set to empty string if not provided
 input_metadata_json="${input_metadata_json:-}"
@@ -70,8 +70,5 @@ echo "RUNNING: STAGE 6"
 
 echo "RUNNING: STAGE 7"
 "$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -s -n "STG7" -b 10 -i "$output_folder""/STG6.parquet" -m "$output_folder""/STG6_metadata.json" -o "$output_folder"
-
-# echo "RUNNING: STAGE 5";
-# "$SCRIPT_DIR"/stage_5_assign_final_sic_code.py -n "STG5" -b "$batch_size" "$output_folder""/STG4.parquet" "$output_folder""/STG4_metadata.json" "$output_folder"
 
 echo "Pipeline Completed Successfully!"

@@ -1,43 +1,15 @@
 #!/usr/bin/env python3
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code, redefined-outer-name
 """This script assigns final SIC code using intermediate outputs from previous stages.
 It reloads the output from the previous stage as a DataFrame object, creates a new column in the
 DataFrame with this information, and then saves the results to CSV, parquet,
 and JSON metadata files in a user-specified output folder.
 
-Clarification On Script Arguments:
-
-```bash
-python stage_5_assign_final_sic_code.py --help
-```
-
-Example Usage:
-
-1. Ensure you have (re-)authenticated with `gcloud` for the current project.
-
-2. Run the script:
-   ```bash
-   python stage_5_assign_final_sic_code.py \
-        -n my_output \
-        -b 200 \
-        persisted_dataframe.parquet \
-        persisted_metadata.json \
-        output_folder
-   ```
-   where:
-     - `-n my_output` sets the output filename prefix to "my_output".
-     - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
-     - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
-     - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
-     - `output_folder` is the directory where results will be saved.
-
-3. Verify outputs exist as expected:
-    ```bash
-   ls output_folder
-   ```
-   (expect to see my_output.csv, my_output.parquet, and my_output_metadata.json)
-
+See README_evaluation_pipeline.md for more details on how to run.
 """
+
+import asyncio
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -57,6 +29,8 @@ MODEL_LOCATION = "europe-west1"
 
 CODE_DIGITS = 5
 
+MAX_ASYNC_BATCH_SIZE = 10
+
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
@@ -73,35 +47,67 @@ ANSWER_TO_CLOSED_QUESTION = ""
 tqdm.pandas()
 
 
-def assign_final_sic_code(row: pd.Series) -> dict:  # pylint: disable=C0103, W0613
-    """Using the provided row data, call an LLM to assign a final SIC code.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
+def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
+    """Updates the metadata dictionary with values from the command-line arguments,
+    using defaults where necessary.
 
     Args:
-        row (pd.Series): A row from the input DataFrame containing the columns corresponding
-                         to the survey responses, sic candidates, and follow-up questions and
-                         corresponding answers.
+        parsed_args: The command-line arguments parsed by `parse_args()`.
+        in_metadata: The initial metadata dictionary loaded from the input JSON file.
 
     Returns:
-        result (dict): final codability, assigned 5 digit SIC code or a higher level code if
-            final sic cannot be assigned unambiguously.
+        dict: The updated metadata dictionary with values from args and defaults.
     """
-    sa_final_sic = c_llm.final_sic_code(
-        industry_descr=row[MERGED_INDUSTRY_DESC_COL],
-        job_title=row[JOB_TITLE_COL],
-        job_description=row[JOB_DESCRIPTION_COL],
-        sic_candidates=row[SIC_CANDIDATES_COL],
-        # open_question=row[OPEN_QUESTION_COL],
-        # answer_to_open_question=row[ANSWER_TO_OPEN_QUESTION_COL],
-        # closed_question=CLOSED_QUESTION,
-        # answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
+    updated_metadata = in_metadata.copy() if in_metadata else {}
+
+    updated_metadata["batch_size"] = parsed_args.batch_size
+    updated_metadata["model_name"] = updated_metadata.get("model_name", MODEL_NAME)
+    updated_metadata["model_location"] = updated_metadata.get(
+        "model_location", MODEL_LOCATION
     )
-    result = {
-        "unambiguously_codable_final": sa_final_sic[0].codable,
-        "final_sic": sa_final_sic[0].unambiguous_code,
-        "higher_level_final_sic": sa_final_sic[0].higher_level_code,
-    }
-    return result
+    updated_metadata["code_digits"] = updated_metadata.get("code_digits", CODE_DIGITS)
+
+    if parsed_args.batch_size > MAX_ASYNC_BATCH_SIZE:
+        print(f"batch size too large. lower batch size to {MAX_ASYNC_BATCH_SIZE}")
+    updated_metadata["batch_size_async"] = min(
+        parsed_args.batch_size, MAX_ASYNC_BATCH_SIZE
+    )
+
+    return updated_metadata
+
+
+async def get_final_sic_batch_async(
+    batch: pd.DataFrame, c_llm: ClassificationLLM
+) -> list[dict[str, Any]]:
+    """Processes a batch of rows asynchronously to assign final SIC codes."""
+    tasks = []
+    for _, row in batch.iterrows():
+        task = asyncio.create_task(
+            c_llm.final_sic_code(
+                industry_descr=row[MERGED_INDUSTRY_DESC_COL],
+                job_title=row[JOB_TITLE_COL],
+                job_description=row[JOB_DESCRIPTION_COL],
+                sic_candidates=row[SIC_CANDIDATES_COL],
+                open_question=row[OPEN_QUESTION_COL],
+                answer_to_open_question=row[ANSWER_TO_OPEN_QUESTION_COL],
+                # closed_question=CLOSED_QUESTION,
+                # answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
+            )
+        )
+        tasks.append(task)
+
+    responses = await asyncio.gather(*tasks)
+
+    results: list[dict[str, Any]] = []
+    for final_assignment, _ in responses:
+        results.append(
+            {
+                "unambiguously_codable_final": final_assignment.codable,
+                "final_sic": final_assignment.unambiguous_code,
+                "higher_level_final_sic": final_assignment.higher_level_code,
+            }
+        )
+    return results
 
 
 def get_unambiguous_status_final(row: pd.Series) -> bool:
@@ -150,17 +156,10 @@ def get_higher_level_sic_code(row: pd.Series) -> str:
     return ""
 
 
-c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
-print("Classification LLM loaded.")
-
-if __name__ == "__main__":
-    args = parse_args("STG5")
-
-    df, metadata, start_batch_id, second_run_variables = set_up_initial_state(
-        parsed_args=args
-    )
-
+async def main_async(df, metadata, start_batch_id, args, c_llm):
+    """Runs final SIC assignment in async batches."""
     print("running final SIC code assignment...")
+
     for col in [
         "unambiguously_codable_final",
         "final_sic",
@@ -173,7 +172,11 @@ if __name__ == "__main__":
         enumerate(
             np.split(
                 df,
-                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+                np.arange(
+                    start_batch_id * metadata["batch_size_async"],
+                    len(df),
+                    metadata["batch_size_async"],
+                ),
             )
         )
     ):
@@ -182,9 +185,8 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            batch.loc[batch.index, "intermediate_unambig_results"] = batch.apply(
-                assign_final_sic_code, axis=1
-            )
+            results = await get_final_sic_batch_async(batch, c_llm)
+            batch.loc[batch.index, "intermediate_unambig_results"] = results
             df.loc[batch.index, "unambiguously_codable_final"] = batch.apply(
                 get_unambiguous_status_final, axis=1
             )
@@ -214,3 +216,28 @@ if __name__ == "__main__":
         is_final=True,
     )
     print("Done!")
+
+
+if __name__ == "__main__":
+    args = parse_args("STG5")
+
+    df, metadata, start_batch_id = set_up_initial_state(parsed_args=args)
+
+    metadata = _update_metadata_with_args_and_defaults(args, metadata)
+
+    c_llm = ClassificationLLM(
+        model_name=metadata["model_name"],
+        model_location=metadata["model_location"],
+        verbose=False,
+    )
+    print("Classification LLM loaded.")
+
+    asyncio.run(
+        main_async(
+            df=df,
+            metadata=metadata,
+            start_batch_id=start_batch_id,
+            args=args,
+            c_llm=c_llm,
+        )
+    )

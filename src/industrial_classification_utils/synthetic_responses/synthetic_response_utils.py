@@ -98,22 +98,24 @@ class SyntheticResponder:
         get_question_function: Optional[Callable] = None,
         persona: Optional[dict] = None,
         model_name: str = config["llm"]["llm_model_name"],
+        model_location: str = config["llm"]["model_location"],
     ):
         self.persona = persona
         self.get_question_function = get_question_function
         self.model_name = model_name
-        self.instantiate_llm(model_name=self.model_name)
+        self.model_location = model_location
         self.rephrase_desc = REPHRASE_INDUSTRY_DESCRIPTION
+        self.instantiate_llm()
         logger.debug("SyntheticResponder initialised, connection to LLM established.")
 
-    def instantiate_llm(self, model_name: str = "gemini-2.5-flash"):
+    def instantiate_llm(self):
         """Initialises a VertexAI instance."""
         try:
             self.llm = ChatVertexAI(
-                model_name=model_name,
+                model_name=self.model_name,
                 max_output_tokens=1_600,
                 temperature=0.0,
-                location="europe-west1",
+                location=self.model_location,
                 model_kwargs={"thinking_budget": 0},  # Reduce latency
             )
         except Exception as e:

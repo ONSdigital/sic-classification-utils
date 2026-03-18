@@ -6,38 +6,7 @@ retireves a follow-up question for each row, creates a new column in the
 DataFrame with this information, and then saves the results to CSV, parquet,
 and JSON metadata files in a user-specified output folder.
 
-Clarification On Script Arguments:
-
-```bash
-python stage_3_add_open_questions.py --help
-```
-
-Example Usage:
-
-1. Ensure you have (re-)authenticated with `gcloud` for the current project.
-
-2. Run the script:
-   ```bash
-   python stage_3_add_open_questions.py \
-        -n my_output \
-        -b 10 \
-        persisted_dataframe.parquet \
-        persisted_metadata.json \
-        output_folder
-   ```
-   where:
-     - `-n my_output` sets the output filename prefix to "my_output".
-     - `-b 10` specifies to process in batches of 10 rows, checkpointing between batches.
-     - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
-     - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
-     - `output_folder` is the directory where results will be saved.
-
-3. Verify outputs exist as expected:
-    ```bash
-   ls output_folder
-   ```
-   (expect to see my_output.csv, my_output.parquet, and my_output_metadata.json)
-
+See README_evaluation_pipeline.md for more details on how to run.
 """
 import asyncio
 
@@ -57,13 +26,14 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 MODEL_NAME = "gemini-2.5-flash"
 MODEL_LOCATION = "europe-west1"
 
-CODE_DIGITS = 5
-CANDIDATES_LIMIT = 10
 MAX_BATCH_SIZE = 10
 
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
+
+CANDIDATE_SIC_COL = "alt_sic_candidates"
+OUTPUT_COL = "followup_question"
 #####################################################
 
 # Enable progress bar for semantic-search
@@ -87,10 +57,6 @@ def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
     updated_metadata["model_name"] = updated_metadata.get("model_name", MODEL_NAME)
     updated_metadata["model_location"] = updated_metadata.get(
         "model_location", MODEL_LOCATION
-    )
-    updated_metadata["code_digits"] = updated_metadata.get("code_digits", CODE_DIGITS)
-    updated_metadata["candidates_limit"] = updated_metadata.get(
-        "candidates_limit", CANDIDATES_LIMIT
     )
 
     if parsed_args.batch_size > MAX_BATCH_SIZE:
@@ -120,7 +86,7 @@ async def get_open_question_batch_async(
                 industry_descr=row[MERGED_INDUSTRY_DESC_COL],
                 job_title=row[JOB_TITLE_COL],
                 job_description=row[JOB_DESCRIPTION_COL],
-                llm_output=row["alt_sic_candidates"],  # type: ignore
+                llm_output=row[CANDIDATE_SIC_COL],  # type: ignore
             )
         )
         tasks.append(task)
@@ -162,7 +128,7 @@ async def main_async(df, metadata, start_batch_id, args, c_llm):
             pass
         else:
             results = await get_open_question_batch_async(batch, c_llm)
-            df.loc[batch.index, "followup_question"] = results
+            df.loc[batch.index, OUTPUT_COL] = results
 
             persist_results(
                 df=df,
@@ -189,7 +155,7 @@ async def main_async(df, metadata, start_batch_id, args, c_llm):
 if __name__ == "__main__":
     args = parse_args("STG3")
 
-    df, metadata, start_batch_id, _ = set_up_initial_state(args)
+    df, metadata, start_batch_id = set_up_initial_state(args)
 
     metadata = _update_metadata_with_args_and_defaults(args, metadata)
 
@@ -200,8 +166,8 @@ if __name__ == "__main__":
     )
     print("Classification LLM loaded.")
 
-    if "followup_question" not in df.columns:
-        df["followup_question"] = ""
+    if OUTPUT_COL not in df.columns:
+        df[OUTPUT_COL] = ""
 
     asyncio.run(
         main_async(

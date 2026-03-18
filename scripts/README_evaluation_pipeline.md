@@ -65,3 +65,22 @@ Where:
 - `-b <batch_size>` (optional): The size of processing batch. For stages using LLM (2,3,4 and 7) the maximum batch size is 10.
 - `-s` (optional): Flag indicating second run of classification steps. If flag is present, returns results for final classification using modified output column names to avoid conflicts with initial classification outputs.
 - `-r` (optional): Flag indicating whether to resume from the last completed batch. If flag is present, the script will attempt to load persisted output and resume from the last completed batch. If not present, the script will start from the beginning, even if there is persisted output available.
+
+
+## Metadata
+The metadata JSON file is used to store configuration values and the state of the pipeline. The input metadata is optional, and if not provided, default values will be used. Checkpointing is implemented by storing the state of the pipeline in the intermediate metadata file after each batch, such as the last completed batch ID for each stage. This allows the pipeline to be resumed from the last completed batch in case of interruptions or failures.
+The following fields are stored in the metadata file:
+
+| Field                   | Default Value                                            | Description                                                                                  |
+|-------------------------|---------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| original_dataset_name   | <path/to/input/file.{csv/parquet}>                   | Path to the original dataset                                                                |
+| embedding_model_name    | all-MiniLM-L6-v2                                        | Embedding model used for semantic search                                                    |
+| db_dir                  | src/industrial_classification_utils/data/vector_store   | Directory for vector store database                                                         |
+| k_matches               | 20                                                      | Number of semantic search matches                                                           |
+| sic_index_file          | extended_SIC_index.xlsx                                 | SIC index file                                                                              |
+| sic_structure_file      | publisheduksicsummaryofstructureworksheet.xlsx          | SIC structure file                                                                          |
+| model_name              | gemini-2.5-flash                                        | LLM model used for classification                                                           |
+| code_digits             | 5                                                       | Number of digits in SIC code                                                                |
+| candidates_limit        | 10                                                      | Maximum number of SIC candidates                                                            |
+| batch_size              | 100                                                      | Processing batch size                                                                       |
+| batch_size_async        | 10                                                      | Batch size for asynchronous processing                                                      |

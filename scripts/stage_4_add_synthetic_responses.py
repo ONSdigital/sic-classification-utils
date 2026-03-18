@@ -6,41 +6,9 @@ answers the question in each row, creates a new column in the DataFrame
 with this information, and then saves the results to CSV, parquet, and
 JSON metadata files in a user-specified output folder.
 
-Clarification On Script Arguments:
-
-```bash
-python stage_4_add_snthetic_responses.py --help
-```
-
-Example Usage:
-
-1. Ensure you have (re-)authenticated with `gcloud` for the current project.
-
-2. Run the script:
-   ```bash
-   python stage_4_add_snthetic_responses.py \
-        -n my_output \
-        -b 200 \
-        persisted_dataframe.parquet \
-        persisted_metadata.json \
-        output_folder
-   ```
-   where:
-     - `-n my_output` sets the output filename prefix to "my_output".
-     - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
-     - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
-     - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
-     - `output_folder` is the directory where results will be saved.
-
-3. Verify outputs exist as expected:
-    ```bash
-   ls output_folder
-   ```
-   (expect to see my_output.csv, my_output.parquet, and my_output_metadata.json)
+See README_evaluation_pipeline.md for more details on how to run.
 """
-
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
 from industrial_classification_utils.synthetic_responses.synthetic_response_utils import (
@@ -60,20 +28,56 @@ MODEL_LOCATION = "europe-west1"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
+FOLLOWUP_QUESTION_COL = "followup_question"
+FOLLOWUP_ANSWER_COL = "followup_answer"
 #####################################################
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
 
 
-def get_followup_answer(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
-    """Answer followup question using the provided row data.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
+def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
+    """Updates the metadata dictionary with values from the command-line arguments,
+    using defaults where necessary.
 
     Args:
-        row (pd.Series): A row from the input DataFrame containing the survey responses,
-                         and the followup question.
-    Returns: llm_response (str).
+        parsed_args: The command-line arguments parsed by `parse_args()`.
+        in_metadata: The initial metadata dictionary loaded from the input JSON file.
+
+    Returns:
+        dict: The updated metadata dictionary with values from args and defaults.
+    """
+    updated_metadata = in_metadata.copy() if in_metadata else {}
+
+    if "batch_size" not in updated_metadata:
+        updated_metadata["batch_size"] = parsed_args.batch_size
+    elif updated_metadata.get("batch_size") != parsed_args.batch_size:
+        print(
+            f"Warning: The batch size in the input metadata ({in_metadata.get('batch_size')}) "
+            f"does not match the batch size specified in the arguments ({parsed_args.batch_size}). "
+            "The metadata will be updated with the batch size."
+        )
+        updated_metadata["batch_size"] = parsed_args.batch_size
+
+    updated_metadata["model_name"] = updated_metadata.get("model_name", MODEL_NAME)
+    updated_metadata["model_location"] = updated_metadata.get(
+        "model_location", MODEL_LOCATION
+    )
+
+    return updated_metadata
+
+
+def get_followup_answer(row: dict, one_sr: SyntheticResponder) -> str:
+    """Answer followup question using the provided row data.
+    Intended for use as a `.apply()` operation to create a new column in a pd.DataFrame object.
+
+    Args:
+        row (dict): A dictionary containing the survey responses and the followup question.
+        one_sr (SyntheticResponder): An instance of the SyntheticResponder class,
+            used to generate the answer.
+
+    Returns:
+        str: The generated answer to the followup question.
     """
     payload = {
         "industry_descr": row[MERGED_INDUSTRY_DESC_COL],
@@ -81,24 +85,30 @@ def get_followup_answer(row: pd.Series) -> str:  # pylint: disable=C0103, W0613
         "job_description": row[JOB_DESCRIPTION_COL],
     }
     if not row["unambiguously_codable"]:
-        answer_followup_prompt = SR.construct_prompt(payload, row["followup_question"])
-        return SR.answer_followup(answer_followup_prompt, payload).answer
+        answer_followup_prompt = one_sr.construct_prompt(
+            payload, row[FOLLOWUP_QUESTION_COL]
+        )
+        return one_sr.answer_followup(answer_followup_prompt, payload).answer
     return ""
 
-
-SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
 
 if __name__ == "__main__":
     args = parse_args("STG4")
 
-    job_description_rephrased = []
-    df, metadata, start_batch_id, second_run_variables = set_up_initial_state(args)
+    df, metadata, start_batch_id = set_up_initial_state(args)
+
+    metadata = _update_metadata_with_args_and_defaults(args, metadata)
+
+    sr = SyntheticResponder(
+        persona=None,
+        get_question_function=None,
+        model_name=metadata["model_name"],
+        model_location=metadata["model_location"],
+    )
 
     print("getting synthetic responses to followup questions...")
-    if "followup_answer" not in df.columns:
-        df["followup_answer"] = ""
-    if "industry_description_rephrased" not in df.columns:
-        df["industry_description_rephrased"] = ""
+    if FOLLOWUP_ANSWER_COL not in df.columns:
+        df[FOLLOWUP_ANSWER_COL] = ""
 
     for batch_id, batch in tqdm(
         enumerate(
@@ -113,8 +123,8 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, "followup_answer"] = batch.apply(
-                get_followup_answer, axis=1
+            df.loc[batch.index, FOLLOWUP_ANSWER_COL] = batch.apply(
+                lambda row: get_followup_answer(row, one_sr=sr), axis=1
             )
             persist_results(
                 df=df,

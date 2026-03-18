@@ -136,7 +136,7 @@ def _try_to_restart(
     return (
         df_persisted,
         metadata_persisted,
-        checkpoint_info_persisted,
+        checkpoint_info_persisted["completed_batches"],
     )
 
 
@@ -181,7 +181,7 @@ def persist_results(  # noqa:PLR0913, pylint: disable=too-many-arguments
         _write_json(
             {
                 "completed_batches": completed_batches,
-                "batch_size": metadata["batch_size"],
+                "batch_size": metadata.get("batch_size"),
                 "batch_size_async": metadata.get("batch_size_async"),
             },
             f"{output_folder}/{output_shortname}_checkpoint_info.json",
@@ -252,7 +252,7 @@ def _delete_folder_contents(folder_path: str) -> None:
 
 def set_up_initial_state(
     parsed_args: Namespace,
-) -> tuple[pd.DataFrame, dict, int, bool]:
+) -> tuple[pd.DataFrame, dict, int]:
     """Sets up the initial state for a pipeline stage.
 
     This function handles the logic for starting a processing job, either by
@@ -269,19 +269,11 @@ def set_up_initial_state(
             - pd.DataFrame: The loaded or newly created DataFrame.
             - dict: The loaded or newly created metadata dictionary.
             - int: The starting batch ID for processing.
-            - bool: True if a restart from a checkpoint was successful,
-              False otherwise.
     """
     if parsed_args.restart:
         try:
-            df, metadata, checkpoint_info = _try_to_restart(  # type: ignore
+            return _try_to_restart(  # type: ignore
                 parsed_args,
-            )
-            return (
-                df,
-                metadata,
-                checkpoint_info["completed_batches"],
-                parsed_args.second_run,
             )
         except FileNotFoundError:
             print("Could not load persisted output, starting from scratch")
@@ -290,8 +282,8 @@ def set_up_initial_state(
         metadata = _read_json(parsed_args.metadata_json)
     except FileNotFoundError:
         print(
-            f"Could not find metadata file {parsed_args.metadata_json}"
-            ", will use default values for metadata fields"
+            f"Could not find metadata file {parsed_args.metadata_json},"
+            " will use default values for metadata fields"
         )
         metadata = {}
 
@@ -310,4 +302,4 @@ def set_up_initial_state(
 
     print("Input loaded")
 
-    return df, metadata, 0, parsed_args.second_run
+    return df, metadata, 0

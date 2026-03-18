@@ -1,56 +1,20 @@
 #!/usr/bin/env python3
 # pylint: disable=duplicate-code
-"""This script performs X on a dataset and persists the results.
-It reads reloads the output from the previous stage as a DataFrame object,
-performs X for each row, creates a new column in the DataFrame with this
-information, and then saves the results to CSV, parquet, and JSON metadata
-files in a user-specified output folder.
-
-The script requires Y.
-
-Clarification On Script Arguments:
-
-```bash
-python stage_k_template.py --help
-```
-
-Example Usage:
-
-1. Ensure the vector store is running at http://0.0.0.0:8088.
-
-2. Run the script:
-   ```bash
-   python stage_k_template.py \
-        -n my_output \
-        -b 200 \
-        persisted_dataframe.parquet \
-        persisted_metadata.json \
-        output_folder
-   ```
-   where:
-     - `-n my_output` sets the output filename prefix to "my_output".
-     - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
-     - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
-     - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
-     - `output_folder` is the directory where results will be saved.
-
-3. Verify outputs exist as expected:
-    ```bash
-   ls output_folder
-   ```
-   (expect to see my_output.csv, my_output.parquet, and my_output_metadata.json)
+"""This is a template script for a stage in the evaluation pipeline.
 
 -----------------------------------------------------------------------------------------
 What to change, to adapt it to a given stage's requirements:
 
-* update `check_y` function to check whatever is required for your new stage.
-  (e.g. connection to LLM established, or Vector Store ready)
+* update `update_metadata_with_args_and_defaults()` function to add any relevant values from
+  the command-line arguments and to set any defaults for missing metadata values.
 * update `get_x()` function to achieve whatever is required for your new column.
-* create second `get_x2()` function if more than one new column is required.
-* update the `if __name__=="__main__" block to use the new function names, and
+* update the `if __name__=="__main__"` block to use the new function names, and
   repeat the creation of the empty new column and batch.apply() if you are adding
-  more thn one new column.
+  more than one new column.
+* if asynchronous calls are needed, move the batch processing loop into an async function
+  and use `asyncio.run()` for batches.  Respect the MAX_ASYNC_BATCH_SIZE constant.
 """
+
 from typing import Any
 
 import numpy as np
@@ -64,18 +28,53 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 )
 
 #####################################################
-# Constants:
-VECTOR_STORE_URL_BASE = "http://0.0.0.0:8088"
-STATUS_ENDPOINT = "/v1/sic-vector-store/status"
-SEARCH_ENDPOINT = "/v1/sic-vector-store/search-index"
+# Default values and constants:
+EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+DB_DIR = "src/industrial_classification_utils/data/vector_store"
+K_MATCHES = 20
+EMBEDDING_SIC_INDEX_FILE = "extended_SIC_index.xlsx"
+EMBEDDING_SIC_STRUCTURE_FILE = "publisheduksicsummaryofstructureworksheet.xlsx"
+MODEL_NAME = "gemini-2.5-flash"
+MODEL_LOCATION = "europe-west1"
+CODE_DIGITS = 5
+CANDIDATES_LIMIT = 10
 
-INDUSTRY_DESCR_COL = "sic2007_employee"
+MAX_ASYNC_BATCH_SIZE = 10
+
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
+INDUSTRY_DESCR_COL = "sic2007_employee"
+SELF_EMPLOYED_DESC_COL = "sic2007_self_employed"
+MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
+
+OUTPUT_COL = "stage_k_results"
 #####################################################
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
+
+
+def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
+    """Updates the metadata dictionary with values from the command-line arguments,
+    using defaults where necessary.
+
+    Args:
+        parsed_args: The command-line arguments parsed by `parse_args()`.
+        in_metadata: The initial metadata dictionary loaded from the input JSON file.
+
+    Returns:
+        dict: The updated metadata dictionary with values from args and defaults.
+    """
+    updated_metadata = in_metadata.copy() if in_metadata else {}
+
+    # Update metadata with values from parsed_args, using defaults where necessary
+
+    # for example for async LLM calls we limit batch size to avoid OOM errors:
+    updated_metadata["batch_size_async"] = min(
+        parsed_args.batch_size, MAX_ASYNC_BATCH_SIZE
+    )
+
+    return updated_metadata
 
 
 def check_y():
@@ -107,12 +106,12 @@ if __name__ == "__main__":
     check_y()
     print("Requirement Y is met")
 
-    df, metadata, start_batch_id, second_run_variables = set_up_initial_state(
-        parsed_args=args
-    )
+    df, metadata, start_batch_id = set_up_initial_state(parsed_args=args)
 
-    if "new_column" not in df.columns:
-        df["new_column"] = 0
+    metadata = _update_metadata_with_args_and_defaults(args, metadata)
+
+    if OUTPUT_COL not in df.columns:
+        df[OUTPUT_COL] = 0
 
     print("running X...")
     for batch_id, batch in tqdm(
@@ -128,7 +127,7 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, "new_column"] = batch.apply(get_x, axis=1)
+            df.loc[batch.index, OUTPUT_COL] = batch.apply(get_x, axis=1)
             persist_results(
                 df=df,
                 metadata=metadata,
