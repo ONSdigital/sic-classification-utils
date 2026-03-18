@@ -14,12 +14,12 @@ Stage 1 -> Stage 2 -> Stage 3 -> Stage 4 -> Stage 5 -> Stage 6 (use the script f
 |Stage|Pipeline process|Required columns|Columns added|
 |--|--|--|--|
 |1|Create `merged_industry_description`. Perform Semantic Search| `sic2007_employee`, `soc2020_job_title`, `soc2020_job_description`, `sic2007_self_employed`|`merged_industry_description`, `semantic_search_results`|
-|2|Initial classification and ambiguity assesment| `soc2020_job_title`, `soc2020_job_description`, `merged_industry_description`, `semantic_search_results`|`unambiguously_codable`, `initial_code`, `alt_sic_candidates`|
-|3|Generate follow up question when `unambiguously_codable` is `False`| `unambiguously_codable`, `merged_industry_description`, `soc2020_job_title`, `soc2020_job_description`, `alt_sic_candidates`|`followup_question`|
-|4|Generate follow up answer| `unambiguously_codable`, `merged_industry_description`, `soc2020_job_title`, `soc2020_job_description`, `followup_question`|`followup_answer`|
-|5|Modify `merged_industry_description`| `merged_industry_description`, `followup_question`, `followup_answer`| `extended_industry_description`|
-|6|Second semantic search, using modified industry label| `soc2020_job_title`, `soc2020_job_description`, `extended_industry_description`|`second_semantic_search_results`|
-|7|Final classification and ambiguity assesment| `soc2020_job_title`, `soc2020_job_description`, `extended_industry_description`, `second_semantic_search_results`|`unambiguously_codable_final`, `final_code`, `alt_sic_candidates_final`|
+|2|Initial classification and ambiguity assesment| `soc2020_job_title`, `soc2020_job_description`, `merged_industry_desc`, `semantic_search_results`|`unambiguously_codable`, `initial_code`, `alt_sic_candidates`|
+|3|Generate follow up question when `unambiguously_codable` is `False`| `unambiguously_codable`, `merged_industry_desc`, `soc2020_job_title`, `soc2020_job_description`, `alt_sic_candidates`|`followup_question`|
+|4|Generate follow up answer| `unambiguously_codable`, `merged_industry_desc`, `soc2020_job_title`, `soc2020_job_description`, `followup_question`|`followup_answer`|
+|5|Modify `merged_industry_desc`| `merged_industry_desc`, `followup_question`, `followup_answer`| `extended_industry_desc`|
+|6|Second semantic search, using modified industry label| `soc2020_job_title`, `soc2020_job_description`, `extended_industry_desc`|`second_semantic_search_results`|
+|7|Final classification and ambiguity assesment| `soc2020_job_title`, `soc2020_job_description`, `extended_industry_desc`, `second_semantic_search_results`|`unambiguously_codable_final`, `final_code`, `alt_sic_candidates_final`|
 
 
 ## Usage
