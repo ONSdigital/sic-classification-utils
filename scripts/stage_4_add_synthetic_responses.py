@@ -78,7 +78,11 @@ if __name__ == "__main__":
         enumerate(
             np.split(
                 df,
-                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+                np.arange(
+                    start_batch_id * metadata["batch_size"],
+                    len(df),
+                    metadata["batch_size"],
+                ),
             )
         )
     ):
