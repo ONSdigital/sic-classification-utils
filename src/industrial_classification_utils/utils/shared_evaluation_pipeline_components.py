@@ -381,7 +381,7 @@ def _update_metadata_with_args_and_defaults(
             BATCH_SIZE if parsed_args.batch_size is None else parsed_args.batch_size
         )
 
-    if "async_batch_size" not in updated_metadata:
+    if "batch_size_async" not in updated_metadata:
         updated_metadata["batch_size_async"] = min(
             updated_metadata["batch_size"], MAX_ASYNC_BATCH_SIZE
         )
