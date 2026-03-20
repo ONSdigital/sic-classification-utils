@@ -49,8 +49,8 @@ def get_default_config() -> FullConfig:
         "lookups": {
             "sic_index": (
                 "industrial_classification_utils.data.sic_index",
-                "extended_SIC_index.xlsx",
-                # "uksic2007indexeswithaddendumdecember2022.xlsx",
+                # "extended_SIC_index.xlsx",
+                "uksic2007indexeswithaddendumdecember2022.xlsx",
             ),
             "sic_structure": (
                 "industrial_classification_utils.data.sic_index",
