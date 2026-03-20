@@ -22,9 +22,6 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Constants:
-MODEL_NAME = "gemini-2.5-flash"
-MODEL_LOCATION = "europe-west1"
-
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
@@ -34,37 +31,6 @@ FOLLOWUP_ANSWER_COL = "followup_answer"
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
-
-
-def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
-    """Updates the metadata dictionary with values from the command-line arguments,
-    using defaults where necessary.
-
-    Args:
-        parsed_args: The command-line arguments parsed by `parse_args()`.
-        in_metadata: The initial metadata dictionary loaded from the input JSON file.
-
-    Returns:
-        dict: The updated metadata dictionary with values from args and defaults.
-    """
-    updated_metadata = in_metadata.copy() if in_metadata else {}
-
-    if "batch_size" not in updated_metadata:
-        updated_metadata["batch_size"] = parsed_args.batch_size
-    elif updated_metadata.get("batch_size") != parsed_args.batch_size:
-        print(
-            f"Warning: The batch size in the input metadata ({in_metadata.get('batch_size')}) "
-            f"does not match the batch size specified in the arguments ({parsed_args.batch_size}). "
-            "The metadata will be updated with the batch size."
-        )
-        updated_metadata["batch_size"] = parsed_args.batch_size
-
-    updated_metadata["model_name"] = updated_metadata.get("model_name", MODEL_NAME)
-    updated_metadata["model_location"] = updated_metadata.get(
-        "model_location", MODEL_LOCATION
-    )
-
-    return updated_metadata
 
 
 def get_followup_answer(row: dict, one_sr: SyntheticResponder) -> str:
@@ -96,8 +62,6 @@ if __name__ == "__main__":
     args = parse_args("STG4")
 
     df, metadata, start_batch_id = set_up_initial_state(args)
-
-    metadata = _update_metadata_with_args_and_defaults(args, metadata)
 
     sr = SyntheticResponder(
         persona=None,

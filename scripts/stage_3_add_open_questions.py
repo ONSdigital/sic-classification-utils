@@ -23,11 +23,6 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Default values and constants:
-MODEL_NAME = "gemini-2.5-flash"
-MODEL_LOCATION = "europe-west1"
-
-MAX_BATCH_SIZE = 10
-
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
@@ -38,33 +33,6 @@ OUTPUT_COL = "followup_question"
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
-
-
-def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
-    """Updates the metadata dictionary with values from the command-line arguments,
-    using defaults where necessary.
-
-    Args:
-        parsed_args: The command-line arguments parsed by `parse_args()`.
-        in_metadata: The initial metadata dictionary loaded from the input JSON file.
-
-    Returns:
-        dict: The updated metadata dictionary with values from args and defaults.
-    """
-    updated_metadata = in_metadata.copy() if in_metadata else {}
-
-    # Update metadata with values from parsed_args, using defaults where necessary
-    updated_metadata["model_name"] = updated_metadata.get("model_name", MODEL_NAME)
-    updated_metadata["model_location"] = updated_metadata.get(
-        "model_location", MODEL_LOCATION
-    )
-
-    if parsed_args.batch_size > MAX_BATCH_SIZE:
-        print(f"batch size too large. lower batch size to {MAX_BATCH_SIZE}")
-
-    updated_metadata["batch_size_async"] = min(parsed_args.batch_size, MAX_BATCH_SIZE)
-
-    return updated_metadata
 
 
 async def get_open_question_batch_async(
@@ -156,8 +124,6 @@ if __name__ == "__main__":
     args = parse_args("STG3")
 
     df, metadata, start_batch_id = set_up_initial_state(args)
-
-    metadata = _update_metadata_with_args_and_defaults(args, metadata)
 
     c_llm = ClassificationLLM(
         model_name=metadata["model_name"],

@@ -29,7 +29,6 @@ from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 from survey_assist_utils.logging import get_logger
 
-from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.llm.prompt import (
     FIX_PARSING_PROMPT,
     GENERAL_PROMPT_RAG,
@@ -52,6 +51,7 @@ from industrial_classification_utils.models.response_model import (
     UnambiguousResponse,
 )
 from industrial_classification_utils.utils.constants import (
+    get_default_config,
     truncate_identifier,
 )
 from industrial_classification_utils.utils.sic_data_access import (
@@ -60,7 +60,7 @@ from industrial_classification_utils.utils.sic_data_access import (
 )
 
 logger = get_logger(__name__)
-config = get_config()
+config = get_default_config()
 
 
 # pylint: disable=too-many-instance-attributes
@@ -87,7 +87,7 @@ class ClassificationLLM:
     def __init__(  # noqa: PLR0913
         self,
         model_name: str = config["llm"]["llm_model_name"],
-        model_location: str = config["llm"].get("model_location", "europe-west2"),
+        model_location: str = config["llm"]["model_location"],
         llm: Optional[Union[ChatVertexAI, ChatOpenAI]] = None,
         max_tokens: int = 1600,
         temperature: float = 0.0,
@@ -219,9 +219,9 @@ class ClassificationLLM:
         self,
         short_list: list[dict],
         chars_limit: int = 14000,
-        candidates_limit: int = 5,
+        candidates_limit: int = config["llm"]["candidates_limit"],
         activities_limit: int = 3,
-        code_digits: int = 5,
+        code_digits: int = config["llm"]["code_digits"],
     ) -> str:
         """Create candidate list for the prompt based on the given parameters.
 
@@ -247,7 +247,7 @@ class ClassificationLLM:
         a: defaultdict[Any, list] = defaultdict(list)
 
         logger.debug(
-            f"Chars Lmt: {chars_limit} Candidate Lmt: {candidates_limit} "
+            f"Candidates Lmt: {chars_limit} Candidate Lmt: {candidates_limit} "
             f"Activities Lmt: {activities_limit} Short List Len: {len(short_list)} "
             f"Code Digits: {code_digits}"
         )
@@ -278,9 +278,9 @@ class ClassificationLLM:
         self,
         short_list: list[dict],
         chars_limit: int = 14000,
-        candidates_limit: int = 5,
+        candidates_limit: int = config["llm"]["candidates_limit"],
         activities_limit: int = 3,
-        code_digits: int = 5,
+        code_digits: int = config["llm"]["code_digits"],
         filtered_list: Optional[list[str]] = None,
     ) -> str:
         """Create candidate list for the prompt based on the given parameters.
@@ -340,8 +340,8 @@ class ClassificationLLM:
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        code_digits: int = 5,
-        candidates_limit: int = 5,
+        code_digits: int = config["llm"]["code_digits"],
+        candidates_limit: int = config["llm"]["candidates_limit"],
         short_list: Optional[list[dict[Any, Any]]] = None,
     ) -> tuple[SicResponse, Optional[list[dict[Any, Any]]], Optional[Any]]:
         """Generates a SIC classification based on respondent's data using RAG approach.
@@ -472,8 +472,8 @@ class ClassificationLLM:
         semantic_search_results: list[dict],
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        candidates_limit: int = 5,
-        code_digits: int = 5,
+        candidates_limit: int = config["llm"]["candidates_limit"],
+        code_digits: int = config["llm"]["code_digits"],
         correlation_id: Optional[str] = None,
     ) -> tuple[UnambiguousResponse, Optional[Any]]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
@@ -627,8 +627,8 @@ class ClassificationLLM:
         industry_descr: str,
         job_title: Optional[str] = None,
         job_description: Optional[str] = None,
-        code_digits: int = 5,
-        candidates_limit: int = 7,
+        code_digits: int = config["llm"]["code_digits"],
+        candidates_limit: int = config["llm"]["candidates_limit"],
         output_limit: int = 5,
         short_list: Optional[list[dict[Any, Any]]] = None,
     ) -> Union[tuple[Any, Optional[list], Optional[dict[str, Any]]], dict[str, Any]]:

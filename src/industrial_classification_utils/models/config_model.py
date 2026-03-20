@@ -12,6 +12,20 @@ Classes:
 from typing import TypedDict
 
 
+class EmbeddingConfig(TypedDict):
+    """Configuration for embedding model and vector store.
+
+    Attributes:
+        embedding_model_name (str): Name of the embedding model.
+        db_dir (str): Directory for the database.
+        k_matches (int): Number of matches to return in similarity search.
+    """
+
+    embedding_model_name: str
+    db_dir: str
+    k_matches: int
+
+
 class LLMConfig(TypedDict):
     """Configuration for language and embedding models and location of
     the vector store.
@@ -19,14 +33,14 @@ class LLMConfig(TypedDict):
     Attributes:
         llm_model_name (str): Name of the language model.
         model_location (str): Location of the model.
-        embedding_model_name (str): Name of the embedding model.
-        db_dir (str): Directory for the database.
+        code_digits (int): Number of digits in the SIC code.
+        candidates_limit (int): Maximum number of candidate SIC codes to return.
     """
 
     llm_model_name: str
     model_location: str
-    embedding_model_name: str
-    db_dir: str
+    code_digits: int
+    candidates_limit: int
 
 
 class LookupsConfig(TypedDict):
@@ -47,9 +61,11 @@ class FullConfig(TypedDict):
     """Full configuration model for the SIC classification.
 
     Attributes:
+        embedding (EmbeddingConfig): Configuration for embedding model and vector store.
         llm (LLMConfig): Configuration for language and embedding models.
         lookups (LookupsConfig): Configuration for SIC-related lookup tables.
     """
 
+    embedding: EmbeddingConfig
     llm: LLMConfig
     lookups: LookupsConfig

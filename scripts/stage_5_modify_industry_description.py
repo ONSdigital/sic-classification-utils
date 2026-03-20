@@ -23,52 +23,17 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Constants:
-MODEL_NAME = "gemini-2.5-flash"
-MODEL_LOCATION = "europe-west1"
+EXTENDED_INDUSTRY_METHOD = "concatenate"
 
 FOLLOWUP_QUESTION = "followup_question"
 FOLLOWUP_ANSWER = "followup_answer"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
-MERGED_INDUSTRY_METHOD = "concatenate"
 
 OUTPUT_COL = "extended_industry_desc"
 #####################################################
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
-
-
-def _update_metadata_with_args_and_defaults(parsed_args, in_metadata, method: str):
-    """Updates the metadata dictionary with values from the command-line arguments,
-    using defaults where necessary.
-
-    Args:
-        parsed_args: The command-line arguments parsed by `parse_args()`.
-        in_metadata: The initial metadata dictionary loaded from the input JSON file.
-        method: The industry-description merge/rephrase method used in this stage.
-
-    Returns:
-        dict: The updated metadata dictionary with values from args and defaults.
-    """
-    updated_metadata = in_metadata.copy() if in_metadata else {}
-
-    if "batch_size" not in updated_metadata:
-        updated_metadata["batch_size"] = parsed_args.batch_size
-    elif updated_metadata.get("batch_size") != parsed_args.batch_size:
-        print(
-            f"Warning: The batch size in the input metadata ({in_metadata.get('batch_size')}) "
-            f"does not match the batch size specified in the arguments ({parsed_args.batch_size}). "
-            "The metadata will be updated with the batch size."
-        )
-        updated_metadata["batch_size"] = parsed_args.batch_size
-
-    updated_metadata["model_name"] = updated_metadata.get("model_name", MODEL_NAME)
-    updated_metadata["model_location"] = updated_metadata.get(
-        "model_location", MODEL_LOCATION
-    )
-    updated_metadata["merged_industry_method"] = method
-
-    return updated_metadata
 
 
 def get_rephrased_industry_desc(
@@ -111,9 +76,7 @@ if __name__ == "__main__":
 
     df, metadata, start_batch_id = set_up_initial_state(args)
 
-    metadata = _update_metadata_with_args_and_defaults(
-        args, metadata, method=MERGED_INDUSTRY_METHOD
-    )
+    metadata["extended_industry_method"] = EXTENDED_INDUSTRY_METHOD
 
     sr = SyntheticResponder(
         persona=None,
@@ -141,7 +104,7 @@ if __name__ == "__main__":
         else:
             df.loc[batch.index, OUTPUT_COL] = batch.apply(
                 lambda row: get_rephrased_industry_desc(
-                    row, one_sr=sr, method=MERGED_INDUSTRY_METHOD
+                    row, one_sr=sr, method=metadata["extended_industry_method"]
                 ),
                 axis=1,
             )

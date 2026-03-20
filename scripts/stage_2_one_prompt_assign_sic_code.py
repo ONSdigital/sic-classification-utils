@@ -26,9 +26,6 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Constants:
-MODEL_NAME = "gemini-2.5-flash"
-MODEL_LOCATION = "europe-west1"
-
 CODE_DIGITS = 5
 CANDIDATES_LIMIT = 10
 MAX_ASYNC_BATCH_SIZE = 10
@@ -41,39 +38,6 @@ SEMANTIC_SEARCH_COL = "semantic_search_results"
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
-
-
-def _update_metadata_with_args_and_defaults(
-    parsed_args: Namespace, in_metadata: dict[str, Any]
-) -> dict[str, Any]:
-    """Updates the metadata dictionary with values from the command-line arguments,
-    using defaults where necessary.
-
-    Args:
-        parsed_args: The command-line arguments parsed by `parse_args()`.
-        in_metadata: The initial metadata dictionary loaded from the input JSON file.
-
-    Returns:
-        dict: The updated metadata dictionary with values from args and defaults.
-    """
-    updated_metadata: dict[str, Any] = in_metadata.copy() if in_metadata else {}
-
-    updated_metadata["model_name"] = updated_metadata.get("model_name", MODEL_NAME)
-    updated_metadata["model_location"] = updated_metadata.get(
-        "model_location", MODEL_LOCATION
-    )
-    updated_metadata["code_digits"] = updated_metadata.get("code_digits", CODE_DIGITS)
-    updated_metadata["candidates_limit"] = updated_metadata.get(
-        "candidates_limit", CANDIDATES_LIMIT
-    )
-
-    if parsed_args.batch_size > MAX_ASYNC_BATCH_SIZE:
-        print(f"batch size too large. lower batch size to {MAX_ASYNC_BATCH_SIZE}")
-    updated_metadata["batch_size_async"] = min(
-        parsed_args.batch_size, MAX_ASYNC_BATCH_SIZE
-    )
-
-    return updated_metadata
 
 
 async def get_rag_response_batch_async(
@@ -166,16 +130,23 @@ async def main_async(
             results = await get_rag_response_batch_async(batch, c_llm)
 
             # Write results directly into output columns (no extra apply helpers)
-            df.loc[batch.index, "unambiguously_codable"] = [
-                r["unambiguously_codable"] for r in results
-            ]
-            df.loc[batch.index, "initial_code"] = [r["initial_code"] for r in results]
-            df.loc[batch.index, "alt_sic_candidates"] = [
-                r["alt_sic_candidates"] for r in results
-            ]
-            df.loc[batch.index, "followup_question"] = [
-                r["followup_question"] for r in results
-            ]
+            df.loc[batch.index, "unambiguously_codable"] = pd.Series(
+                [r["unambiguously_codable"] for r in results],
+                index=batch.index,
+            )
+            df.loc[batch.index, "initial_code"] = pd.Series(
+                [r["initial_code"] for r in results],
+                index=batch.index,
+            )
+            df.loc[batch.index, "alt_sic_candidates"] = pd.Series(
+                [r["alt_sic_candidates"] for r in results],
+                index=batch.index,
+                dtype="object",
+            )
+            df.loc[batch.index, "followup_question"] = pd.Series(
+                [r["followup_question"] for r in results],
+                index=batch.index,
+            )
 
             persist_results(
                 df=df,
@@ -201,8 +172,6 @@ async def main_async(
 if __name__ == "__main__":
     args = parse_args("STG2")
     df, metadata, start_batch_id = set_up_initial_state(args)
-
-    metadata = _update_metadata_with_args_and_defaults(args, metadata)
 
     if "unambiguously_codable" not in df.columns:
         df["unambiguously_codable"] = False

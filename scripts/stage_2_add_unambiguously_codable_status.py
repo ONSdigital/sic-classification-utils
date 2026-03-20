@@ -29,13 +29,6 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Default values and constants:
-MODEL_NAME = "gemini-2.5-flash"
-MODEL_LOCATION = "europe-west1"
-CODE_DIGITS = 5
-CANDIDATES_LIMIT = 10
-
-MAX_ASYNC_BATCH_SIZE = 10
-
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
@@ -56,42 +49,6 @@ OUTPUT_COLS_FINAL = {
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
-
-
-def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
-    """Updates the metadata dictionary with values from the command-line arguments,
-    using defaults where necessary.
-
-    Args:
-        parsed_args: The command-line arguments parsed by `parse_args()`.
-        in_metadata: The initial metadata dictionary loaded from the input JSON file.
-
-    Returns:
-        dict: The updated metadata dictionary with values from args and defaults.
-    """
-    updated_metadata = in_metadata.copy() if in_metadata else {}
-
-    # Persisted checkpoint metadata expects this key.
-    updated_metadata["batch_size"] = parsed_args.batch_size
-
-    # Update metadata with values from parsed_args, using defaults where necessary
-    updated_metadata["model_name"] = updated_metadata.get("model_name", MODEL_NAME)
-    updated_metadata["model_location"] = updated_metadata.get(
-        "model_location", MODEL_LOCATION
-    )
-    updated_metadata["code_digits"] = updated_metadata.get("code_digits", CODE_DIGITS)
-    updated_metadata["candidates_limit"] = updated_metadata.get(
-        "candidates_limit", CANDIDATES_LIMIT
-    )
-
-    if parsed_args.batch_size > MAX_ASYNC_BATCH_SIZE:
-        print(f"batch size too large. lower batch size to {MAX_ASYNC_BATCH_SIZE}")
-
-    updated_metadata["batch_size_async"] = min(
-        parsed_args.batch_size, MAX_ASYNC_BATCH_SIZE
-    )
-
-    return updated_metadata
 
 
 # This new async function processes a whole batch of rows concurrently.
@@ -236,8 +193,6 @@ if __name__ == "__main__":
     args = parse_args("STG2")
 
     df, metadata, start_batch_id = set_up_initial_state(parsed_args=args)
-
-    metadata = _update_metadata_with_args_and_defaults(args, metadata)
 
     c_llm = ClassificationLLM(
         model_name=metadata["model_name"],

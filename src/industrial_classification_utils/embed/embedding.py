@@ -24,9 +24,7 @@ from langchain_core.documents import Document
 from langchain_google_vertexai import VertexAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from industrial_classification_utils.models.config_model import (
-    FullConfig,
-)
+from industrial_classification_utils.utils.constants import get_default_config
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
@@ -35,52 +33,18 @@ from industrial_classification_utils.utils.sic_data_access import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Share configuration with other modules
-embedding_config = {
-    "embedding_model_name": "unknown",
-    "llm_model_name": "unknown",
-    "db_dir": "unknown",
-    "sic_index": "unknown",
-    "sic_structure": "unknown",
-    "sic_condensed": "unknown",
-    "matches": 0,
-    "index_size": 0,
-}
-
-
-def get_config() -> FullConfig:
-    """Returns the configuration dictionary for the LLM.
-
-    Returns:
-        dict: A dictionary containing configuration details for the embedding model
-        and lookup file paths.
-    """
-    return {
-        "llm": {
-            "llm_model_name": "gemini-2.5-flash",
-            "model_location": "europe-west1",
-            "embedding_model_name": "all-MiniLM-L6-v2",  # text-embedding-004
-            "db_dir": "src/industrial_classification_utils/data/vector_store",
-        },
-        "lookups": {
-            "sic_index": (
-                "industrial_classification_utils.data.sic_index",
-                "uksic2007indexeswithaddendumdecember2022.xlsx",
-            ),
-            "sic_structure": (
-                "industrial_classification_utils.data.sic_index",
-                "publisheduksicsummaryofstructureworksheet.xlsx",
-            ),
-            "sic_condensed": (
-                "industrial_classification_utils.data.example",
-                "sic_2d_condensed.txt",
-            ),
-        },
-    }
-
-
-config = get_config()
+config = get_default_config()
 MAX_BATCH_SIZE = 5400
+
+embedding_config = {
+    "embedding_model_name": config["embedding"]["embedding_model_name"],
+    "db_dir": config["embedding"]["db_dir"],
+    "sic_index": config["lookups"]["sic_index"],
+    "sic_structure": config["lookups"]["sic_structure"],
+    "sic_condensed": config["lookups"]["sic_condensed"],
+    "matches": config["embedding"]["k_matches"],
+    "index_size": None,
+}
 
 
 class CustomVertexAIEmbeddings(VertexAIEmbeddings):
@@ -124,9 +88,9 @@ class EmbeddingHandler:
 
     def __init__(
         self,
-        embedding_model_name: str = config["llm"]["embedding_model_name"],
-        db_dir: str = config["llm"]["db_dir"],
-        k_matches: int = 20,
+        embedding_model_name: str = config["embedding"]["embedding_model_name"],
+        db_dir: str = config["embedding"]["db_dir"],
+        k_matches: int = config["embedding"]["k_matches"],
     ):
         """Initializes the EmbeddingHandler.
 
@@ -136,7 +100,7 @@ class EmbeddingHandler:
             db_dir (str, optional): Directory for the vector store database.
                 Defaults to the value in the configuration file.
             k_matches (int, optional): Number of nearest matches to retrieve.
-                Defaults to 20.
+                Defaults to the value in the configuration file.
         """
         self.embeddings: Any  # Use Any if no common base type exists
         if embedding_model_name.startswith(("textembedding-", "text-embedding-")):
@@ -161,9 +125,6 @@ class EmbeddingHandler:
 
         # 🔄 Update shared config
         embedding_config["embedding_model_name"] = embedding_model_name
-        embedding_config["llm_model_name"] = config["llm"].get(
-            "llm_model_name", "unknown"
-        )
         embedding_config["db_dir"] = db_dir
         embedding_config["matches"] = self.k_matches
         embedding_config["index_size"] = self._index_size
@@ -318,9 +279,6 @@ class EmbeddingHandler:
         embedding_config["matches"] = self.k_matches
         embedding_config["db_dir"] = self.db_dir
         embedding_config["embedding_model_name"] = self.embeddings.model_name
-        embedding_config["llm_model_name"] = config["llm"].get(
-            "llm_model_name", "unknown"
-        )
         logger.info("Embedding config updated: %s", embedding_config)
 
     def search_index(
@@ -375,7 +333,6 @@ class EmbeddingHandler:
         """Returns the current embedding configuration as a dictionary."""
         return {
             "embedding_model_name": str(embedding_config["embedding_model_name"]),
-            "llm_model_name": str(embedding_config["llm_model_name"]),
             "db_dir": str(embedding_config["db_dir"]),
             "sic_index": str(embedding_config["sic_index"]),
             "sic_structure": str(embedding_config["sic_structure"]),

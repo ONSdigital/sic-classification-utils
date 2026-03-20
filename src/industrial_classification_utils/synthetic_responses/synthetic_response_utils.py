@@ -59,13 +59,13 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts.prompt import PromptTemplate
 from langchain_google_vertexai import ChatVertexAI
 
-from industrial_classification_utils.embed.embedding import get_config
+from industrial_classification_utils.utils.constants import get_default_config
 
 from .prompts import REPHRASE_INDUSTRY_DESCRIPTION, make_followup_answer_prompt_pydantic
 from .response_models import FollowupAnswerResponse, RephraseDescription
 
 logger = logging.getLogger(__name__)
-config = get_config()
+config = get_default_config()
 
 
 class SyntheticResponder:

@@ -23,18 +23,12 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Default values and constants:
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
-DB_DIR = "src/industrial_classification_utils/data/vector_store"
-K_MATCHES = 20
-EMBEDDING_SIC_INDEX_FILE = "extended_SIC_index.xlsx"
-EMBEDDING_SIC_STRUCTURE_FILE = "publisheduksicsummaryofstructureworksheet.xlsx"
-
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 INDUSTRY_DESCR_COL = "sic2007_employee"
 SELF_EMPLOYED_DESC_COL = "sic2007_self_employed"
-MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
 
+MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
 OUTPUT_COL_INITIAL = "semantic_search_results"
 
 # Constants for second run (final codes):
@@ -44,64 +38,6 @@ OUTPUT_COL_FINAL = "second_semantic_search_results"
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
-
-
-def _update_metadata_with_args_and_defaults(parsed_args, in_metadata):
-    """Updates the metadata dictionary with values from the command-line arguments,
-    using defaults where necessary.
-
-    Args:
-        parsed_args: The command-line arguments parsed by `parse_args()`.
-        in_metadata: The initial metadata dictionary loaded from the input JSON file.
-
-    Returns:
-        dict: The updated metadata dictionary with values from args and defaults.
-    """
-    updated_metadata = in_metadata.copy() if in_metadata else {}
-
-    if updated_metadata.get("original_dataset_name") != parsed_args.input_file:
-        print(
-            f"""Warning: The original dataset name in the input metadata ({
-                updated_metadata.get('original_dataset_name')}) """
-            f"does not match the input file specified in the arguments ({parsed_args.input_file}). "
-            "The metadata will be updated with the input file name."
-        )
-        updated_metadata["original_dataset_name"] = parsed_args.input_file
-
-    if "original_dataset_name" not in updated_metadata:
-        updated_metadata["original_dataset_name"] = parsed_args.input_file
-    elif updated_metadata.get("original_dataset_name") != parsed_args.input_file:
-        print(
-            f"""Warning: The original dataset name in the input metadata ({
-                in_metadata.get('original_dataset_name')}) """
-            f"does not match the input file specified in the arguments ({parsed_args.input_file}). "
-            "The metadata will be updated with the input file name."
-        )
-        updated_metadata["original_dataset_name"] = parsed_args.input_file
-
-    if "batch_size" not in updated_metadata:
-        updated_metadata["batch_size"] = parsed_args.batch_size
-    elif updated_metadata.get("batch_size") != parsed_args.batch_size:
-        print(
-            f"Warning: The batch size in the input metadata ({in_metadata.get('batch_size')}) "
-            f"does not match the batch size specified in the arguments ({parsed_args.batch_size}). "
-            "The metadata will be updated with the batch size."
-        )
-        updated_metadata["batch_size"] = parsed_args.batch_size
-
-    updated_metadata["embedding_model_name"] = updated_metadata.get(
-        "embedding_model_name", EMBEDDING_MODEL_NAME
-    )
-    updated_metadata["db_dir"] = updated_metadata.get("db_dir", DB_DIR)
-    updated_metadata["k_matches"] = updated_metadata.get("k_matches", K_MATCHES)
-    updated_metadata["sic_index_file"] = updated_metadata.get(
-        "sic_index_file", EMBEDDING_SIC_INDEX_FILE
-    )
-    updated_metadata["sic_structure_file"] = updated_metadata.get(
-        "sic_structure_file", EMBEDDING_SIC_STRUCTURE_FILE
-    )
-
-    return updated_metadata
 
 
 def clean_text(text: str) -> str:
@@ -171,26 +107,20 @@ def clean_text_industry(text: str) -> str:
 def _make_embedding_handler(in_metadata: dict) -> EmbeddingHandler:
     """Create an :class:`EmbeddingHandler` using settings from metadata where possible."""
     new_embedding_handler = EmbeddingHandler(
-        embedding_model_name=in_metadata.get(
-            "embedding_model_name", "all-MiniLM-L6-v2"
-        ),
-        db_dir=in_metadata.get(
-            "db_dir", "src/industrial_classification_utils/data/vector_store"
-        ),
-        k_matches=in_metadata.get("k_matches", 20),
+        embedding_model_name=in_metadata["embedding_model_name"],
+        db_dir=in_metadata["db_dir"],
+        k_matches=in_metadata["k_matches"],
     )
 
     new_embedding_handler.embed_index(
         from_empty=True,
         sic_index_file=(
             "industrial_classification_utils.data.sic_index",
-            in_metadata.get("sic_index_file", "extended_SIC_index.xlsx"),
+            in_metadata["sic_index_file"],
         ),
         sic_structure_file=(
             "industrial_classification_utils.data.sic_index",
-            in_metadata.get(
-                "sic_structure_file", "publisheduksicsummaryofstructureworksheet.xlsx"
-            ),
+            in_metadata["sic_structure_file"],
         ),
     )
 
@@ -246,8 +176,6 @@ if __name__ == "__main__":
     args = parse_args("STG1")
 
     df, metadata, start_batch_id = set_up_initial_state(args)
-
-    metadata = _update_metadata_with_args_and_defaults(args, metadata)
 
     embedding_handler = _make_embedding_handler(metadata)
     print(

@@ -46,29 +46,29 @@ echo "RUNNING: STAGE 1"
 
 if [ "$pipeline_choice" -eq "1" ]; then
     echo "RUNNING: STAGE 2 (one-prompt pipeline)";
-    "$SCRIPT_DIR"/stage_2_one_prompt_assign_sic_code.py -n "STG2" -b "$batch_size" -i "$output_folder""/STG1.parquet" -m "$output_folder""/STG1_metadata.json" -o "$output_folder"
+    "$SCRIPT_DIR"/stage_2_one_prompt_assign_sic_code.py -n "STG2" -i "$output_folder""/STG1.parquet" -m "$output_folder""/STG1_metadata.json" -o "$output_folder"
 
     echo "RUNNING: STAGE 4 (one-prompt pipeline)";
-    "$SCRIPT_DIR"/stage_4_add_synthetic_responses.py -n "STG4" -b "$batch_size" -i "$output_folder""/STG2.parquet" -m "$output_folder""/STG2_metadata.json" -o "$output_folder"
+    "$SCRIPT_DIR"/stage_4_add_synthetic_responses.py -n "STG4" -i "$output_folder""/STG2.parquet" -m "$output_folder""/STG2_metadata.json" -o "$output_folder"
 
 else
     echo "RUNNING: STAGE 2 (initial classification)";
-    "$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -r -n "STG2" -b "$batch_size" -i "$output_folder""/STG1.parquet" -m "$output_folder""/STG1_metadata.json" -o "$output_folder"
+    "$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -r -n "STG2" -i "$output_folder""/STG1.parquet" -m "$output_folder""/STG1_metadata.json" -o "$output_folder"
 
     echo "RUNNING: STAGE 3";
-    "$SCRIPT_DIR"/stage_3_add_open_questions.py -r -n "STG3" -b "$batch_size" -i "$output_folder""/STG2.parquet" -m "$output_folder""/STG2_metadata.json" -o "$output_folder"
+    "$SCRIPT_DIR"/stage_3_add_open_questions.py -r -n "STG3" -i "$output_folder""/STG2.parquet" -m "$output_folder""/STG2_metadata.json" -o "$output_folder"
 
     echo "RUNNING: STAGE 4";
-    "$SCRIPT_DIR"/stage_4_add_synthetic_responses.py -n "STG4" -b "$batch_size" -i "$output_folder""/STG3.parquet" -m "$output_folder""/STG3_metadata.json" -o "$output_folder"
+    "$SCRIPT_DIR"/stage_4_add_synthetic_responses.py -n "STG4" -i "$output_folder""/STG3.parquet" -m "$output_folder""/STG3_metadata.json" -o "$output_folder"
 fi
 
 echo "RUNNING: STAGE 5"
-"$SCRIPT_DIR"/stage_5_modify_industry_description.py -n "STG5" -b "$batch_size" -i "$output_folder""/STG4.parquet" -m "$output_folder""/STG4_metadata.json" -o "$output_folder"
+"$SCRIPT_DIR"/stage_5_modify_industry_description.py -n "STG5" -i "$output_folder""/STG4.parquet" -m "$output_folder""/STG4_metadata.json" -o "$output_folder"
 
 echo "RUNNING: STAGE 6"
-"$SCRIPT_DIR"/stage_1_add_semantic_search.py -s -n "STG6" -b "$batch_size" -i "$output_folder""/STG5.csv" -m "$output_folder""/STG5_metadata.json" -o "$output_folder"
+"$SCRIPT_DIR"/stage_1_add_semantic_search.py -s -n "STG6" -i "$output_folder""/STG5.csv" -m "$output_folder""/STG5_metadata.json" -o "$output_folder"
 
 echo "RUNNING: STAGE 7"
-"$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -s -n "STG7" -b 10 -i "$output_folder""/STG6.parquet" -m "$output_folder""/STG6_metadata.json" -o "$output_folder"
+"$SCRIPT_DIR"/stage_2_add_unambiguously_codable_status.py -s -n "STG7" -i "$output_folder""/STG6.parquet" -m "$output_folder""/STG6_metadata.json" -o "$output_folder"
 
 echo "Pipeline Completed Successfully!"
