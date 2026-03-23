@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# pylint: disable=duplicate-code
-# pylint: disable=invalid-name
+# pylint: disable=duplicate-code, redefined-outer-name
 """This script analyzes a dataset to determine if each record is
 "unambiguously codable" for a Standard Industrial Classification (SIC) code.
 
@@ -12,41 +11,7 @@ to CSV, parquet, and JSON metadata files in a user-specified output folder.
 
 The script requires a configured connection to a compatible LLM.
 
-Clarification On Script Arguments:
-
-```bash
-python stage_2_add_unambiguously_codable_status.py --help
-```
-
-Example Usage:
-
-1. Ensure you have run `gcloud` (re-)authentication for the current project.
-
-2. Run the script:
-   ```bash
-   python stage_2_add_unambiguously_codable_status.py \
-        -n my_output \
-        -b 10 \
-        -s \
-        persisted_dataframe.parquet \
-        persisted_metadata.json \
-        output_folder
-   ```
-   where:
-     - `-n my_output` sets the output filename prefix to "my_output".
-     - `-b 10` specifies to process in batches of 10 rows, checkpointing between batches.
-        Note: the max batch size is limited to 10 here, due to LLM concurrency constraints.
-     - `-s` get final_sic (if `-s` absent, run initial stage).
-     - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
-     - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
-     - `output_folder` is the directory where results will be saved.
-
-3. Verify outputs exist as expected:
-    ```bash
-   ls output_folder
-   ```
-   (expect to see my_output.csv, my_output.parquet, and my_output_metadata.json)
-
+See README_evaluation_pipeline.md for more details on how to run.
 """
 import asyncio
 from typing import Any
@@ -63,18 +28,23 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 )
 
 #####################################################
-# Constants:
-MODEL_NAME = "gemini-2.5-flash"
-MODEL_LOCATION = "europe-west9"
-
-CODE_DIGITS = 5
-CANDIDATES_LIMIT = 10
-MAX_BATCH_SIZE = 10
-
-INDUSTRY_DESCR_COL = "sic2007_employee"
+# Default values and constants:
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
+
+OUTPUT_COLS_INITIAL = {
+    "sic_code_col": "initial_code",
+    "codable_col": "unambiguously_codable",
+    "alt_candidates_col": "alt_sic_candidates",
+    "semantic_search_col": "semantic_search_results",
+}
+OUTPUT_COLS_FINAL = {
+    "sic_code_col": "final_code",
+    "codable_col": "unambiguously_codable_final",
+    "alt_candidates_col": "alt_sic_candidates_final",
+    "semantic_search_col": "second_semantic_search_results",
+}
 #####################################################
 
 # Enable progress bar for semantic-search
@@ -83,7 +53,11 @@ tqdm.pandas()
 
 # This new async function processes a whole batch of rows concurrently.
 async def get_unambiguous_sic_batch_async(
-    batch: pd.DataFrame, semantic_search
+    batch: pd.DataFrame,
+    semantic_search_col: str,
+    c_llm: ClassificationLLM,
+    candidates_limit: int,
+    code_digits: int,
 ) -> list[dict[str, Any]]:
     """Processes a batch of rows asynchronously to get unambiguous SIC codability."""
     # 1. Create a task for each row in the batch
@@ -92,11 +66,11 @@ async def get_unambiguous_sic_batch_async(
         task = asyncio.create_task(
             c_llm.unambiguous_sic_code(
                 industry_descr=row[MERGED_INDUSTRY_DESC_COL],
-                semantic_search_results=row[semantic_search],
+                semantic_search_results=row[semantic_search_col],
                 job_title=row[JOB_TITLE_COL],
                 job_description=row[JOB_DESCRIPTION_COL],
-                candidates_limit=CANDIDATES_LIMIT,
-                code_digits=CODE_DIGITS,
+                candidates_limit=candidates_limit,
+                code_digits=code_digits,
             )
         )
         tasks.append(task)
@@ -124,107 +98,43 @@ async def get_unambiguous_sic_batch_async(
     return results
 
 
-def get_unambiguous_status(row: pd.Series) -> bool:
-    """Gets the codability status from the intermediate results.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
+async def main_async(
+    df: pd.DataFrame,
+    metadata: dict,
+    start_batch_id: int,
+    args,
+    c_llm: ClassificationLLM,
+):
+    """Runs the unambiguous codability analysis (async batch processing).
 
     Args:
-        row (pd.Series): A row from the input DataFrame containing "intermediate_unambig_results".
+    df (pd.DataFrame): The input DataFrame containing the dataset to analyze.
+    metadata (dict): The metadata dictionary containing configuration values.
+    start_batch_id (int): The batch ID to start processing from (when restarting from checkpoint).
+    args: The command-line arguments parsed by `parse_args()`.
+    c_llm (ClassificationLLM): An instance of the ClassificationLLM class for making LLM calls.
 
-    Returns:
-        codability status (bool).
     """
-    if row["intermediate_unambig_results"]["unambiguously_codable"] is not None:
-        return row["intermediate_unambig_results"]["unambiguously_codable"]
-    return False
+    col_names = OUTPUT_COLS_FINAL if args.second_run else OUTPUT_COLS_INITIAL
 
+    if col_names["codable_col"] not in df.columns:
+        df[col_names["codable_col"]] = False
+    if col_names["sic_code_col"] not in df.columns:
+        df[col_names["sic_code_col"]] = ""
+    if col_names["alt_candidates_col"] not in df.columns:
+        df[col_names["alt_candidates_col"]] = [[] for _ in range(len(df))]
 
-def get_sic_code(row: pd.Series) -> str:
-    """Gets the assigned SIC code from the intermediate results, if possible.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
-
-    Args:
-        row (pd.Series): A row from the input DataFrame containing "intermediate_unambig_results".
-
-    Returns:
-        initial_code (str): the assigned SIC code, or an empty string if not available.
-    """
-    if row["intermediate_unambig_results"]["code"] is not None:
-        return row["intermediate_unambig_results"]["code"]
-    return ""
-
-
-def get_alt_sic_candidates(row: pd.Series) -> list[dict]:
-    """Gets the alternative SIC candidates from the intermediate results, if possible.
-    Intended for use as a `.apply()` operation to create a new colum in a pd.DataFrame object.
-
-    Args:
-        row (pd.Series): A row from the input DataFrame containing "intermediate_unambig_results".
-
-    Returns:
-        alt_sic_codes (list): the alternative SIC candidates, or an empty list if not available.
-    """
-    if row["intermediate_unambig_results"]["alt_candidates"] is not None:
-        return row["intermediate_unambig_results"]["alt_candidates"]
-    return []
-
-
-async def main():
-    """Main function to run the unambiguous codability analysis.
-    Deviates from the stage_k template to enable async processing.
-    """
-    global c_llm, args  # noqa: PLW0603 # pylint: disable=global-statement, global-variable-undefined
-    c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
-    print("Classification LLM loaded.")
-    args = parse_args("STG2")
-
-    df, metadata, start_batch_id, restart_successful, second_run_variables = (
-        set_up_initial_state(
-            args.restart,
-            args.second_run,
-            args.output_folder,
-            args.output_shortname,
-            args.input_parquet_file,
-            args.input_metadata_json,
-            args.batch_size,
-            stage_id="stage_2",
-        )
-    )
-
-    if args.batch_size > MAX_BATCH_SIZE:
-        print(f"batch size too large. lower batch size to {MAX_BATCH_SIZE}")
-        batch_size_async = MAX_BATCH_SIZE
-    else:
-        batch_size_async = args.batch_size
-
-    print("running unamibuous codability analysis...")
-
-    if second_run_variables:
-        SIC_CODE = "final_code"
-        CODABLE = "unambiguously_codable_final"
-        ALT_CANDIDATES = "alt_sic_candidates_final"
-        semantic_search = "second_semantic_search_results"
-    else:
-        SIC_CODE = "initial_code"
-        CODABLE = "unambiguously_codable"
-        ALT_CANDIDATES = "alt_sic_candidates"
-        semantic_search = "semantic_search_results"
-
-    if (not args.restart) or (not restart_successful):
-        df["intermediate_unambig_results"] = {
-            CODABLE: False,
-            SIC_CODE: "",
-            ALT_CANDIDATES: [],
-        }
-        df[CODABLE] = False
-        df[SIC_CODE] = ""
-        df[ALT_CANDIDATES] = np.empty((len(df), 0)).tolist()
+    print("running unambiguous codability analysis...")
 
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
                 df,
-                np.arange(start_batch_id * batch_size_async, len(df), batch_size_async),
+                np.arange(
+                    start_batch_id * metadata["batch_size_async"],
+                    len(df),
+                    metadata["batch_size_async"],
+                ),
             )
         )
     ):
@@ -233,31 +143,70 @@ async def main():
         if batch_id == 0:
             pass
         else:
-            results = await get_unambiguous_sic_batch_async(batch, semantic_search)
-            batch.loc[batch.index, "intermediate_unambig_results"] = results
-            df.loc[batch.index, CODABLE] = batch.apply(get_unambiguous_status, axis=1)
-            df.loc[batch.index, SIC_CODE] = batch.apply(get_sic_code, axis=1)
-            df.loc[batch.index, ALT_CANDIDATES] = batch.apply(
-                get_alt_sic_candidates, axis=1
-            )
-            persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
-                is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
+            results = await get_unambiguous_sic_batch_async(
+                batch,
+                semantic_search_col=col_names["semantic_search_col"],
+                c_llm=c_llm,
+                candidates_limit=metadata["candidates_limit"],
+                code_digits=metadata["code_digits"],
             )
 
-    print("unambiguous coding analysis is complete")
-    print("deleting temporary DataFrame column...")
-    df = df.drop("intermediate_unambig_results", axis=1)
+            # Write results directly into output columns (no extractor helpers)
+            df.loc[batch.index, col_names["codable_col"]] = pd.Series(
+                [bool(r.get("unambiguously_codable", False)) for r in results],
+                index=batch.index,
+            )
+            df.loc[batch.index, col_names["sic_code_col"]] = pd.Series(
+                [str(r.get("code") or "") for r in results],
+                index=batch.index,
+            )
+            df.loc[batch.index, col_names["alt_candidates_col"]] = pd.Series(
+                [(r.get("alt_candidates") or []) for r in results],
+                index=batch.index,
+                dtype="object",
+            )
+
+            persist_results(
+                df=df,
+                metadata=metadata,
+                output_folder=args.output_folder,
+                output_shortname=args.output_shortname,
+                is_final=False,
+                completed_batches=(batch_id + start_batch_id),
+            )
+
+    print("unambiguous codability analysis is complete")
+    if "intermediate_unambig_results" in df.columns:
+        df.drop(columns=["intermediate_unambig_results"], inplace=True)
     print("persisting results...")
     persist_results(
-        df, metadata, args.output_folder, args.output_shortname, is_final=True
+        df=df,
+        metadata=metadata,
+        output_folder=args.output_folder,
+        output_shortname=args.output_shortname,
+        is_final=True,
     )
     print("Done!")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    args = parse_args("STG2")
+
+    df, metadata, start_batch_id = set_up_initial_state(parsed_args=args)
+
+    c_llm = ClassificationLLM(
+        model_name=metadata["model_name"],
+        model_location=metadata["model_location"],
+        verbose=False,
+    )
+    print("Classification LLM loaded.")
+
+    asyncio.run(
+        main_async(
+            df=df,
+            metadata=metadata,
+            start_batch_id=start_batch_id,
+            args=args,
+            c_llm=c_llm,
+        )
+    )

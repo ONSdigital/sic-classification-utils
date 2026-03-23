@@ -6,39 +6,8 @@ object, modifies each row with selected method, overwrites 'merged_industry_desc
 the DataFrame with this information, and then saves the results to CSV, parquet, and
 JSON metadata files in a user-specified output folder.
 
-Clarification On Script Arguments:
-
-```bash
-python stage_5_modify_industry_description.py --help
-```
-
-Example Usage:
-
-1. Ensure you have (re-)authenticated with `gcloud` for the current project.
-
-2. Run the script:
-   ```bash
-   python stage_5_modify_industry_description.py \
-        -n my_output \
-        -b 200 \
-        persisted_dataframe.parquet \
-        persisted_metadata.json \
-        output_folder
-   ```
-   where:
-     - `-n my_output` sets the output filename prefix to "my_output".
-     - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
-     - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
-     - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
-     - `output_folder` is the directory where results will be saved.
-
-3. Verify outputs exist as expected:
-    ```bash
-   ls output_folder
-   ```
-   (expect to see my_output.csv, my_output.parquet, and my_output_metadata.json)
+See README_evaluation_pipeline.md for more details on how to run.
 """
-
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -54,28 +23,29 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Constants:
-MODEL_NAME = "gemini-2.5-flash"
-MODEL_LOCATION = "europe-west1"
+EXTENDED_INDUSTRY_METHOD = "concatenate"
 
-MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
 FOLLOWUP_QUESTION = "followup_question"
 FOLLOWUP_ANSWER = "followup_answer"
-MERGED_INDUSTRY_MATHOD = "concatenate"
+MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
+
+OUTPUT_COL = "extended_industry_desc"
 #####################################################
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
 
 
-# pylint: disable=C0116 # the docstring is below
-
-
-def get_rephrased_id(row: pd.Series, method: str = "concatenate") -> str:
+def get_rephrased_industry_desc(
+    row: pd.Series, one_sr: SyntheticResponder, method: str = "concatenate"
+) -> str:
     """Rephrase industry description with follow up question and follow up answer as a label.
 
     Args:
         row (pd.Series): A row from the input DataFrame containing the survey responses,
                          and the followup question.
+        one_sr (SyntheticResponder): An instance of the SyntheticResponder class, used to rephrase
+              the industry description if method is set to 'rephrase'.
         method (str): method to use for rephrasing. Options are 'concatenate' and 'rephrase'.
 
     Returns: response (str)
@@ -93,7 +63,7 @@ def get_rephrased_id(row: pd.Series, method: str = "concatenate") -> str:
             + row[FOLLOWUP_ANSWER]
         )
     if method == "rephrase" and row[FOLLOWUP_QUESTION] != "":
-        return SR.rephrase_question_and_id(
+        return one_sr.rephrase_question_and_id(
             row[MERGED_INDUSTRY_DESC_COL],
             row[FOLLOWUP_QUESTION],
             row[FOLLOWUP_ANSWER],
@@ -101,60 +71,63 @@ def get_rephrased_id(row: pd.Series, method: str = "concatenate") -> str:
     return row[MERGED_INDUSTRY_DESC_COL]
 
 
-SR = SyntheticResponder(persona=None, get_question_function=None, model_name=MODEL_NAME)
-
 if __name__ == "__main__":
-    args = parse_args("STG4")
+    args = parse_args("STG5")
 
-    job_description_rephrased = []
-    df, metadata, start_batch_id, restart_successful, second_run_variables = (
-        set_up_initial_state(
-            args.restart,
-            args.second_run,
-            args.output_folder,
-            args.output_shortname,
-            args.input_parquet_file,
-            args.input_metadata_json,
-            args.batch_size,
-            stage_id="stage_5",
-        )
+    df, metadata, start_batch_id = set_up_initial_state(args)
+
+    metadata["extended_industry_method"] = EXTENDED_INDUSTRY_METHOD
+
+    sr = SyntheticResponder(
+        persona=None,
+        get_question_function=None,
+        model_name=metadata["model_name"],
     )
+
     print(
         "rephrasing industry description with follow up questions and followup answers..."
     )
-    if (not args.restart) or (not restart_successful):
-        df["industry_description_rephrased"] = ""
+    if OUTPUT_COL not in df.columns:
+        df[OUTPUT_COL] = ""
 
     # rephrase new job description
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
                 df,
-                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+                np.arange(
+                    start_batch_id * metadata["batch_size"],
+                    len(df),
+                    metadata["batch_size"],
+                ),
             )
         )
     ):
         if batch_id == 0:
             pass
         else:
-            df.loc[batch.index, "industry_description_rephrased"] = batch.apply(
-                get_rephrased_id, method=MERGED_INDUSTRY_MATHOD, axis=1
+            df.loc[batch.index, OUTPUT_COL] = batch.apply(
+                lambda row: get_rephrased_industry_desc(
+                    row, one_sr=sr, method=metadata["extended_industry_method"]
+                ),
+                axis=1,
             )
             persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
+                df=df,
+                metadata=metadata,
+                output_folder=args.output_folder,
+                output_shortname=args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
+                completed_batches=(batch_id + start_batch_id),
             )
-    df[MERGED_INDUSTRY_DESC_COL] = df["industry_description_rephrased"]
-    df.drop(columns=["industry_description_rephrased"], inplace=True)
 
-    print("synthetic response generation is complete")
-
+    print("industry description modification is complete")
     print("persisting results...")
     persist_results(
-        df, metadata, args.output_folder, args.output_shortname, is_final=True
+        df=df,
+        metadata=metadata,
+        output_folder=args.output_folder,
+        output_shortname=args.output_shortname,
+        is_final=True,
     )
     print("Done!")

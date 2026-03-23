@@ -175,8 +175,8 @@ def test_llm_model_default():
 
 
 @pytest.mark.llm
-def test_model_name():
-    assert ClassificationLLM().llm.model_name == "gemini-1.0-pro"
+def test_model_name_default():
+    assert ClassificationLLM().llm.model_name == "gemini-2.5-flash"
 
 
 # Test methods in ClassificationLLM

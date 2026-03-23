@@ -1,44 +1,16 @@
 #!/usr/bin/env python3
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code, redefined-outer-name
 """This script generates a SIC classification based on respondent's data
-using RAG approach and persists the results.
+using a Retrieval Augmented Generation (RAG) approach and persists the results.
 It reloads the output from the previous stage as a DataFrame object,
-performs classification for each row of data passed using LLM and creates
-a new column in the DataFrame with this information, and then saves the results
-to CSV, parquet, and JSON metadata files in a user-specified output folder.
+performs classification for each row using an LLM, writes the results back into
+the DataFrame, and then saves the results to CSV, parquet, and JSON metadata
+files in a user-specified output folder.
 
-Clarification On Script Arguments:
-
-```bash
-python stage_2_assign_sic_code_one_prompt.py --help
-```
-
-Example Usage:
-
-1. Ensure the `gcloud` authentication ()
-
-2. Run the script:
-   ```bash
-   python stage_2_assign_sic_code_one_prompt.py \
-        -n my_output \
-        -b 200 \
-        persisted_dataframe.parquet \
-        persisted_metadata.json \
-        output_folder
-   ```
-   where:
-     - `-n my_output` sets the output filename prefix to "my_output".
-     - `-b 200` specifies to process in batches of 200 rows, checkpointing between batches.
-     - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
-     - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
-     - `output_folder` is the directory where results will be saved.
-
-3. Verify outputs exist as expected:
-    ```bash
-   ls output_folder
-   ```
-   (expect to see my_output.csv, my_output.parquet and my_output_metadata.json)
+See README_evaluation_pipeline.md for more details on how to run.
 """
+import asyncio
+from argparse import Namespace
 from typing import Any
 
 import numpy as np
@@ -54,144 +26,99 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 
 #####################################################
 # Constants:
-VECTOR_STORE_URL_BASE = "http://0.0.0.0:8088"
-STATUS_ENDPOINT = "/v1/sic-vector-store/status"
-SEARCH_ENDPOINT = "/v1/sic-vector-store/search-index"
-MODEL_NAME = "gemini-2.5-flash"
+CODE_DIGITS = 5
+CANDIDATES_LIMIT = 10
+MAX_ASYNC_BATCH_SIZE = 10
 
 INDUSTRY_DESCR_COL = "sic2007_employee"
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
-SHORT_LIST = "semantic_search_results"
+SEMANTIC_SEARCH_COL = "semantic_search_results"
 #####################################################
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
 
 
-def get_rag_response(row: pd.Series) -> dict[str, Any]:  # pylint: disable=C0103, W0613
-    """Generates sa_rag_response dictionary using the provided row data.
-    Intended for use as a `.apply()` operation to create a new colum in
-    a pd.DataFrame object.
+async def get_rag_response_batch_async(
+    batch: pd.DataFrame, c_llm: ClassificationLLM
+) -> list[dict[str, Any]]:
+    """Processes a batch of rows concurrently to generate RAG SIC results.
 
     Args:
-        row (pd.Series): A row from the input DataFrame containing
-        semantic_search_results column.
+        batch: Batch of rows. Must include the columns defined by
+            `JOB_TITLE_COL`, `JOB_DESCRIPTION_COL`, `INDUSTRY_DESCR_COL`, and
+            `SEMANTIC_SEARCH_COL`.
+        c_llm: Initialised LLM wrapper used to run the RAG prompt.
 
     Returns:
-        result (doct[str, Any]): a dictionary with initial_sic,
-        and alt_sic_candidates for specified row.
+        A list of dictionaries (one per row) that can be written directly into
+        the output columns (`unambiguously_codable`, `initial_code`,
+        `alt_sic_candidates`, `followup_question`).
     """
-    sa_rag_response = uni_chat.sa_rag_sic_code(  # pylint: disable=E0606
-        job_title=row[JOB_TITLE_COL],
-        job_description=row[JOB_DESCRIPTION_COL],
-        industry_descr=row[INDUSTRY_DESCR_COL],
-        candidates_limit=10,
-        short_list=row[SHORT_LIST],
-    )
-
-    result = {
-        "initial_sic": sa_rag_response[0].sic_code,
-        "followup": sa_rag_response[0].followup,
-        "unambiguously_codable": sa_rag_response[0].sic_code not in ("", None),
-        "alt_sic_candidates": [
-            {
-                "code": i.sic_code,
-                "likelihood": i.likelihood,
-                "title": i.sic_descriptive,
-            }
-            for i in sa_rag_response[0].sic_candidates
-        ],
-    }
-    return result
-
-
-def get_codable_status(row: pd.Series) -> str:
-    """Generator funciton to access initial_sic for the specified row.
-
-    Args:
-        row (pd.Series): A row from the input DataFrame containing
-        semantic_search_results column.
-
-    Returns:
-        str: a initial_sic for the row.
-    """
-    return row["sa_rag_sic_response"]["unambiguously_codable"]
-
-
-def get_followup_question(row: pd.Series) -> str:
-    """Generator funciton to access initial_sic for the specified row.
-
-    Args:
-        row (pd.Series): A row from the input DataFrame containing
-        semantic_search_results column.
-
-    Returns:
-        str: a initial_sic for the row.
-    """
-    return row["sa_rag_sic_response"]["followup"]
-
-
-def get_initial_sic(row: pd.Series) -> str:
-    """Generator funciton to access initial_sic for the specified row.
-
-    Args:
-        row (pd.Series): A row from the input DataFrame containing
-        semantic_search_results column.
-
-    Returns:
-        str: a initial_sic for the row.
-    """
-    return row["sa_rag_sic_response"]["initial_sic"]
-
-
-def get_alt_sic_candidates(row: pd.Series) -> str:
-    """Generator funciton to access alt_sic_candidates for the specified row.
-
-    Args:
-        row (pd.Series): A row from the input DataFrame containing
-        semantic_search_results column.
-
-    Returns:
-        str: A list of possible sic_code alternatives.
-    """
-    return row["sa_rag_sic_response"]["alt_sic_candidates"]
-
-
-if __name__ == "__main__":
-    args = parse_args("STG2")
-    df, metadata, start_batch_id, restart_successful, second_run_variables = (
-        set_up_initial_state(
-            args.restart,
-            args.second_run,
-            args.output_folder,
-            args.output_shortname,
-            args.input_parquet_file,
-            args.input_metadata_json,
-            args.batch_size,
-            stage_id="stage_2",
+    tasks = []
+    for _, row in batch.iterrows():
+        task = asyncio.create_task(
+            c_llm.sa_rag_sic_code(
+                job_title=row[JOB_TITLE_COL],
+                job_description=row[JOB_DESCRIPTION_COL],
+                industry_descr=row[INDUSTRY_DESCR_COL],
+                code_digits=CODE_DIGITS,
+                candidates_limit=CANDIDATES_LIMIT,
+                short_list=row[SEMANTIC_SEARCH_COL],
+            )
         )
-    )
+        tasks.append(task)
 
+    responses = await asyncio.gather(*tasks)
+
+    results: list[dict[str, Any]] = []
+    for sic_response, _, _ in responses:
+        results.append(
+            {
+                "initial_code": sic_response.sic_code or "",
+                "followup_question": sic_response.followup or "",
+                "unambiguously_codable": (sic_response.sic_code or "") != "",
+                "alt_sic_candidates": [
+                    {
+                        "code": i.sic_code,
+                        "likelihood": i.likelihood,
+                        "title": i.sic_descriptive,
+                    }
+                    for i in sic_response.sic_candidates
+                ],
+            }
+        )
+    return results
+
+
+async def main_async(
+    df: pd.DataFrame,
+    metadata: dict[str, Any],
+    start_batch_id: int,
+    args: Namespace,
+    c_llm: ClassificationLLM,
+) -> None:
+    """Runs async RAG SIC allocation and persists checkpoints.
+
+    Args:
+        df: The input DataFrame containing the survey responses and semantic search results.
+        metadata: The metadata dictionary loaded from the input JSON file.
+        start_batch_id: The batch ID to start from, determined by the checkpointing logic.
+        args: The command-line arguments parsed by `parse_args()`.
+        c_llm: An initialised instance of the ClassificationLLM class.
+    """
     print("Running RAG SIC allocation...")
-    if (not args.restart) or (not restart_successful):
-        df["sa_rag_sic_response"] = {
-            "unambiguously_codable": False,
-            "initial_sic": "",
-            "alt_sic_candidates": [],
-            "followup": "",
-        }
-        df["unambiguously_codable"] = False
-        df["initial_code"] = ""
-        df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
-        df["followup_question"] = ""
 
-    uni_chat = ClassificationLLM(model_name=MODEL_NAME)
     for batch_id, batch in tqdm(
         enumerate(
             np.split(
                 df,
-                np.arange(start_batch_id * args.batch_size, len(df), args.batch_size),
+                np.arange(
+                    start_batch_id * metadata["batch_size_async"],
+                    len(df),
+                    metadata["batch_size_async"],
+                ),
             )
         )
     ):
@@ -200,32 +127,73 @@ if __name__ == "__main__":
         if batch_id == 0:
             pass
         else:
-            batch.loc[batch.index, "sa_rag_sic_response"] = batch.apply(
-                get_rag_response, axis=1
-            )
-            df.loc[batch.index, "unambiguously_codable"] = batch.apply(
-                get_codable_status, axis=1
-            )
-            df.loc[batch.index, "initial_code"] = batch.apply(get_initial_sic, axis=1)
-            df.loc[batch.index, "alt_sic_candidates"] = batch.apply(
-                get_alt_sic_candidates, axis=1
-            )
-            df.loc[batch.index, "followup_question"] = batch.apply(
-                get_followup_question, axis=1
-            )
-            persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
-                is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
-            )
-    df.drop("sa_rag_sic_response", axis=1, inplace=True)
-    print("RAG SIC allocation is complete")
+            results = await get_rag_response_batch_async(batch, c_llm)
 
+            # Write results directly into output columns (no extra apply helpers)
+            df.loc[batch.index, "unambiguously_codable"] = pd.Series(
+                [r["unambiguously_codable"] for r in results],
+                index=batch.index,
+            )
+            df.loc[batch.index, "initial_code"] = pd.Series(
+                [r["initial_code"] for r in results],
+                index=batch.index,
+            )
+            df.loc[batch.index, "alt_sic_candidates"] = pd.Series(
+                [r["alt_sic_candidates"] for r in results],
+                index=batch.index,
+                dtype="object",
+            )
+            df.loc[batch.index, "followup_question"] = pd.Series(
+                [r["followup_question"] for r in results],
+                index=batch.index,
+            )
+
+            persist_results(
+                df=df,
+                metadata=metadata,
+                output_folder=args.output_folder,
+                output_shortname=args.output_shortname,
+                is_final=False,
+                completed_batches=(batch_id + start_batch_id),
+            )
+
+    print("RAG SIC allocation is complete")
     print("persisting results...")
     persist_results(
-        df, metadata, args.output_folder, args.output_shortname, is_final=True
+        df=df,
+        metadata=metadata,
+        output_folder=args.output_folder,
+        output_shortname=args.output_shortname,
+        is_final=True,
     )
     print("Done!")
+
+
+if __name__ == "__main__":
+    args = parse_args("STG2")
+    df, metadata, start_batch_id = set_up_initial_state(args)
+
+    if "unambiguously_codable" not in df.columns:
+        df["unambiguously_codable"] = False
+    if "initial_code" not in df.columns:
+        df["initial_code"] = ""
+    if "alt_sic_candidates" not in df.columns:
+        df["alt_sic_candidates"] = np.empty((len(df), 0)).tolist()
+    if "followup_question" not in df.columns:
+        df["followup_question"] = ""
+
+    uni_chat = ClassificationLLM(
+        model_name=metadata["model_name"],
+        model_location=metadata["model_location"],
+        verbose=False,
+    )
+
+    asyncio.run(
+        main_async(
+            df=df,
+            metadata=metadata,
+            start_batch_id=start_batch_id,
+            args=args,
+            c_llm=uni_chat,
+        )
+    )

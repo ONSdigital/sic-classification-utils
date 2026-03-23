@@ -21,13 +21,22 @@ The main components provided are:
 import json
 import os
 import shutil
-from argparse import ArgumentParser as AP
-from argparse import Namespace
+from argparse import ArgumentParser, Namespace
 from datetime import UTC, datetime
-from typing import Optional
+from typing import Any, Optional
 
 import gcsfs
 import pandas as pd
+
+from industrial_classification_utils.utils.constants import get_default_config
+
+default_config = get_default_config()
+
+#####################################################
+# Default values and constants:
+BATCH_SIZE = 100
+MAX_ASYNC_BATCH_SIZE = 10
+#######################################################
 
 
 def parse_args(default_output_shortname: str = "STGK") -> Namespace:
@@ -39,19 +48,23 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
     Returns:
         Namespace: The parsed command-line arguments.
     """
-    parser = AP()
+    parser = ArgumentParser()
     parser.add_argument(
-        "input_parquet_file",
+        "--input_file",
+        "-i",
         type=str,
         help="relative path to the persisted DataFrame from previous stage",
     )
     parser.add_argument(
-        "input_metadata_json",
+        "--metadata_json",
+        "-m",
         type=str,
+        default=None,
         help="relative path to the persisted metadata from previous stage",
     )
     parser.add_argument(
-        "output_folder",
+        "--output_folder",
+        "-o",
         type=str,
         help="relative path to the output folder location (will be created if it doesn't exist)",
     )
@@ -67,9 +80,9 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
         "--batch_size",
         "-b",
         type=int,
-        default=10,
+        default=None,
         help="save the output every X rows, as a checkpoint that can be used to restart the "
-        "processing job if needed (optional, default: 10)",
+        "processing job if needed (optional, default: 100)",
     )
     parser.add_argument(
         "--restart",
@@ -89,14 +102,8 @@ def parse_args(default_output_shortname: str = "STGK") -> Namespace:
     return parser.parse_args()
 
 
-def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
-    output_folder: str,
-    output_shortname: str,
-    input_parquet_file: str,
-    input_metadata_json: str,
-    batch_size: int,
-    stage_id: Optional[str] = "stage_k",
-    is_stage_1: Optional[bool] = False,
+def _try_to_restart(
+    parsed_args: Namespace,
 ):
     """Attempts to restart a processing job by loading checkpoint data.
 
@@ -109,83 +116,43 @@ def _try_to_restart(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     initial input data and metadata, and prepares new checkpoint information.
 
     Args:
-        output_folder (str): The path to the specified output folder.
-        output_shortname (str): The prefix for the output filenames.
-        input_parquet_file (str): The path to the (previous stage's) persisted dataframe file, used
-            only if starting from scratch after failure to restart.
-        input_metadata_json (str): The path to the (previous stage's) metadata JSON file,
-            used only if starting from scratch after failure to restart.
-        batch_size (int): The size of processing batches, used only if starting
-            from scratch after failure to restart.
-        stage_id (str): A prefix used for per-stage fields in the metadata.
-        is_stage_1 (bool): A flag to indicate the incoming data is .csv not .parquet.
+        parsed_args (Namespace): The namespace of parsed command-line arguments.
 
     Returns:
         tuple: A tuple containing:
             - pd.DataFrame: The loaded or newly created DataFrame.
             - dict: The loaded or newly created metadata dictionary.
             - dict: The loaded or newly created checkpoint information.
-            - bool: True if the restart from a checkpoint was successful,
-              False otherwise.
 
     Raises:
         FileNotFoundError: If starting from scratch and the initial data
-            file (`input_parquet_file`) or metadata file (`input_metadata_json`)
+            file (`input_file`) or metadata file (`input_metadata_json`)
             cannot be found.
     """
-    try:
-        df_persisted = pd.read_parquet(
-            f"{output_folder}/intermediate_outputs/{output_shortname}.parquet"
-        )
-        checkpoint_info_persisted = _read_json(
-            f"{output_folder}/intermediate_outputs/{output_shortname}_checkpoint_info.json"
-        )
-        metadata_persisted = _read_json(
-            f"{output_folder}/intermediate_outputs/{output_shortname}_metadata.json"
-        )
-        restart_successful = True
-        print("Partially-processed data re-loaded succesfully")
-        return (
-            df_persisted,
-            metadata_persisted,
-            checkpoint_info_persisted,
-            restart_successful,
-        )
-    except (FileNotFoundError, Exception):  # pylint: disable=W0718
-        print("Could not re-load checkpointed results, restarting from scratch...")
-        restart_successful = False
-        try:
-            with open(input_metadata_json, encoding="utf-8") as input_meta:
-                metadata_persisted = json.load(input_meta)
-        except FileNotFoundError:
-            print(f"Could not find metadata file {input_metadata_json}")
-            raise
-        metadata_persisted[f"{stage_id}_start_timestamp"] = datetime.now(
-            UTC
-        ).timestamp()
-        metadata_persisted[f"{stage_id}_start_time_readable"] = datetime.now(
-            UTC
-        ).strftime("%Y/%m/%d_%H:%M:%S")
-        metadata_persisted["batch_size"] = batch_size
-        df_persisted = (
-            pd.read_csv(input_parquet_file)
-            if is_stage_1
-            else pd.read_parquet(input_parquet_file)
-        )
-        checkpoint_info_persisted = {
-            "completed_batches": 0,
-            "batch_size": batch_size,
-        }
-        return (
-            df_persisted,
-            metadata_persisted,
-            checkpoint_info_persisted,
-            restart_successful,
-        )
+    output_folder = parsed_args.output_folder
+    output_shortname = parsed_args.output_shortname
+
+    df_persisted = pd.read_parquet(
+        f"{output_folder}/intermediate_outputs/{output_shortname}.parquet"
+    )
+    checkpoint_info_persisted = _read_json(
+        f"{output_folder}/intermediate_outputs/{output_shortname}_checkpoint_info.json"
+    )
+    metadata_persisted = _read_json(
+        f"{output_folder}/intermediate_outputs/{output_shortname}_metadata.json"
+    )
+
+    print("Partially-processed data re-loaded succesfully")
+    return (
+        df_persisted,
+        metadata_persisted,
+        checkpoint_info_persisted["completed_batches"],
+    )
 
 
-def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
-    df_with_search: pd.DataFrame,
+def persist_results(  # noqa:PLR0913, pylint: disable=too-many-arguments
+    *,
+    df: pd.DataFrame,
     metadata: dict,
     output_folder: str,
     output_shortname: str,
@@ -195,7 +162,7 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     """Persists the results DataFrame to CSV, parquet, and saves metadata to JSON.
 
     Args:
-        df_with_search (pd.DataFrame): The DataFrame containing the results to be persisted.
+        df (pd.DataFrame): The DataFrame containing the results to be persisted.
         metadata (dict): The additional metadata surrounding this processing job.
         output_folder (str): The path to the output folder where the files will be saved.
         output_shortname (str): The prefix given to each file to be saved.
@@ -212,11 +179,9 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             f"{output_folder}/{output_shortname}_metadata.json",
         )
         print("Saving results to parquet...")
-        df_with_search.to_parquet(
-            f"{output_folder}/{output_shortname}.parquet", index=False
-        )
+        df.to_parquet(f"{output_folder}/{output_shortname}.parquet", index=False)
         print("Saving results to CSV...")
-        df_with_search.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
+        df.to_csv(f"{output_folder}/{output_shortname}.csv", index=False)
 
         print("Removing intermediate outputs...")
         _delete_folder_contents(f"{output_folder}/intermediate_outputs")
@@ -226,7 +191,8 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
         _write_json(
             {
                 "completed_batches": completed_batches,
-                "batch_size": metadata["batch_size"],
+                "batch_size": metadata.get("batch_size"),
+                "batch_size_async": metadata.get("batch_size_async"),
             },
             f"{output_folder}/{output_shortname}_checkpoint_info.json",
         )
@@ -234,9 +200,7 @@ def persist_results(  # noqa: PLR0913 # pylint: disable=R0913, R0917
             metadata,
             f"{output_folder}/{output_shortname}_metadata.json",
         )
-        df_with_search.to_parquet(
-            f"{output_folder}/{output_shortname}.parquet", index=False
-        )
+        df.to_parquet(f"{output_folder}/{output_shortname}.parquet", index=False)
 
 
 def _read_json(file_path: str) -> dict:
@@ -296,17 +260,9 @@ def _delete_folder_contents(folder_path: str) -> None:
         shutil.rmtree(folder_path)
 
 
-def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
-    restart: bool,
-    second_run: bool,
-    output_folder: str,
-    output_shortname: str,
-    input_parquet_file: str,
-    input_metadata_json: str,
-    batch_size: int,
-    stage_id: Optional[str] = "stage_k",
-    is_stage_1: Optional[bool] = False,
-) -> tuple[pd.DataFrame, dict, int, bool, bool]:
+def set_up_initial_state(
+    parsed_args: Namespace,
+) -> tuple[pd.DataFrame, dict, int]:
     """Sets up the initial state for a pipeline stage.
 
     This function handles the logic for starting a processing job, either by
@@ -315,66 +271,129 @@ def set_up_initial_state(  # noqa: PLR0913 # pylint: disable=R0913, R0917
     determines the starting point for batch processing.
 
     Args:
-        restart (bool): Flag to indicate whether to attempt a restart from a
-            checkpoint.
-        second_run (bool): Flag to indicate the first or second run of the stage.
-        output_folder (str): The path to the specified output folder.
-        output_shortname (str): The prefix for the output filenames.
-        input_parquet_file (str): The path to the persisted dataframe file from
-            the previous stage.
-        input_metadata_json (str): The path to the persisted metadata JSON file
-            from the previous stage.
-        batch_size (int): The size of processing batches.
+        parsed_args (Namespace): The namespace of parsed command-line arguments.
         stage_id (str): A prefix used for per-stage fields in the metadata.
-        is_stage_1 (bool): A flag to indicate the incoming data is .csv not .parquet.
 
     Returns:
         tuple: A tuple containing:
             - pd.DataFrame: The loaded or newly created DataFrame.
             - dict: The loaded or newly created metadata dictionary.
             - int: The starting batch ID for processing.
-            - bool: True if a restart from a checkpoint was successful,
-              False otherwise.
     """
-    restart_successful = True
-    if restart:
+    if parsed_args.restart:
         try:
-            df, metadata, checkpoint_info, restart_successful = _try_to_restart(  # type: ignore
-                output_folder,
-                output_shortname,
-                input_parquet_file,
-                input_metadata_json,
-                batch_size,
-                stage_id=stage_id,
-                is_stage_1=is_stage_1,
+            return _try_to_restart(  # type: ignore
+                parsed_args,
             )
-        except Exception:
-            print(
-                "Could not load persisted output, and ran into an issue starting from scratch"
-            )
-            raise
-    else:
-        try:
-            metadata = _read_json(input_metadata_json)
         except FileNotFoundError:
-            print(f"Could not find metadata file {input_metadata_json}")
-            raise
-        metadata[f"{stage_id}_start_timestamp"] = datetime.now(UTC).timestamp()
-        metadata[f"{stage_id}_start_time_readable"] = datetime.now(UTC).strftime(
-            "%Y/%m/%d_%H:%M:%S"
-        )
-        metadata["batch_size"] = batch_size
-        df = (
-            pd.read_csv(input_parquet_file)
-            if is_stage_1
-            else pd.read_parquet(input_parquet_file)
-        )
-        print("Input loaded")
+            print("Could not load persisted output, starting from scratch")
 
-    start_batch_id = (
-        0
-        if (not restart) or (not restart_successful)
-        else checkpoint_info["completed_batches"]  # type: ignore
+    try:
+        metadata = _read_json(parsed_args.metadata_json)
+    except FileNotFoundError:
+        print(
+            f"Could not find metadata file {parsed_args.metadata_json},"
+            " will use default values for metadata fields"
+        )
+        metadata = {}
+
+    metadata = _update_metadata_with_args_and_defaults(
+        parsed_args,
+        metadata,
     )
 
-    return df, metadata, start_batch_id, restart_successful, second_run
+    df = (
+        pd.read_csv(parsed_args.input_file)
+        if parsed_args.input_file.endswith(".csv")
+        else pd.read_parquet(parsed_args.input_file)
+    )
+
+    print("Input loaded")
+
+    return df, metadata, 0
+
+
+def _update_metadata_with_args_and_defaults(
+    parsed_args: Namespace,
+    in_metadata: Optional[dict],
+) -> dict[str, Any]:
+    """Updates a metadata dict with CLI args and stage-specific defaults.
+
+    This is intended to be used by pipeline stage scripts to keep metadata
+    consistent across stages.
+
+    Behavior:
+    - Always ensures `batch_size` in metadata matches `parsed_args.batch_size`.
+    - Optionally sets/updates `original_dataset_name` from `parsed_args.input_file`
+      (recommended only for stage 1).
+    - Applies provided `defaults` only when metadata keys are missing.
+    - Optionally sets `batch_size_async` capped by `max_async_batch_size`.
+
+    Args:
+        parsed_args: The command-line arguments parsed by `parse_args()`.
+        in_metadata: The initial metadata dictionary loaded from input JSON.
+
+    Returns:
+        Updated metadata dictionary.
+    """
+    updated_metadata: dict[str, Any] = in_metadata.copy() if in_metadata else {}
+
+    if (parsed_args.output_shortname == "STG1") and not parsed_args.second_run:
+        if (
+            "original_dataset_name" in updated_metadata
+            and updated_metadata.get("original_dataset_name") != parsed_args.input_file
+        ):
+            print(
+                "Warning: The original dataset name in the input metadata "
+                f"({updated_metadata.get('original_dataset_name')}) does not match the input "
+                f"file specified in the arguments ({parsed_args.input_file}). "
+                "The metadata will be updated with the input file name."
+            )
+        updated_metadata["original_dataset_name"] = parsed_args.input_file
+
+    defaults = {
+        "embedding_model_name": default_config["embedding"]["embedding_model_name"],
+        "db_dir": default_config["embedding"]["db_dir"],
+        "k_matches": default_config["embedding"]["k_matches"],
+        "sic_index_file": default_config["lookups"]["sic_index"][1],
+        "sic_structure_file": default_config["lookups"]["sic_structure"][1],
+        "model_name": default_config["llm"]["llm_model_name"],
+        "model_location": default_config["llm"]["model_location"],
+        "code_digits": default_config["llm"]["code_digits"],
+        "candidates_limit": default_config["llm"]["candidates_limit"],
+    }
+    for key, value in defaults.items():
+        if key not in updated_metadata:
+            updated_metadata[key] = value
+
+    if "batch_size" in updated_metadata and parsed_args.batch_size is not None:
+        if updated_metadata.get("batch_size") != parsed_args.batch_size:
+            print(
+                f"""Warning: The batch size in the input metadata ({
+                updated_metadata.get('batch_size')
+                }) does not match the batch size specified in the arguments ({
+                parsed_args.batch_size
+                }). The metadata will be updated with the batch size."""
+            )
+            updated_metadata["batch_size"] = parsed_args.batch_size
+    elif "batch_size" not in updated_metadata:
+        updated_metadata["batch_size"] = (
+            BATCH_SIZE if parsed_args.batch_size is None else parsed_args.batch_size
+        )
+
+    if "batch_size_async" not in updated_metadata:
+        updated_metadata["batch_size_async"] = min(
+            updated_metadata["batch_size"], MAX_ASYNC_BATCH_SIZE
+        )
+
+    updated_metadata[f"{parsed_args.output_shortname}_input_file"] = (
+        parsed_args.input_file
+    )
+    updated_metadata[f"{parsed_args.output_shortname}_start_timestamp"] = datetime.now(
+        UTC
+    ).timestamp()
+    updated_metadata[f"{parsed_args.output_shortname}_start_time_readable"] = (
+        datetime.now(UTC).strftime("%Y/%m/%d_%H:%M:%S")
+    )
+
+    return updated_metadata

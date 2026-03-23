@@ -1,43 +1,12 @@
 #!/usr/bin/env python3
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code, redefined-outer-name
 """This script retrieves followup questions and persists the results.
 It reads reloads the output from the previous stage as a DataFrame object,
 retireves a follow-up question for each row, creates a new column in the
 DataFrame with this information, and then saves the results to CSV, parquet,
 and JSON metadata files in a user-specified output folder.
 
-Clarification On Script Arguments:
-
-```bash
-python stage_3_add_open_questions.py --help
-```
-
-Example Usage:
-
-1. Ensure you have (re-)authenticated with `gcloud` for the current project.
-
-2. Run the script:
-   ```bash
-   python stage_3_add_open_questions.py \
-        -n my_output \
-        -b 10 \
-        persisted_dataframe.parquet \
-        persisted_metadata.json \
-        output_folder
-   ```
-   where:
-     - `-n my_output` sets the output filename prefix to "my_output".
-     - `-b 10` specifies to process in batches of 10 rows, checkpointing between batches.
-     - `persisted_dataframe.parquet` is the saved dataframe output at the previous stage.
-     - `persisted_metadata.json` is persisted JSON metadata from the previous stage.
-     - `output_folder` is the directory where results will be saved.
-
-3. Verify outputs exist as expected:
-    ```bash
-   ls output_folder
-   ```
-   (expect to see my_output.csv, my_output.parquet, and my_output_metadata.json)
-
+See README_evaluation_pipeline.md for more details on how to run.
 """
 import asyncio
 
@@ -53,30 +22,29 @@ from industrial_classification_utils.utils.shared_evaluation_pipeline_components
 )
 
 #####################################################
-# Constants:
-MODEL_NAME = "gemini-2.5-flash"
-MODEL_LOCATION = "europe-west1"
-
-CODE_DIGITS = 5
-CANDIDATES_LIMIT = 10
-MAX_BATCH_SIZE = 10
-
-INDUSTRY_DESCR_COL = "sic2007_employee"
+# Default values and constants:
 JOB_TITLE_COL = "soc2020_job_title"
 JOB_DESCRIPTION_COL = "soc2020_job_description"
 MERGED_INDUSTRY_DESC_COL = "merged_industry_desc"
+
+CANDIDATE_SIC_COL = "alt_sic_candidates"
+OUTPUT_COL = "followup_question"
 #####################################################
 
 # Enable progress bar for semantic-search
 tqdm.pandas()
 
 
-async def get_open_question_batch_async(batch: pd.DataFrame) -> list[str]:
+async def get_open_question_batch_async(
+    batch: pd.DataFrame, c_llm: ClassificationLLM
+) -> list[str]:
     """Process a batch of rows asynchronously to generate an open follow-up question for each row.
 
     Args:
         batch (pd.DataFrame): A batch of DataFrame containing rows with columns corresponding
                          to the survey responses, and the semantic search results.
+        c_llm (ClassificationLLM): An initialised instance of the ClassificationLLM class.
+
     Returns: question (str).
     """
     tasks = []
@@ -86,7 +54,7 @@ async def get_open_question_batch_async(batch: pd.DataFrame) -> list[str]:
                 industry_descr=row[MERGED_INDUSTRY_DESC_COL],
                 job_title=row[JOB_TITLE_COL],
                 job_description=row[JOB_DESCRIPTION_COL],
-                llm_output=row["alt_sic_candidates"],  # type: ignore
+                llm_output=row[CANDIDATE_SIC_COL],  # type: ignore
             )
         )
         tasks.append(task)
@@ -102,42 +70,11 @@ async def get_open_question_batch_async(batch: pd.DataFrame) -> list[str]:
     return results
 
 
-async def main():
+async def main_async(df, metadata, start_batch_id, args, c_llm):
     """Main function to generate follow up questions.
     Deviates from the stage_k template to enable async processing.
     """
-    global c_llm, args  # noqa: PLW0603 # pylint: disable=global-statement, global-variable-undefined
-    c_llm = ClassificationLLM(MODEL_NAME, verbose=False)
-    print("Classification LLM loaded.")
-
-    args = parse_args("STG3")
-
-    (
-        df,
-        metadata,
-        start_batch_id,
-        restart_successful,
-        second_run_variables,  # pylint: disable=W0612
-    ) = set_up_initial_state(
-        args.restart,
-        args.second_run,
-        args.output_folder,
-        args.output_shortname,
-        args.input_parquet_file,
-        args.input_metadata_json,
-        args.batch_size,
-        stage_id="stage_3",
-    )
-
-    if args.batch_size > MAX_BATCH_SIZE:
-        print(f"batch size too large. lower batch size to {MAX_BATCH_SIZE}")
-        batch_size_async = MAX_BATCH_SIZE
-    else:
-        batch_size_async = args.batch_size
-
     print("getting followup questions ...")
-    if (not args.restart) or (not restart_successful):
-        df["followup_question"] = ""
 
     df_uncodable = df[~df["unambiguously_codable"]]
 
@@ -146,9 +83,9 @@ async def main():
             np.split(
                 df_uncodable,
                 np.arange(
-                    start_batch_id * batch_size_async,
+                    start_batch_id * metadata["batch_size_async"],
                     len(df_uncodable),
-                    batch_size_async,
+                    metadata["batch_size_async"],
                 ),
             )
         )
@@ -158,26 +95,52 @@ async def main():
         if batch_id == 0:
             pass
         else:
-            results = await get_open_question_batch_async(batch)
-            df.loc[batch.index, "followup_question"] = results
+            results = await get_open_question_batch_async(batch, c_llm)
+            df.loc[batch.index, OUTPUT_COL] = results
 
             persist_results(
-                df,
-                metadata,
-                args.output_folder,
-                args.output_shortname,
+                df=df,
+                metadata=metadata,
+                output_folder=args.output_folder,
+                output_shortname=args.output_shortname,
                 is_final=False,
-                completed_batches=(batch_id + 1 + start_batch_id),
+                completed_batches=(batch_id + start_batch_id),
             )
 
     print("Followup question retrieval is complete")
 
     print("persisting results...")
     persist_results(
-        df, metadata, args.output_folder, args.output_shortname, is_final=True
+        df=df,
+        metadata=metadata,
+        output_folder=args.output_folder,
+        output_shortname=args.output_shortname,
+        is_final=True,
     )
     print("Done!")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    args = parse_args("STG3")
+
+    df, metadata, start_batch_id = set_up_initial_state(args)
+
+    c_llm = ClassificationLLM(
+        model_name=metadata["model_name"],
+        model_location=metadata["model_location"],
+        verbose=False,
+    )
+    print("Classification LLM loaded.")
+
+    if OUTPUT_COL not in df.columns:
+        df[OUTPUT_COL] = ""
+
+    asyncio.run(
+        main_async(
+            df=df,
+            metadata=metadata,
+            start_batch_id=start_batch_id,
+            args=args,
+            c_llm=c_llm,
+        )
+    )
