@@ -104,6 +104,15 @@ def test_duplicate_terms_increase_rank_via_counts(small_corpus):
     assert results[0] == "Car Wash"
 
 
+def test_duplicate_display_variants_are_returned_shorter_first(small_corpus):
+    s = SAYTSuggester(
+        small_corpus, min_chars=3, ngram_enable=False, semantic_enable=False
+    )
+    results = s.suggest("car wa")
+    # Both display variants should be present, with the shorter one first.
+    assert results[:2] == ["Car Wash", "CAR WASH (duplicate)"]
+
+
 def test_fuzzy_prefix_can_recover_from_simple_typo(small_corpus):
     s = SAYTSuggester(
         small_corpus, min_chars=3, ngram_enable=False, semantic_enable=False
