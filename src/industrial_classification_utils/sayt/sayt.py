@@ -38,7 +38,6 @@ class _SaytDefaults(NamedTuple):
     ngram_max_df: float = 0.2
     semantic_enable: bool = True
     semantic_weight: float = 1.0
-    semantic_min_chars: int = 10
     semantic_handler: VectoriserBase | str | None = None
 
 
@@ -127,7 +126,7 @@ class _CharNgramVectoriser(VectoriserBase):
     def __init__(self, corpus: list[str], *, n: int, max_df: float) -> None:
         self._vectoriser = CountVectorizer(
             analyzer="char_wb",
-            ngram_range=(2, n),
+            ngram_range=(n, n),
             max_df=max_df,
         )
         self._vectoriser.fit(corpus)
@@ -161,11 +160,7 @@ class SAYTSuggester:
         # Keep temporary vector-store dirs alive for the instance lifetime.
         self._tmp_dirs: list[tempfile.TemporaryDirectory[str]] = []
 
-        self._corpus_rows = self._clean_corpus(corpus)
-        self._id_to_search: dict[str, str] = {rid: s for rid, s, _ in self._corpus_rows}
-        self._id_to_display: dict[str, str] = {
-            rid: d for rid, _, d in self._corpus_rows
-        }
+        self._clean_corpus(corpus)
 
         if self._prefix_enable:
             self._init_prefix_index()
@@ -209,6 +204,14 @@ class SAYTSuggester:
             else 0.0
         )
 
+        if self._ngram_enable:
+            self._ngram_n = _coerce_int(cfg["ngram_n"], key="ngram_n")
+            if not 2 <= self._ngram_n <= 5:
+                raise ValueError("ngram_n must be between 2 and 5")
+            self._ngram_max_df = _coerce_float(cfg["ngram_max_df"], key="ngram_max_df")
+            if not 0.0 < self._ngram_max_df <= 1.0:
+                raise ValueError("ngram_max_df must be in (0, 1]")
+
         self._semantic_enable = _coerce_bool(
             cfg["semantic_enable"], key="semantic_enable"
         )
@@ -218,18 +221,7 @@ class SAYTSuggester:
             else 0.0
         )
 
-        if self._ngram_enable:
-            self._ngram_n = _coerce_int(cfg["ngram_n"], key="ngram_n")
-            if not 2 <= self._ngram_n <= 5:
-                raise ValueError("ngram_n must be between 2 and 5")
-            self._ngram_max_df = _coerce_float(cfg["ngram_max_df"], key="ngram_max_df")
-            if not 0.0 < self._ngram_max_df <= 1.0:
-                raise ValueError("ngram_max_df must be in (0, 1]")
-
         if self._semantic_enable:
-            self._semantic_min_chars = _coerce_int(
-                cfg["semantic_min_chars"], key="semantic_min_chars"
-            )
             self._semantic_handler = cfg.get("semantic_handler")
 
     def _validate_weights(self) -> None:
@@ -276,6 +268,16 @@ class SAYTSuggester:
         rows: list[tuple[str, str, str]] = [
             (f"{i:06d}", norm, display) for i, (norm, display) in enumerate(cleaned)
         ]
+
+        self._corpus_rows = rows
+        self._id_to_search: dict[str, str] = {rid: s for rid, s, _ in rows}
+        self._id_to_display: dict[str, str] = {rid: d for rid, _, d in rows}
+        self._display_text_count: dict[str, int] = {}
+        for _, _, display in rows:
+            self._display_text_count[display] = (
+                self._display_text_count.get(display, 0) + 1
+            )
+
         return rows
 
     def _init_prefix_index(self) -> None:
@@ -400,9 +402,14 @@ class SAYTSuggester:
             raise ValueError(f"Column '{display_text_col}' not found in CSV")
         return cls(list(zip(df[search_text_col], df[display_text_col])), **kwargs)
 
-    def _get_prefix_suggestions(self, q_norm: str) -> list[_Suggestion]:
+    def _get_prefix_suggestions(
+        self, q_norm: str, num_suggestions: int | None = None
+    ) -> list[_Suggestion]:
         if not self._prefix_enable or (len(q_norm) < self._min_chars):
             return []
+
+        if num_suggestions is None:
+            num_suggestions = self._max_suggestions
 
         scores: dict[str, float] = {}
 
@@ -446,9 +453,14 @@ class SAYTSuggester:
             )
         return out
 
-    def _get_ngram_suggestions(self, q_norm: str) -> list[_Suggestion]:
+    def _get_ngram_suggestions(
+        self, q_norm: str, num_suggestions: int | None = None
+    ) -> list[_Suggestion]:
         if not self._ngram_enable or len(q_norm) < self._min_chars:
             return []
+
+        if num_suggestions is None:
+            num_suggestions = self._max_suggestions
 
         q_vec = self._ngram_vectoriser.transform([q_norm])
         q_vec = np.asarray(q_vec, dtype=float)
@@ -480,9 +492,14 @@ class SAYTSuggester:
             )
         return out
 
-    def _get_semantic_suggestions(self, q_norm: str) -> list[_Suggestion]:
+    def _get_semantic_suggestions(
+        self, q_norm: str, num_suggestions: int | None = None
+    ) -> list[_Suggestion]:
         if not self._semantic_enable or len(q_norm) < self._min_chars:
             return []
+
+        if num_suggestions is None:
+            num_suggestions = self._max_suggestions
 
         q_vec = self._semantic_vectoriser.transform([q_norm])
         q_vec = np.asarray(q_vec, dtype=float)
@@ -514,7 +531,27 @@ class SAYTSuggester:
             )
         return out
 
-    def _rank_suggestions(
+    def _dedup_suggestions(self, suggestions: list[_Suggestion]) -> list[_Suggestion]:
+        # sort by score and deduplicate by display text, keeping the highest-scoring variant.
+        sorted_suggestions = sorted(
+            suggestions,
+            key=lambda s: (
+                -s.score,
+                -self._display_text_count.get(s.display_text, 0),
+                s.display_text.lower(),
+                s.search_text,
+                s.row_id,
+            ),
+        )
+        seen: set[str] = set()
+        deduped: list[_Suggestion] = []
+        for s in sorted_suggestions:
+            if s.display_text not in seen:
+                deduped.append(s)
+                seen.add(s.display_text)
+        return deduped
+
+    def _combine_suggestions(
         self,
         *,
         prefix_results: list[_Suggestion],
@@ -546,54 +583,60 @@ class SAYTSuggester:
         ngram_norm = normalise_scores(ngram_results, w_ngram)
         sem_norm = normalise_scores(semantic_results, w_sem)
 
-        combined: dict[str, float] = {}
+        combined_scores: dict[str, float] = {}
         for d in (prefix_norm, ngram_norm, sem_norm):
             for k, v in d.items():
-                combined[k] = combined.get(k, 0.0) + v
+                combined_scores[k] = combined_scores.get(k, 0.0) + v
 
-        ranked = sorted(
-            combined.items(),
-            key=lambda kv: (
-                -kv[1],
-                self._id_to_search.get(kv[0], ""),
-                len(self._id_to_display.get(kv[0], "")),
-                self._id_to_display.get(kv[0], "").lower(),
-                self._id_to_display.get(kv[0], ""),
-                kv[0],
-            ),
-        )
-
-        out: list[_Suggestion] = []
-        for row_id, score in ranked[: self._max_suggestions]:
-            out.append(
-                _Suggestion(
-                    display_text=self._id_to_display.get(row_id, ""),
-                    score=float(score),
-                    search_text=self._id_to_search.get(row_id, ""),
-                    row_id=row_id,
-                )
+        return [
+            _Suggestion(
+                display_text=self._id_to_display.get(row_id, ""),
+                score=float(score),
+                search_text=self._id_to_search.get(row_id, ""),
+                row_id=row_id,
             )
-        return out
+            for row_id, score in combined_scores.items()
+        ]
 
-    def suggest_with_scores(self, query: str) -> list[_Suggestion]:
+    def suggest_with_scores(
+        self, query: str, num_suggestions: int | None = None
+    ) -> list[_Suggestion]:
         """Return suggestions for the given query, with relevance scores."""
+        if num_suggestions is None:
+            num_suggestions = self._max_suggestions
         q_norm = _normalise(query)
         if len(q_norm) < self._min_chars:
             return []
 
-        prefix_results = self._get_prefix_suggestions(q_norm)
-        ngram_results = self._get_ngram_suggestions(q_norm)
-        semantic_results = self._get_semantic_suggestions(q_norm)
+        # Ask for more suggestions, as some may be filtered out after deduplication
+        prefix_results = self._get_prefix_suggestions(
+            q_norm, num_suggestions=10 * num_suggestions
+        )
+        ngram_results = self._get_ngram_suggestions(
+            q_norm, num_suggestions=10 * num_suggestions
+        )
+        semantic_results = self._get_semantic_suggestions(
+            q_norm, num_suggestions=10 * num_suggestions
+        )
 
-        combined_result = self._rank_suggestions(
+        combined_result = self._combine_suggestions(
             prefix_results=prefix_results,
             ngram_results=ngram_results,
             semantic_results=semantic_results,
         )
-        return combined_result
+        ranked_results = self._dedup_suggestions(combined_result)
 
-    def suggest(self, query: str) -> list[str]:
+        return ranked_results[:num_suggestions]
+
+    def suggest(self, query: str, num_suggestions: int | None = None) -> list[str]:
         """Return list of suggestions (display text only) upto a maximum limit."""
+        if num_suggestions is None:
+            num_suggestions = self._max_suggestions
         return list(
-            dict.fromkeys(s.display_text for s in self.suggest_with_scores(query))
-        )[: self._max_suggestions]
+            dict.fromkeys(
+                s.display_text
+                for s in self.suggest_with_scores(
+                    query, num_suggestions=num_suggestions
+                )
+            )
+        )[:num_suggestions]

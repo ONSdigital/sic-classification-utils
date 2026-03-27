@@ -1,4 +1,8 @@
-"""Experimenting with different approaches to improve SAYT results."""
+"""Experimenting with different approaches to improve SAYT results.
+
+This is initial experiment not using the SAYTSuggester class.
+
+"""
 
 # ruff: noqa: PLR2004
 # pylint: disable=C0301,C0103,C0115,C0116,W0621,W0105,R0903
@@ -17,28 +21,23 @@ project_id = get_key(".env", "PROJECT_ID")
 if not project_id:
     raise ValueError("PROJECT_ID not found in .env file. Please set it.")
 
-data_bucket = get_key(".env", "PREPROD_DATA_BUCKET") or "./"
+data_bucket = get_key(".env", "EVALUATION_BUCKET") or "./"
 
 # out_dir = f"{data_bucket}SAYT_semantic_search_test_results/"
-out_dir = "./SAYT_semantic_search_results/"
+out_dir = "data/SAYT_semantic_search_results/"
 
 if not out_dir.startswith("gs://"):
     os.makedirs(out_dir, exist_ok=True)
 
 # %%
-lookup_df = pd.read_csv(
-    f"{data_bucket}Lookup_IT3_Final.csv",
-    usecols=["text", "id"],
-    dtype={
-        "text": pd.StringDtype,
-        "id": pd.StringDtype,
-    },
-)
-lookup_df["id"] = lookup_df["id"].apply(lambda x: x if len(x) == 5 else f"0{x}")
+sayt_df = pd.read_csv(
+    f"{data_bucket}evaluation-pipeline/SAYT/Lookup_IT3_Final.csv", dtype=str
+).rename(columns={"SIC07": "id", "SIC_lookup": "text"})
+sayt_df["id"] = sayt_df["id"].apply(lambda x: x if len(x) == 5 else f"0{x}")
 
 # %%
 matching_df = pd.read_csv(
-    f"{data_bucket}SAYT_matching.csv",
+    f"{data_bucket}evaluation-pipeline/SAYT/SAYT_matching.csv",
     usecols=[
         "Correct SIC code",
         "Full entry looking for",
@@ -121,7 +120,7 @@ gcp_vs = VectorStore(
 
 # %%
 
-sayt_v = MockSAYTVectoriser(lookup_df["text"])
+sayt_v = MockSAYTVectoriser(sayt_df["text"])
 sayt_vs = VectorStore(
     file_name=f"{data_bucket}Lookup_IT3_Final.csv",
     data_type="csv",
