@@ -28,8 +28,8 @@ Attributes:
 
 # pylint: disable=invalid-name # Need to clean up the code to remove this
 
-from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts.prompt import PromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
 
 from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.models.response_model import (
