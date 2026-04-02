@@ -4,34 +4,31 @@ using Chroma vector stores and language models.
 It includes functionality for embedding SIC hierarchy data, managing vector stores,
 and performing similarity searches.
 """
+
 import csv
-import shutil
-import tempfile
-import uuid
+
 # Optional but doesn't hurt
 import logging
-import numpy as np
 import os
+import posixpath
+import shutil
 import sqlite3  # noqa: F401 # pylint: disable=unused-import
+import tempfile
 
 # Docker Image may have old sqlite3 version for ChromaDB
 # Top of your module (before any langchain or chroma import)
 import uuid
 from typing import Any, Optional, Union
 
+import numpy as np
 from autocorrect import Speller
-from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarchy
-from langchain_chroma import Chroma
-from langchain_core.documents import Document
-
 from classifai.indexers import VectorStore, VectorStoreSearchInput
 from classifai.vectorisers import (
     HuggingFaceVectoriser,
 )
-
-# from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from google.cloud import storage
+from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarchy
 from langchain_google_vertexai import VertexAIEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
 
 from industrial_classification_utils.models.config_model import (
     FullConfig,
@@ -43,12 +40,15 @@ from industrial_classification_utils.utils.sic_data_access import (
 
 
 class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
+    """Custom HuggingFaceVectoriser that normalizes vectors to unit length after embedding."""
+
     def _normalize(self, vectors):
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1.0, norms)
         return vectors / norms
 
     def transform(self, texts):
+        """Transforms texts into normalized vectors."""
         single_input = isinstance(texts, str)
         if single_input:
             texts = [texts]
@@ -61,17 +61,21 @@ class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
         return vectors
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Embeds a list of documents into normalized vectors."""
         return self.transform(texts).tolist()
 
     def embed_query(self, text: str) -> list[float]:
+        """Embeds a single query into a normalized vector."""
         return self.transform([text]).tolist()[0]
 
     def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Asynchronously embeds a list of documents into normalized vectors."""
         return self.embed_documents(texts)
 
     def aembed_query(self, text: str) -> list[float]:
+        """Asynchronously embeds a single query into a normalized vector."""
         return self.embed_query(text)
-    
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -87,6 +91,8 @@ embedding_config = {
     "matches": 0,
     "index_size": 0,
 }
+
+EXPECTED_SPLIT_PARTS = 2
 
 
 def get_config() -> FullConfig:
@@ -150,7 +156,7 @@ class CustomVertexAIEmbeddings(VertexAIEmbeddings):
         return super().embed_query(text, embeddings_task_type=embeddings_task_type)
 
 
-class EmbeddingHandler:
+class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
     """Handles embedding operations for the Chroma vector store.
 
     Attributes:
@@ -162,7 +168,7 @@ class EmbeddingHandler:
         _index_size (int): Number of entries in the vector store.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         embedding_model_name: str = config["llm"]["embedding_model_name"],
         db_dir: str = config["llm"]["db_dir"],
@@ -203,8 +209,11 @@ class EmbeddingHandler:
         self.spell = Speller()
 
         self.sic_index_file = sic_index_file or config["lookups"]["sic_index"]
-        self.sic_structure_file = sic_structure_file or config["lookups"]["sic_structure"]
+        self.sic_structure_file = (
+            sic_structure_file or config["lookups"]["sic_structure"]
+        )
 
+        self._vector_store_tmp_dir: tempfile.TemporaryDirectory | None = None
         self.vector_store = self._load_or_build_vector_store()
         self._index_size = self.vector_store.num_vectors
 
@@ -226,11 +235,99 @@ class EmbeddingHandler:
 
         logger.debug("EmbeddingHandler initialised with config: %s", embedding_config)
 
-    def _load_or_build_vector_store(self) -> VectorStore:
-        """Load an existing ClassifAI vector store, or build one from SIC source files."""
+    def _is_gcs_path(self, path: str) -> bool:
+        return path.startswith("gs://")
 
-        if not self.db_dir:
-            raise ValueError("db_dir must be provided.")
+    def _parse_gcs_uri(self, gcs_uri: str) -> tuple[str, str]:
+        """Parse gs://bucket/path/to/folder into (bucket_name, prefix)."""
+        if not gcs_uri.startswith("gs://"):
+            raise ValueError(f"Not a valid GCS URI: {gcs_uri}")
+
+        without_scheme = gcs_uri[5:]
+        parts = without_scheme.split("/", 1)
+        bucket_name = parts[0]
+        prefix = parts[1].rstrip("/") if len(parts) > 1 else ""
+
+        if not bucket_name:
+            raise ValueError(f"Invalid GCS URI, bucket missing: {gcs_uri}")
+
+        return bucket_name, prefix
+
+    def _download_vector_store_from_gcs(self, gcs_uri: str) -> str:
+        """Download metadata.json and vectors.parquet from a GCS folder into a
+        temporary local directory and return that directory path.
+
+        Raises:
+            FileNotFoundError: if either metadata.json or vectors.parquet is missing.
+        """
+        bucket_name, prefix = self._parse_gcs_uri(gcs_uri)
+
+        metadata_blob_name = (
+            posixpath.join(prefix, "metadata.json") if prefix else "metadata.json"
+        )
+        vectors_blob_name = (
+            posixpath.join(prefix, "vectors.parquet") if prefix else "vectors.parquet"
+        )
+
+        logger.info(
+            "Attempting to load ClassifAI vector store from GCS bucket=%s prefix=%s",
+            bucket_name,
+            prefix,
+        )
+
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+
+        metadata_blob = bucket.blob(metadata_blob_name)
+        vectors_blob = bucket.blob(vectors_blob_name)
+
+        missing = []
+        if not metadata_blob.exists():
+            missing.append(f"gs://{bucket_name}/{metadata_blob_name}")
+        if not vectors_blob.exists():
+            missing.append(f"gs://{bucket_name}/{vectors_blob_name}")
+
+        if missing:
+            raise FileNotFoundError(
+                "Required vector store file(s) not found in GCS: " + ", ".join(missing)
+            )
+
+        tmp_dir = tempfile.TemporaryDirectory()  # pylint: disable=consider-using-with
+        local_dir = tmp_dir.name
+
+        # Keep the tempdir alive for the lifetime of the handler
+        self._vector_store_tmp_dir = tmp_dir
+
+        local_metadata = os.path.join(local_dir, "metadata.json")
+        local_vectors = os.path.join(local_dir, "vectors.parquet")
+
+        metadata_blob.download_to_filename(local_metadata)
+        vectors_blob.download_to_filename(local_vectors)
+
+        logger.info(
+            "Downloaded vector store files from gs://%s/%s to %s",
+            bucket_name,
+            prefix,
+            local_dir,
+        )
+
+        return local_dir
+
+    def _load_existing_vector_store(self) -> Optional[VectorStore]:
+        """Load an existing vector store from either a local folder or a GCS folder.
+        Returns None if no existing store is found locally.
+        Raises FileNotFoundError for missing required files in GCS.
+        """
+        if self._is_gcs_path(self.db_dir):
+            local_dir = self._download_vector_store_from_gcs(self.db_dir)
+            logger.info(
+                "Loading existing ClassifAI vector store from GCS URI %s", self.db_dir
+            )
+            return VectorStore.from_filespace(
+                folder_path=local_dir,
+                vectoriser=self.embeddings,
+                hooks=None,
+            )
 
         metadata_path = os.path.join(self.db_dir, "metadata.json")
         vectors_path = os.path.join(self.db_dir, "vectors.parquet")
@@ -248,6 +345,19 @@ class EmbeddingHandler:
                 vectoriser=self.embeddings,
                 hooks=None,
             )
+
+        return None
+
+    def _load_or_build_vector_store(  # pylint: disable=too-many-locals
+        self,
+    ) -> VectorStore:
+        """Load an existing ClassifAI vector store, or build one from SIC source files."""
+        if not self.db_dir:
+            raise ValueError("db_dir must be provided.")
+
+        existing_store = self._load_existing_vector_store()
+        if existing_store is not None:
+            return existing_store
 
         logger.info(
             "No existing vector store found in %s. Building from SIC source files.",
@@ -322,8 +432,7 @@ class EmbeddingHandler:
 
         return vector_store
 
-
-    def embed_index(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+    def embed_index(  # noqa: PLR0915, C901 # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments, too-many-statements
         self,
         from_empty: bool = True,
         sic: Optional[SIC] = None,
@@ -367,7 +476,7 @@ class EmbeddingHandler:
                     continue
 
                 bits = line.split(":", 1)
-                if len(bits) != 2:
+                if len(bits) != EXPECTED_SPLIT_PARTS:
                     logger.warning("Skipping malformed line: %s", line)
                     continue
 
@@ -497,14 +606,12 @@ class EmbeddingHandler:
             Union[list[dict], list[tuple[str, float]]]: List of top k index entries
             by relevance.
         """
-        search_input = VectorStoreSearchInput(
-            {"id": ["q1"], "query": [query]}
-        )
+        search_input = VectorStoreSearchInput({"id": ["q1"], "query": [query]})
         results = self.vector_store.search(search_input, n_results=self.k_matches)
 
         # ClassifAI returns a dataframe-like object.
         # Depending on the exact backend/version, one of these usually works.
-        if hasattr(results, "to_dicts"):
+        if hasattr(results, "to_dicts"):  # noqa: SIM108
             rows = results.to_dicts()
         else:
             rows = results.to_dict(orient="records")
@@ -521,11 +628,7 @@ class EmbeddingHandler:
                 for row in rows
             ]
 
-        return [
-            (row["doc_text"], float(row["score"]))
-            for row in rows
-        ]
-
+        return [(row["doc_text"], float(row["score"])) for row in rows]
 
     def search_index_multi(self, query: list[str]) -> list[dict]:
         """Returns k document chunks with the highest relevance to a list of query fields.
