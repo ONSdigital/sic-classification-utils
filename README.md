@@ -63,7 +63,7 @@ This will output semantic search of the files in [src/industrial_classification_
 
 [scripts](scripts) - location of any supporting scripts (e.g. data cleansing etc)
 
-[demos](demos) - example code for using the functionality in this repo, including example data fixtures
+[demos](demos) - example code for using the functionality in this repo, including example data fixtures. Contents of this folder should generally be formatted 'notebook' style, with cells separated by `# %%` and comments to explain the code. The whole example should be runnable as a script, but the formatting allows for easier reading and understanding of the code.
 
 [src/industrial_classification_utils/data](src/industrial_classification_utils/data) - example data and SIC classification data used for embeddings
 
