@@ -1,5 +1,6 @@
 """This module provides illustration for the use of unambiguous prompt with an LLM."""
 
+# %%
 import asyncio
 import json
 from pathlib import Path
@@ -8,7 +9,7 @@ from pprint import pprint
 from industrial_classification_utils.llm import ClassificationLLM
 
 # pylint: disable=duplicate-code
-
+# %%
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
 LLM_MODEL = "gemini-2.5-flash"
@@ -21,18 +22,18 @@ with (DATA_DIR / "adult_mental_health_embed_short_list.json").open(
 ) as handle:
     EXAMPLE_EMBED_SHORT_LIST = json.load(handle)
 
-if __name__ == "__main__":
-    uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
+# %%
+uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
 
-    sa_response = asyncio.run(
-        uni_chat.unambiguous_sic_code(
-            industry_descr=ORG_DESCRIPTION,
-            semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
-            job_title=JOB_TITLE,
-            job_description=JOB_DESCRIPTION,
-            code_digits=5,
-            candidates_limit=7,
-        )
+sa_response = asyncio.run(
+    uni_chat.unambiguous_sic_code(
+        industry_descr=ORG_DESCRIPTION,
+        semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
+        job_title=JOB_TITLE,
+        job_description=JOB_DESCRIPTION,
+        code_digits=5,
+        candidates_limit=7,
     )
+)
 
-    pprint(sa_response[0].model_dump(), indent=2, width=80)
+pprint(sa_response[0].model_dump(), indent=2, width=80)
