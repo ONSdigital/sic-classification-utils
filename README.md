@@ -49,10 +49,10 @@ pre-commit install
 
 ### Run Locally
 
-There is example source for using the SIC Embedding functionality in [sic_embedding_example.py](src/industrial_classification_utils/embed/sic_embedding_example.py) to run:
+There is example source for using the SIC Embedding functionality in [sic_embedding_example.py](demos/embed/sic_embedding_example.py) to run:
 
 ```bash
-poetry run python src/industrial_classification_utils/embed/sic_embedding_example.py
+poetry run python demos/embed/sic_embedding_example.py
 ```
 
 This will output semantic search of the files in [src/industrial_classification_utils/data/sic_index](src/industrial_classification_utils/data/sic_index) based on the query "school teacher primary education"
@@ -61,11 +61,15 @@ This will output semantic search of the files in [src/industrial_classification_
 
 [docs](docs) - documentation as code using mkdocs
 
-[scripts](scripts) - location of any supporting scripts (e.g data cleansing etc)
+[scripts](scripts) - location of any supporting scripts (e.g. data cleansing etc)
+
+[demos](demos) - example code for using the functionality in this repo, including example data fixtures
 
 [src/industrial_classification_utils/data](src/industrial_classification_utils/data) - example data and SIC classification data used for embeddings
 
-[src/industrial_classification_utils/embed](src/industrial_classification_utils/embed) - ChromaDB vector store and embedding code, includes an example use of the store.
+[src/industrial_classification_utils/embed](src/industrial_classification_utils/embed) - ChromaDB vector store and embedding code
+
+[src/industrial_classification_utils/llm](src/industrial_classification_utils/llm) - LLM code for SIC classification and related tasks
 
 [src/industrial_classification_utils/models](src/industrial_classification_utils/models) - common data structures that need to be shared
 

@@ -1,0 +1,17 @@
+[
+  {
+    "class_code": "88990",
+    "class_descriptive": "Other social work activities without accommodation nec",
+    "likelihood": 0.8
+  },
+  {
+    "class_code": "88100",
+    "class_descriptive": "Social work activities without accommodation for theelderly and disabled",
+    "likelihood": 0.6
+  },
+  {
+    "class_code": "84120",
+    "class_descriptive": "Regulation of the activities of providing health care, education,cultural services and other social services, excluding social security",
+    "likelihood": 0.3
+  }
+]

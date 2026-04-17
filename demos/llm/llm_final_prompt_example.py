@@ -1,0 +1,45 @@
+"""This module provides illustration for the use of final SIC assignment prompt with an LLM."""
+
+import asyncio
+import json
+from pathlib import Path
+from pprint import pprint
+
+from industrial_classification_utils.llm import ClassificationLLM
+
+# pylint: disable=duplicate-code
+
+DATA_DIR = Path(__file__).resolve().parent / "data"
+
+LLM_MODEL = "gemini-2.5-flash"
+JOB_TITLE = "community assessment officer"
+JOB_DESCRIPTION = "social services"
+ORG_DESCRIPTION = "adult social care"
+OPEN_QUESTION = (
+    "Could you briefly describe the main types of support or assessments"
+    " that you provide to individuals in your community?"
+)
+ANSWER_TO_OPEN_QUESTION = "housing and benefits assistance"
+CLOSED_QUESTION = "Which of these best describes your organisation's activities?"
+ANSWER_TO_CLOSED_QUESTION = "other social work activities without accommodation nec"
+
+with (DATA_DIR / "final_sic_candidates.json").open(encoding="utf-8") as handle:
+    SIC_CANDIDATES = json.load(handle)
+
+if __name__ == "__main__":
+    uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
+
+    sa_response = asyncio.run(
+        uni_chat.final_sic_code(
+            industry_descr=ORG_DESCRIPTION,
+            job_title=JOB_TITLE,
+            job_description=JOB_DESCRIPTION,
+            sic_candidates=str(SIC_CANDIDATES),
+            open_question=OPEN_QUESTION,
+            answer_to_open_question=ANSWER_TO_OPEN_QUESTION,
+            closed_question=CLOSED_QUESTION,
+            answer_to_closed_question=ANSWER_TO_CLOSED_QUESTION,
+        )
+    )
+
+    pprint(sa_response[0].model_dump(), indent=2, width=80)
