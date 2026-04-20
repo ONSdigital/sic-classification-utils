@@ -8,14 +8,14 @@ which can be used for tasks such as similarity searches or classification.
 """
 
 # %%
-from industrial_classification_utils.embed.embedding import EmbeddingHandler
+from industrial_classification_utils.embed import EmbeddingHandler
 
 EXAMPLE_QUERY = "school teacher primary education"
 
 # %%
 print("Creating embeddings index...")
 # Create the embeddings index
-embed = EmbeddingHandler()
+embed = EmbeddingHandler(db_dir="./data/vector_store")
 embed.embed_index(from_empty=True)
 print(
     f"Embeddings index created with {embed._index_size} entries."  # pylint: disable=protected-access
