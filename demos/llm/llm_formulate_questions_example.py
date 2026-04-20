@@ -5,10 +5,13 @@ import json
 from pathlib import Path
 from pprint import pprint
 
+import nest_asyncio
+
 from industrial_classification_utils.llm import ClassificationLLM
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 # %%
+nest_asyncio.apply()
 # Inputs for ClassificationLLM methods
 JOB_TITLE = "psychologist"
 JOB_DESCRIPTION = "I help adults who have mental health difficulties"

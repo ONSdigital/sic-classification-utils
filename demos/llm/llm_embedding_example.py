@@ -15,10 +15,13 @@ import asyncio
 import json
 from pathlib import Path
 
+import nest_asyncio
+
 from industrial_classification_utils.llm import ClassificationLLM
 
 # pylint: disable=duplicate-code
 # %%
+nest_asyncio.apply()
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
 EXAMPLE_QUERY = "school teacher primary education"
@@ -46,7 +49,7 @@ response_sic_code = loop.run_until_complete(
     gemini_llm.get_sic_code(ORG_DESCRIPTION, JOB_TITLE, JOB_DESCRIPTION)
 )
 
-print(response_sic_code)
+print(response_sic_code.model_dump_json(indent=2))
 # %%
 response, short_list, prompt = loop.run_until_complete(
     gemini_llm.sa_rag_sic_code(
@@ -58,7 +61,7 @@ response, short_list, prompt = loop.run_until_complete(
     )
 )
 # Print the response
-print(response)
+print(response.model_dump_json(indent=2))
 # %%
 query_response, call_dict = loop.run_until_complete(
     gemini_llm.unambiguous_sic_code(
@@ -70,4 +73,6 @@ query_response, call_dict = loop.run_until_complete(
 )
 
 # Print the response
-print(query_response)
+print(query_response.model_dump_json(indent=2))
+
+# %%

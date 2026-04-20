@@ -6,10 +6,13 @@ import json
 from pathlib import Path
 from pprint import pprint
 
+import nest_asyncio
+
 from industrial_classification_utils.llm import ClassificationLLM
 
 # pylint: disable=duplicate-code
 # %%
+nest_asyncio.apply()
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
 LLM_MODEL = "gemini-2.5-flash"
