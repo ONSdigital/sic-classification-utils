@@ -10,11 +10,19 @@ The example then uses llm from the `industrial_classification_utils.llm.llm_embe
 package to perform a lookup using the embeddings index.
 """
 
+# %%
 import asyncio
+import json
+from pathlib import Path
 
-from industrial_classification_utils.llm.llm import ClassificationLLM
+import nest_asyncio
+
+from industrial_classification_utils.llm import ClassificationLLM
 
 # pylint: disable=duplicate-code
+# %%
+nest_asyncio.apply()
+DATA_DIR = Path(__file__).resolve().parent / "data"
 
 EXAMPLE_QUERY = "school teacher primary education"
 LLM_MODEL = "gemini-2.5-flash"
@@ -23,45 +31,16 @@ JOB_DESCRIPTION = "teach maths"
 ORG_DESCRIPTION = "school"
 CANDIDATE_LIMIT = 100
 
-# The following is a mock response for the embedding search
-EXAMPLE_EMBED_SHORT_LIST = [
-    {
-        "distance": 0.6347243785858154,
-        "title": "Education agent",
-        "code": "85600",
-        "four_digit_code": "8560",
-        "two_digit_code": "85",
-    },
-    {
-        "distance": 0.6422433257102966,
-        "title": "Teacher n.e.c.",
-        "code": "85590",
-        "four_digit_code": "8559",
-        "two_digit_code": "85",
-    },
-    {
-        "distance": 0.7757259607315063,
-        "title": "Teachers of sport",
-        "code": "85510",
-        "four_digit_code": "8551",
-        "two_digit_code": "85",
-    },
-    {
-        "distance": 0.8803297281265259,
-        "title": "Kindergartens",
-        "code": "85100",
-        "four_digit_code": "8510",
-        "two_digit_code": "85",
-    },
-]
+with (DATA_DIR / "school_embed_short_list.json").open(encoding="utf-8") as handle:
+    EXAMPLE_EMBED_SHORT_LIST = json.load(handle)
 
-
+# %%
 # The vector store is decoupled from the LLM.
 # The expectation is that the embedding will be queried and then
 # the results will be passed to the LLM for classification.
 # This example uses mocked data for the embedding search.
 gemini_llm = ClassificationLLM(model_name=LLM_MODEL)
-
+# %%
 # Create single event loop for each async method to use
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -70,8 +49,8 @@ response_sic_code = loop.run_until_complete(
     gemini_llm.get_sic_code(ORG_DESCRIPTION, JOB_TITLE, JOB_DESCRIPTION)
 )
 
-print(response_sic_code)
-
+print(response_sic_code.model_dump_json(indent=2))
+# %%
 response, short_list, prompt = loop.run_until_complete(
     gemini_llm.sa_rag_sic_code(
         ORG_DESCRIPTION,
@@ -82,8 +61,8 @@ response, short_list, prompt = loop.run_until_complete(
     )
 )
 # Print the response
-print(response)
-
+print(response.model_dump_json(indent=2))
+# %%
 query_response, call_dict = loop.run_until_complete(
     gemini_llm.unambiguous_sic_code(
         industry_descr=ORG_DESCRIPTION,
@@ -94,4 +73,6 @@ query_response, call_dict = loop.run_until_complete(
 )
 
 # Print the response
-print(query_response)
+print(query_response.model_dump_json(indent=2))
+
+# %%
