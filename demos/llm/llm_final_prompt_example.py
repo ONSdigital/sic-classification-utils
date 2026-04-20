@@ -1,44 +1,35 @@
 """This module provides illustration for the use of final SIC assignment prompt with an LLM."""
 
+# %%
 import asyncio
+import json
+from pathlib import Path
 from pprint import pprint
 
-from industrial_classification_utils.llm.llm import ClassificationLLM
+import nest_asyncio
+
+from industrial_classification_utils.llm import ClassificationLLM
 
 # pylint: disable=duplicate-code
+# %%
+nest_asyncio.apply()
+DATA_DIR = Path(__file__).resolve().parent / "data"
 
 LLM_MODEL = "gemini-2.5-flash"
 JOB_TITLE = "community assessment officer"
 JOB_DESCRIPTION = "social services"
 ORG_DESCRIPTION = "adult social care"
-OPEN_QUESTION = "Could you briefly describe the main types of support or assessments"
-"that you provide to individuals in your community?"
+OPEN_QUESTION = (
+    "Could you briefly describe the main types of support or assessments"
+    " that you provide to individuals in your community?"
+)
 ANSWER_TO_OPEN_QUESTION = "housing and benefits assistance"
 CLOSED_QUESTION = "Which of these best describes your organisation's activities?"
 ANSWER_TO_CLOSED_QUESTION = "other social work activities without accommodation nec"
 
-
-# The following is a mock LLM output for unambiguous_sic_code
-SIC_CANDIDATES = [
-    {
-        "class_code": "88990",
-        "class_descriptive": "Other social work activities without accommodation nec",
-        "likelihood": 0.8,
-    },
-    {
-        "class_code": "88100",
-        "class_descriptive": "Social work activities without accommodation for the"
-        "elderly and disabled",
-        "likelihood": 0.6,
-    },
-    {
-        "class_code": "84120",
-        "class_descriptive": "Regulation of the activities of providing health care, education,"
-        "cultural services and other social services, excluding social security",
-        "likelihood": 0.3,
-    },
-]
-
+with (DATA_DIR / "final_sic_candidates.json").open(encoding="utf-8") as handle:
+    SIC_CANDIDATES = json.load(handle)
+# %%
 uni_chat = ClassificationLLM(model_name=LLM_MODEL, verbose=True)
 
 sa_response = asyncio.run(
@@ -55,3 +46,5 @@ sa_response = asyncio.run(
 )
 
 pprint(sa_response[0].model_dump(), indent=2, width=80)
+
+# %%
