@@ -3,7 +3,7 @@
 # pylint: disable=protected-access, R0801
 
 # %%
-from industrial_classification_utils.sayt.sayt import SAYTSuggester
+from industrial_classification_utils.sayt import SAYTSuggester
 
 # %%
 ############# toy example to verify SAYT works #############

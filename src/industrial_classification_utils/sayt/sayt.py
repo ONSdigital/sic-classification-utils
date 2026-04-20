@@ -386,7 +386,7 @@ class SAYTSuggester:
     @classmethod
     def from_csv(
         cls,
-        file_path: str,
+        file_path: str | os.PathLike,
         *,
         search_text_col: str = "title",
         display_text_col: str | None = None,
