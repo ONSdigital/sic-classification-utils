@@ -340,7 +340,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
             code = (row["code"].replace(".", "").replace("/", "") + "0")[:5]
             rows.append(
                 {
-                    "id": str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])),
+                    "label": str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])),
                     "text": row["text"],
                     "code": code,
                     "four_digit_code": code[0:4],
@@ -364,7 +364,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
                 writer = csv.DictWriter(
                     csvfile,
                     fieldnames=[
-                        "id",
+                        "label",
                         "text",
                         "code",
                         "four_digit_code",
@@ -446,7 +446,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
 
                 rows.append(
                     {
-                        "id": str(uuid.uuid3(uuid.NAMESPACE_URL, line.strip())),
+                        "label": str(uuid.uuid3(uuid.NAMESPACE_URL, line.strip())),
                         "text": text,
                         "code": code,
                         "four_digit_code": code[0:4],
@@ -477,7 +477,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
 
                 rows.append(
                     {
-                        "id": str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])),
+                        "label": str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])),
                         "text": row["text"],
                         "code": code,
                         "four_digit_code": code[0:4],
@@ -501,7 +501,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
                 writer = csv.DictWriter(
                     csvfile,
                     fieldnames=[
-                        "id",
+                        "label",
                         "text",
                         "code",
                         "four_digit_code",
