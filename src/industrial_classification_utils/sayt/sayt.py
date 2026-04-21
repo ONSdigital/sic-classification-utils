@@ -18,6 +18,7 @@ from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
+import polars as pl
 from classifai.indexers import VectorStore
 from classifai.vectorisers import HuggingFaceVectoriser, VectoriserBase
 from sklearn.feature_extraction.text import CountVectorizer
@@ -310,7 +311,7 @@ class SAYTSuggester:
 
         df = pd.DataFrame(
             {
-                "id": [r[0] for r in self._corpus_rows],
+                "label": [r[0] for r in self._corpus_rows],
                 "text": [r[1] for r in self._corpus_rows],
                 "display": [r[2] for r in self._corpus_rows],
             }
@@ -326,6 +327,13 @@ class SAYTSuggester:
             output_dir=out_dir,
             overwrite=True,
         )
+
+    @staticmethod
+    def _get_vector_store_vectors(vector_store: VectorStore) -> pl.DataFrame:
+        vectors = vector_store.vectors
+        if vectors is None:
+            raise RuntimeError("VectorStore was created without vectors")
+        return vectors
 
     @staticmethod
     def _polars_embeddings_to_matrix(embeddings: list[object]) -> np.ndarray:
@@ -345,12 +353,13 @@ class SAYTSuggester:
         self._ngram_vectoriser: VectoriserBase = ngram_vectoriser
 
         vs = self._build_vector_store(vectoriser=self._ngram_vectoriser, name="ngram")
+        vectors = self._get_vector_store_vectors(vs)
 
-        self._ngram_doc_ids = vs.vectors["id"].to_list()
-        self._ngram_doc_search = vs.vectors["text"].to_list()
-        self._ngram_doc_display = vs.vectors["display"].to_list()
+        self._ngram_doc_ids = vectors["label"].to_list()
+        self._ngram_doc_search = vectors["text"].to_list()
+        self._ngram_doc_display = vectors["display"].to_list()
         self._ngram_doc_matrix = self._polars_embeddings_to_matrix(
-            vs.vectors["embeddings"].to_list()
+            vectors["embeddings"].to_list()
         )
 
     def _init_semantic_index(self) -> None:
@@ -374,13 +383,14 @@ class SAYTSuggester:
         vs = self._build_vector_store(
             vectoriser=self._semantic_vectoriser, name="semantic"
         )
+        vectors = self._get_vector_store_vectors(vs)
 
         # Keep the display text from the semantic vector store documents.
-        self._semantic_doc_ids = vs.vectors["id"].to_list()
-        self._semantic_doc_search = vs.vectors["text"].to_list()
-        self._semantic_doc_display = vs.vectors["display"].to_list()
+        self._semantic_doc_ids = vectors["label"].to_list()
+        self._semantic_doc_search = vectors["text"].to_list()
+        self._semantic_doc_display = vectors["display"].to_list()
         self._semantic_doc_matrix = self._polars_embeddings_to_matrix(
-            vs.vectors["embeddings"].to_list()
+            vectors["embeddings"].to_list()
         )
 
     @classmethod
