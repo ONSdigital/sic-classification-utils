@@ -31,6 +31,7 @@ langchain-openai = "0.3.21"
 pydantic = "^2.11.1"
 langchain = ">=0.3,<0.4"
 google-cloud-storage = ">=2.18,<3" #langchain-google-vertexai (2.1.2) depends on google-cloud-storage (>=2.18,<3)
+openpyxl = "^3.1.5"
 
 [tool.poetry.group.dev.dependencies]
 mkdocs-material = "^9.6.9"
