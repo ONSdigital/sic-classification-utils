@@ -411,8 +411,10 @@ def test_get_embed_config_returns_expected_keys(
     config = embedding_handler_for_embed.get_embed_config()
 
     assert "embedding_model_name" in config
-    assert "llm_model_name" in config
     assert "db_dir" in config
+    assert "sic_index" in config
+    assert "sic_structure" in config
+    assert "sic_condensed" in config
     assert "matches" in config
     assert "index_size" in config
 
