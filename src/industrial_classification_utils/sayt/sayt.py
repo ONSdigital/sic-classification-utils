@@ -10,17 +10,19 @@ survey responses for organisation/industry description questions.
 import os
 import re
 import tempfile
+import warnings
 from bisect import bisect_left, bisect_right
 from collections.abc import Iterable
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 import numpy as np
 import pandas as pd
 import polars as pl
 from classifai.indexers import VectorStore
 from classifai.vectorisers import HuggingFaceVectoriser, VectoriserBase
+from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import CountVectorizer
 
 _WS_RE = re.compile(r"\s+")
@@ -135,7 +137,7 @@ class _CharNgramVectoriser(VectoriserBase):
     def transform(self, texts: str | list[str]) -> np.ndarray:
         if isinstance(texts, str):
             texts = [texts]
-        matrix = self._vectoriser.transform(texts)
+        matrix = cast(csr_matrix, self._vectoriser.transform(texts))
         vectors = matrix.toarray().astype(float, copy=False)
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
         return vectors / np.clip(norms, 1e-12, None)
@@ -262,8 +264,19 @@ class SAYTSuggester:
             item_tuple = item if isinstance(item, tuple) else (item, item)
             text = _normalise(item_tuple[0])
             if not text or text == "-9":
+                warnings.warn(
+                    f"Skipping empty or invalid corpus item: {item!r}",
+                    stacklevel=2,
+                )
                 continue
-            cleaned.append((text, str(item_tuple[1])))
+            display = str(item_tuple[1]).strip()
+            if pd.isna(item_tuple[1]) or not display:
+                warnings.warn(
+                    f"Empty display value for item: {item!r}, using search text as display",
+                    stacklevel=2,
+                )
+                display = str(item_tuple[0]).strip()
+            cleaned.append((text, display))
         if not cleaned:
             raise ValueError("corpus is empty after filtering")
         rows: list[tuple[str, str, str]] = [
@@ -278,7 +291,6 @@ class SAYTSuggester:
             self._display_text_count[display] = (
                 self._display_text_count.get(display, 0) + 1
             )
-
         return rows
 
     def _init_prefix_index(self) -> None:
