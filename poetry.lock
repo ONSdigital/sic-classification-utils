@@ -717,7 +717,7 @@ files = [
 
 [[package]]
 name = "classifai"
-version = "0.2.1"
+version = "1.0.0"
 description = "A generalised, extendable and modular solution for LLM automated / assisted classification."
 optional = false
 python-versions = ">=3.10,<4.0"
@@ -737,15 +737,15 @@ uvicorn = ">0.34.0"
 
 [package.extras]
 all = ["classifai[gcp,huggingface,ollama]"]
-gcp = ["google-genai (>=1.8.0)"]
+gcp = ["google-genai (>=1.68.0)"]
 huggingface = ["torch (>=2.7.1)", "transformers (>=4.52.4)"]
 ollama = ["ollama (>=0.5.1)"]
 
 [package.source]
 type = "git"
 url = "https://github.com/datasciencecampus/classifai.git"
-reference = "v0.2.1"
-resolved_reference = "c1b1681338100c10f13f8214a6a15d1de2e930fb"
+reference = "v1.0.0"
+resolved_reference = "7f82b25e4765010bc2baf86be9baf23ad4b2feec"
 
 [[package]]
 name = "click"
@@ -7272,4 +7272,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "acfcfcd89c8901b762f34ee4e1d5d36651366c53f6b6874615ced5d6020c9372"
+content-hash = "1595e06623e2ada6a0d8083c91ad3a2940112a78cffc126f45bb05e5edf31ce6"
