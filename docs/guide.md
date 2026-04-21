@@ -26,4 +26,4 @@ poetry add git+https://github.com/ONSdigital/sic-classification-utils.git@v.0.1.
 
 ### Usage
 
-Example code that uses the embeddings is in [sic_embedding_example.py](https://github.com/ONSdigital/sic-classification-utils/blob/main/src/industrial_classification_utils/embed/sic_embedding_example.py)
+Example code that uses the embeddings is in [sic_embedding_example.py](demos/embed/sic_embedding_example.py)

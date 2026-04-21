@@ -31,7 +31,6 @@ Attributes:
 from langchain.prompts.prompt import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 
-from industrial_classification_utils.embed.embedding import get_config
 from industrial_classification_utils.models.response_model import (
     ClosedFollowUp,
     FinalSICAssignment,
@@ -40,11 +39,12 @@ from industrial_classification_utils.models.response_model import (
     SicResponse,
     UnambiguousResponse,
 )
+from industrial_classification_utils.utils.constants import get_default_config
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
 )
 
-config = get_config()
+config = get_default_config()
 
 _core_prompt = """You are a conscientious classification assistant of respondent data
 for the use in the UK official statistics. Respondent data may be in English or Welsh,

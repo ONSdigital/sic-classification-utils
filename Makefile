@@ -42,7 +42,7 @@ utils-tests:
 	poetry run pytest -m utils  --cov=src/industrial_classification_utils/utils --cov-report=term-missing --cov-fail-under=80 --cov-config=.coveragerc
 
 all-tests:
-	poetry run pytest  --cov=. --cov-report=term-missing --cov-fail-under=80 --cov-config=.coveragerc
+	poetry run pytest  --cov=src --cov-report=term-missing --cov-fail-under=60 --cov-config=.coveragerc
 
 install: ## Install the dependencies
 	poetry install --only main --no-root

@@ -18,6 +18,7 @@ __pycache__/
 *.zip
 *.gz
 /data/
+!demos/llm/data/*.json
 
 # ignore temporary files
 *.tmp
@@ -199,5 +200,7 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 src/industrial_classification_utils/data/vector_store/*
+demos/embed/data/vector_store/*
 
 .vscode
+.DS_Store
