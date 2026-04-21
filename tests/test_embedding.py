@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from industrial_classification.hierarchy.sic_hierarchy import SIC, SicCode, SicNode
 
 from industrial_classification_utils.embed.embedding import EmbeddingHandler
 
@@ -163,8 +162,8 @@ def embedding_handler_search(tmp_path: Path) -> EmbeddingHandler:
 
 @pytest.fixture
 def embedding_handler_sic(tmp_path: Path) -> EmbeddingHandler:
-    """Return a handler and embed from a SIC object."""
-    placeholder_store = SimpleNamespace(num_vectors=0)
+    """Return an embedding handler backed by a mocked classifai vector store."""
+    built_store = SimpleNamespace(num_vectors=2)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
     with patch(
@@ -173,79 +172,60 @@ def embedding_handler_sic(tmp_path: Path) -> EmbeddingHandler:
     ), patch(
         "industrial_classification_utils.embed.embedding."
         "EmbeddingHandler._load_or_build_vector_store",
-        return_value=placeholder_store,
+        return_value=built_store,
     ):
         handler = EmbeddingHandler(
             embedding_model_name="other",
             db_dir=str(tmp_path / "vector_store"),
         )
 
-    nodes = [
-        SicNode(sic_code=SicCode("A0111x"), description="Bird watching"),
-        SicNode(sic_code=SicCode("A0112x"), description="Petting animals"),
-    ]
-    lookup = {}
-    for node in nodes:
-        lookup[str(node.sic_code)] = node
-        lookup[node.sic_code.alpha_code] = node
-        lookup[node.sic_code.alpha_code.replace("x", "")] = node
-        if node.sic_code.n_digits > 1:
-            lookup[node.sic_code.alpha_code[1:].replace("x", "")] = node
-
-        if node.sic_code.n_digits == 4 and not node.children:  # noqa: PLR2004
-            key = node.sic_code.alpha_code[1:5] + "0"
-            lookup[key] = node
-
-    sic = SIC(nodes=nodes, code_lookup=lookup)
-    built_store = SimpleNamespace(num_vectors=2)
-
-    with patch(
-        "industrial_classification_utils.embed.embedding.VectorStore",
-        return_value=built_store,
-    ) as mock_vector_store:
-        handler.embed_index(from_empty=True, sic=sic)
-
-    assert mock_vector_store.called
     return handler
 
 
 @pytest.mark.embed
-def test_embed_index_with_file_object(
-    embedding_handler_for_embed: EmbeddingHandler, toy_index_file: StringIO
-):
-    built_store = SimpleNamespace(num_vectors=4)
+def test_embedding_handler_init_sets_vector_store(
+    tmp_path: Path,
+) -> None:
+    built_store = SimpleNamespace(num_vectors=EXPECTED_TOY_INDEX_SIZE)
+    fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
     with patch(
-        "industrial_classification_utils.embed.embedding.VectorStore",
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
         return_value=built_store,
-    ) as mock_vector_store:
-        embedding_handler_for_embed.embed_index(
-            from_empty=True, file_object=toy_index_file
+    ):
+        handler = EmbeddingHandler(
+            embedding_model_name="other",
+            db_dir=str(tmp_path / "vector_store"),
         )
 
-    assert embedding_handler_for_embed._index_size == EXPECTED_TOY_INDEX_SIZE
-    assert mock_vector_store.called
+    assert handler.vector_store is built_store
 
 
 @pytest.mark.embed
-def test_embed_index_with_file_object_sets_expected_metadata(
-    embedding_handler_for_embed: EmbeddingHandler, toy_index_file: StringIO
-):
-    built_store = SimpleNamespace(num_vectors=4)
+def test_embedding_handler_init_sets_index_size(
+    tmp_path: Path,
+) -> None:
+    built_store = SimpleNamespace(num_vectors=EXPECTED_TOY_INDEX_SIZE)
+    fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
     with patch(
-        "industrial_classification_utils.embed.embedding.VectorStore",
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
         return_value=built_store,
     ):
-        embedding_handler_for_embed.embed_index(
-            from_empty=True, file_object=toy_index_file
+        handler = EmbeddingHandler(
+            embedding_model_name="other",
+            db_dir=str(tmp_path / "vector_store"),
         )
 
-    assert embedding_handler_for_embed.meta_data == {
-        "code": str,
-        "four_digit_code": str,
-        "two_digit_code": str,
-    }
+    assert handler._index_size == EXPECTED_TOY_INDEX_SIZE
 
 
 @pytest.mark.embed
@@ -698,64 +678,25 @@ def test_load_or_build_vector_store_uses_default_metadata(tmp_path: Path):
 
 
 @pytest.mark.embed
-def test_embed_index_from_empty_removes_existing_directory(
-    embedding_handler_for_embed: EmbeddingHandler,
-    toy_index_file: StringIO,
+def test_embedding_handler_builds_vector_store_from_sic(
     tmp_path: Path,
-):
-    db_dir = tmp_path / "vector_store"
-    db_dir.mkdir(exist_ok=True)
-    embedding_handler_for_embed.db_dir = str(db_dir)
-
-    built_store = SimpleNamespace(num_vectors=4)
-
-    with patch(
-        "industrial_classification_utils.embed.embedding.shutil.rmtree"
-    ) as mock_rmtree, patch(
-        "industrial_classification_utils.embed.embedding.VectorStore",
-        return_value=built_store,
-    ):
-        embedding_handler_for_embed.embed_index(
-            from_empty=True, file_object=toy_index_file
-        )
-
-    assert any(call.args[0] == str(db_dir) for call in mock_rmtree.call_args_list)
-
-
-@pytest.mark.embed
-def test_embed_index_no_rows_sets_index_size_zero(
-    embedding_handler_for_embed: EmbeddingHandler,
-):
-    empty_file = StringIO("")
-
-    embedding_handler_for_embed.embed_index(from_empty=True, file_object=empty_file)
-
-    assert embedding_handler_for_embed._index_size == 0
-
-
-@pytest.mark.embed
-def test_embed_index_skips_malformed_lines(
-    embedding_handler_for_embed: EmbeddingHandler,
-):
-    malformed_file = StringIO(
-        "\n".join(
-            [
-                "01: cat",
-                "bad line without separator",
-                "02: dog",
-            ]
-        )
-    )
+) -> None:
+    """It builds or loads the classifai vector store during handler setup."""
     built_store = SimpleNamespace(num_vectors=2)
+    fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
     with patch(
-        "industrial_classification_utils.embed.embedding.VectorStore",
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
         return_value=built_store,
-    ):
-        embedding_handler_for_embed.embed_index(
-            from_empty=True, file_object=malformed_file
+    ) as mock_load_or_build:
+        handler = EmbeddingHandler(
+            embedding_model_name="other",
+            db_dir=str(tmp_path / "vector_store"),
         )
 
-    assert (
-        embedding_handler_for_embed._index_size == EXPECTED_MALFORMED_LINES_INDEX_SIZE
-    )
+    assert handler.vector_store is built_store
+    mock_load_or_build.assert_called_once()

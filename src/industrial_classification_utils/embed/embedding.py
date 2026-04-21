@@ -1,5 +1,5 @@
 """This module provides utilities for embedding and searching industrial classification data
-using Chroma vector stores and language models.
+using Classifai vector stores and language models.
 
 It includes functionality for embedding SIC hierarchy data, managing vector stores,
 and performing similarity searches.
@@ -11,12 +11,8 @@ import csv
 import logging
 import os
 import posixpath
-import shutil
 import sqlite3  # noqa: F401 # pylint: disable=unused-import
 import tempfile
-
-# Docker Image may have old sqlite3 version for ChromaDB
-# Top of your module (before any langchain or chroma import)
 import uuid
 from typing import Any, Optional, Union
 
@@ -27,7 +23,7 @@ from classifai.vectorisers import (
     HuggingFaceVectoriser,
 )
 from google.cloud import storage
-from industrial_classification.hierarchy.sic_hierarchy import SIC, load_hierarchy
+from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 from langchain_google_vertexai import VertexAIEmbeddings
 
 from industrial_classification_utils.utils.constants import get_default_config
@@ -121,12 +117,12 @@ class CustomVertexAIEmbeddings(VertexAIEmbeddings):
 
 
 class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
-    """Handles embedding operations for the Chroma vector store.
+    """Handles embedding operations for the Classifai vector store.
 
     Attributes:
         embeddings (Any): The embedding model used for vectorization.
         db_dir (str): Directory where the (classifai) vector store database is located.
-        vector_store (Chroma): The Chroma vector store instance.
+        vector_store (Chroma): The Classifai vector store instance.
         k_matches (int): Number of nearest matches to retrieve during search.
         spell (Speller): Autocorrect spell checker instance.
         _index_size (int): Number of entries in the vector store.
@@ -392,159 +388,6 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
             )
 
         return vector_store
-
-    def embed_index(  # noqa: C901 # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments, too-many-statements
-        self,
-        from_empty: bool = True,
-        sic: Optional[SIC] = None,
-        file_object=None,
-        sic_index_file=None,
-        sic_structure_file=None,
-    ):
-        """Embeds the index entries into the vector store.
-
-        For ClassifAI, this rebuilds the vector store from source data by first
-        generating a CSV knowledgebase and then creating a new VectorStore from it.
-
-        Args:
-            from_empty (bool, optional): Whether to rebuild the vector store from scratch.
-                Defaults to True.
-            sic (Optional[SIC], optional): The SIC hierarchy object. If None, the hierarchy
-                is loaded from files specified in the config. Defaults to None.
-            file_object (StringIO object, optional): The index file as a StringIO object.
-                If provided, the file will be read line by line.
-                Each line should have the format **code**: **description**.
-            sic_index_file (optional): Custom path or file-like object to override
-                default SIC index source.
-            sic_structure_file (optional): Custom path or file-like object to override
-                default SIC structure source.
-        """
-        logger.info(
-            "Embedding index: from_empty=%s, sic=%s, file_object=%s, "
-            "sic_index_file=%s, sic_structure_file=%s",
-            from_empty,
-            sic,
-            file_object,
-            sic_index_file,
-            sic_structure_file,
-        )
-
-        rows: list[dict[str, str]] = []
-
-        if file_object is not None:
-            for line in file_object:
-                if not line:
-                    continue
-
-                bits = line.split(":", 1)
-                if len(bits) != EXPECTED_SPLIT_PARTS:
-                    logger.warning("Skipping malformed line: %s", line)
-                    continue
-
-                code = bits[0].strip()
-                text = bits[1].strip()
-
-                rows.append(
-                    {
-                        "label": str(uuid.uuid3(uuid.NAMESPACE_URL, line.strip())),
-                        "text": text,
-                        "code": code,
-                        "four_digit_code": code[0:4],
-                        "two_digit_code": code[0:2],
-                    }
-                )
-
-        else:
-            if sic is None:
-                logger.info(
-                    "Loading SIC hierarchy from files: %s, %s",
-                    sic_index_file,
-                    sic_structure_file,
-                )
-
-                if sic_index_file is None:
-                    sic_index_file = config["lookups"]["sic_index"]
-                sic_index_df = load_sic_index(sic_index_file)
-
-                if sic_structure_file is None:
-                    sic_structure_file = config["lookups"]["sic_structure"]
-                sic_df = load_sic_structure(sic_structure_file)
-
-                sic = load_hierarchy(sic_df, sic_index_df)
-
-            for _, row in sic.all_leaf_text().iterrows():
-                code = (row["code"].replace(".", "").replace("/", "") + "0")[:5]
-
-                rows.append(
-                    {
-                        "label": str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])),
-                        "text": row["text"],
-                        "code": code,
-                        "four_digit_code": code[0:4],
-                        "two_digit_code": code[0:2],
-                    }
-                )
-
-        if not rows:
-            logger.warning("No rows were generated for embedding.")
-            self._index_size = 0
-            return
-
-        if from_empty and os.path.isdir(self.db_dir):
-            logger.info("Removing existing vector store directory: %s", self.db_dir)
-            shutil.rmtree(self.db_dir)
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            csv_path = os.path.join(tmp_dir, "sic_vectors.csv")
-
-            with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
-                writer = csv.DictWriter(
-                    csvfile,
-                    fieldnames=[
-                        "label",
-                        "text",
-                        "code",
-                        "four_digit_code",
-                        "two_digit_code",
-                    ],
-                )
-                writer.writeheader()
-                writer.writerows(rows)
-
-            self.knowledgebase_csv = csv_path
-            self.meta_data = {
-                "code": str,
-                "four_digit_code": str,
-                "two_digit_code": str,
-            }
-
-            self.vector_store = VectorStore(
-                file_name=csv_path,
-                data_type="csv",
-                vectoriser=self.embeddings,
-                batch_size=8,
-                meta_data=self.meta_data,
-                output_dir=self.db_dir,
-                overwrite=from_empty,
-                hooks=None,
-            )
-
-        self._index_size = self.vector_store.num_vectors
-
-        logger.debug(
-            "Inserted %s entries into vector embedding database.", f"{len(rows):,}"
-        )
-
-        embedding_config["index_size"] = self._index_size
-        embedding_config["sic_index"] = sic_index_file or config["lookups"]["sic_index"]
-        embedding_config["sic_structure"] = (
-            sic_structure_file or config["lookups"]["sic_structure"]
-        )
-        embedding_config["sic_condensed"] = config["lookups"]["sic_condensed"]
-        embedding_config["matches"] = self.k_matches
-        embedding_config["db_dir"] = self.db_dir
-        embedding_config["embedding_model_name"] = self.embeddings.model_name
-        logger.info("Embedding config updated: %s", embedding_config)
 
     def search_index(
         self, query: str, return_dicts: bool = True
