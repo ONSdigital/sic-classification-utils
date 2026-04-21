@@ -67,7 +67,7 @@ This will output semantic search of the files in [src/industrial_classification_
 
 [src/industrial_classification_utils/data](src/industrial_classification_utils/data) - example data and SIC classification data used for embeddings
 
-[src/industrial_classification_utils/embed](src/industrial_classification_utils/embed) - ChromaDB vector store and embedding code
+[src/industrial_classification_utils/embed](src/industrial_classification_utils/embed) - ClassifAI vector store and embedding code
 
 [src/industrial_classification_utils/llm](src/industrial_classification_utils/llm) - LLM code for SIC classification and related tasks
 
