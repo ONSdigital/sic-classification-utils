@@ -122,7 +122,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
     Attributes:
         embeddings (Any): The embedding model used for vectorization.
         db_dir (str): Directory where the (classifai) vector store database is located.
-        vector_store (Chroma): The Classifai vector store instance.
+        vector_store (VectorStore): The Classifai vector store instance.
         k_matches (int): Number of nearest matches to retrieve during search.
         spell (Speller): Autocorrect spell checker instance.
         _index_size (int): Number of entries in the vector store.
