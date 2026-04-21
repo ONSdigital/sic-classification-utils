@@ -393,7 +393,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
 
         return vector_store
 
-    def embed_index(  # noqa: PLR0915, C901 # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments, too-many-statements
+    def embed_index(  # noqa: C901 # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments, too-many-statements
         self,
         from_empty: bool = True,
         sic: Optional[SIC] = None,
