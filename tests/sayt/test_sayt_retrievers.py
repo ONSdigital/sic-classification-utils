@@ -5,6 +5,7 @@
 
 import numpy as np
 import pytest
+from classifai.vectorisers import VectoriserBase
 
 from industrial_classification_utils.sayt.sayt import SAYTSuggester
 from industrial_classification_utils.sayt.sayt_common import CleanCorpus
@@ -14,9 +15,7 @@ from industrial_classification_utils.sayt.sayt_retrievers import (
     SemanticRetriever,
     _CharNgramVectoriser,
     _DenseVectorIndex,
-    _get_vector_store_vectors,
     _L2NormalisingVectoriser,
-    _polars_embeddings_to_matrix,
     _PrefixIndex,
 )
 
@@ -77,17 +76,12 @@ def test_ngram_recovers_from_typo_when_prefix_does_not_match(small_corpus):
     assert results[0] == "Dog grooming"
 
 
-class _StubVectoriser:
+class _StubVectoriser(VectoriserBase):
     def __init__(self, output):
         self._output = output
 
     def transform(self, texts):
         return self._output
-
-
-class _StubVectorStore:
-    def __init__(self, vectors):
-        self.vectors = vectors
 
 
 def test_prefix_retriever_returns_empty_for_short_queries(small_corpus):
@@ -145,31 +139,17 @@ def test_char_ngram_vectoriser_accepts_single_string_input():
     assert vectors.shape[0] == 1
 
 
-def test_get_vector_store_vectors_requires_materialised_vectors():
-    """Fail fast when a VectorStore has no vectors payload."""
-    with pytest.raises(RuntimeError, match="without vectors"):
-        _get_vector_store_vectors(_StubVectorStore(None))
-
-
-def test_polars_embeddings_to_matrix_handles_empty_input():
-    """Return an empty 2D matrix when no embeddings are present."""
-    matrix = _polars_embeddings_to_matrix([])
-
-    assert matrix.shape == (0, 0)
-
-
 def test_ngram_retriever_returns_empty_for_empty_query_vector(
     monkeypatch, small_corpus
 ):
     """Stop early when the query vectoriser produces no features."""
     corpus = CleanCorpus.model_validate(small_corpus)
     retriever = NgramRetriever.__new__(NgramRetriever)
+    retriever._corpus = corpus
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
         vectoriser=_StubVectoriser(np.zeros((1, 0))),
-        doc_ids=[corpus.rows[0][0]],
-        doc_search=[corpus.rows[0][1]],
-        doc_display=[corpus.rows[0][2]],
+        row_ids=[corpus.rows[0][0]],
         doc_matrix=np.zeros((1, 0)),
     )
 
@@ -187,12 +167,11 @@ def test_ngram_retriever_returns_empty_for_short_queries():
 def test_ngram_retriever_returns_empty_for_empty_similarity_matrix():
     """Stop early when the dense index contains no document vectors."""
     retriever = NgramRetriever.__new__(NgramRetriever)
+    retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
         vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
-        doc_ids=[],
-        doc_search=[],
-        doc_display=[],
+        row_ids=[],
         doc_matrix=np.zeros((0, 2)),
     )
 
@@ -203,12 +182,11 @@ def test_ngram_retriever_skips_non_positive_similarities(small_corpus):
     """Discard candidate rows whose cosine similarity is not positive."""
     corpus = CleanCorpus.model_validate(small_corpus)
     retriever = NgramRetriever.__new__(NgramRetriever)
+    retriever._corpus = corpus
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
         vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
-        doc_ids=[corpus.rows[0][0], corpus.rows[1][0]],
-        doc_search=[corpus.rows[0][1], corpus.rows[1][1]],
-        doc_display=[corpus.rows[0][2], corpus.rows[1][2]],
+        row_ids=[corpus.rows[0][0], corpus.rows[1][0]],
         doc_matrix=np.array([[0.0, 0.0], [1.0, 0.0]]),
     )
 
@@ -221,12 +199,11 @@ def test_semantic_retriever_skips_non_positive_similarities(small_corpus):
     """Apply the same filtering logic for semantic retrieval results."""
     corpus = CleanCorpus.model_validate(small_corpus)
     retriever = SemanticRetriever.__new__(SemanticRetriever)
+    retriever._corpus = corpus
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
         vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
-        doc_ids=[corpus.rows[0][0], corpus.rows[1][0]],
-        doc_search=[corpus.rows[0][1], corpus.rows[1][1]],
-        doc_display=[corpus.rows[0][2], corpus.rows[1][2]],
+        row_ids=[corpus.rows[0][0], corpus.rows[1][0]],
         doc_matrix=np.array([[0.0, 0.0], [1.0, 0.0]]),
     )
 
@@ -249,14 +226,11 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
         def transform(self, texts):
             return np.array([[1.0, 0.0]])
 
-    def _fake_build_dense_vector_index(*, corpus, vectoriser, name):
-        captured["index_name"] = name
+    def _fake_build_dense_vector_index(*, corpus, vectoriser):
         captured["vectoriser_type"] = type(vectoriser).__name__
         return _DenseVectorIndex(
             vectoriser=vectoriser,
-            doc_ids=[corpus.rows[0][0]],
-            doc_search=[corpus.rows[0][1]],
-            doc_display=[corpus.rows[0][2]],
+            row_ids=[corpus.rows[0][0]],
             doc_matrix=np.array([[1.0, 0.0]]),
         )
 
@@ -265,7 +239,7 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
         _StubHFVectoriser,
     )
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_retrievers._build_dense_vector_index",
+        "industrial_classification_utils.sayt.sayt_retrievers._DenseVectorIndex.from_corpus",
         _fake_build_dense_vector_index,
     )
 
@@ -273,7 +247,6 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
 
     assert captured == {
         "model_name": "sentence-transformers/all-MiniLM-L6-v2",
-        "index_name": "semantic",
         "vectoriser_type": "_L2NormalisingVectoriser",
     }
     assert retriever._min_chars == 3
@@ -291,12 +264,11 @@ def test_semantic_retriever_returns_empty_for_empty_query_vector(small_corpus):
     """Stop early when semantic vectorisation produces no features."""
     corpus = CleanCorpus.model_validate(small_corpus)
     retriever = SemanticRetriever.__new__(SemanticRetriever)
+    retriever._corpus = corpus
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
         vectoriser=_StubVectoriser(np.zeros((1, 0))),
-        doc_ids=[corpus.rows[0][0]],
-        doc_search=[corpus.rows[0][1]],
-        doc_display=[corpus.rows[0][2]],
+        row_ids=[corpus.rows[0][0]],
         doc_matrix=np.zeros((1, 0)),
     )
 
@@ -306,12 +278,11 @@ def test_semantic_retriever_returns_empty_for_empty_query_vector(small_corpus):
 def test_semantic_retriever_returns_empty_for_empty_similarity_matrix():
     """Stop early when semantic retrieval has no document vectors."""
     retriever = SemanticRetriever.__new__(SemanticRetriever)
+    retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
         vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
-        doc_ids=[],
-        doc_search=[],
-        doc_display=[],
+        row_ids=[],
         doc_matrix=np.zeros((0, 2)),
     )
 
