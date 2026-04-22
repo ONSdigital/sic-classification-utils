@@ -28,10 +28,10 @@ suggester = SAYTSuggester(small_corpus)
 # %%
 for q in ["car", "cars", "waxi", "grom", "wash", "duplicate", "auto"]:
     print("searching for:", q)
-    print("prefix", "->", suggester._get_prefix_suggestions(q))
-    print("ngram", "->", suggester._get_ngram_suggestions(q))
-    print("semantic", "->", suggester._get_semantic_suggestions(q))
-    print("combined", "->", suggester.suggest(q))
+    print("prefix", "->", suggester._prefix_retriever.suggest(q, 5))
+    print("ngram", "->", suggester._ngram_retriever.suggest(q, 5))
+    print("semantic", "->", suggester._semantic_retriever.suggest(q, 5))
+    print("combined", "->", suggester.suggest(q, 5))
     print()
 
 # %%
