@@ -8,12 +8,9 @@ implementation.
 
 # ruff: noqa: PLR2004
 
-from classifai.vectorisers import VectoriserBase
 from pydantic import (
     BaseModel,
     ConfigDict,
-    ValidationInfo,
-    field_validator,
     model_validator,
 )
 
@@ -21,8 +18,8 @@ from pydantic import (
 class SaytConfig(BaseModel):
     """Validated configuration for a SAYT suggester instance.
 
-    The model accepts a small amount of input coercion for constructor kwargs
-    and enforces the value ranges used by the suggester implementation.
+    The model relies on Pydantic's native parsing for constructor kwargs and
+    enforces the value ranges used by the suggester implementation.
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -37,36 +34,8 @@ class SaytConfig(BaseModel):
     ngram_max_df: float = 0.2
     semantic_enable: bool = True
     semantic_weight: float = 1.0
-    semantic_handler: VectoriserBase | str | None = None
-
-    @field_validator("min_chars", "max_suggestions", "ngram_n", mode="before")
-    @classmethod
-    def _validate_int_fields(cls, value: object, info: ValidationInfo) -> int:
-        """Coerce configured integer fields while rejecting bool inputs."""
-        return _coerce_int(value, key=info.field_name or "value")
-
-    @field_validator(
-        "prefix_weight",
-        "ngram_weight",
-        "ngram_max_df",
-        "semantic_weight",
-        mode="before",
-    )
-    @classmethod
-    def _validate_float_fields(cls, value: object, info: ValidationInfo) -> float:
-        """Coerce configured float fields from numeric-like inputs."""
-        return _coerce_float(value, key=info.field_name or "value")
-
-    @field_validator(
-        "prefix_enable",
-        "ngram_enable",
-        "semantic_enable",
-        mode="before",
-    )
-    @classmethod
-    def _validate_bool_fields(cls, value: object, info: ValidationInfo) -> bool:
-        """Coerce configured boolean fields from common truthy and falsy values."""
-        return _coerce_bool(value, key=info.field_name or "value")
+    semantic_model: str = "all-MiniLM-L6-v2"
+    corpus_size: int = 0
 
     @model_validator(mode="after")
     def _validate_ranges(self) -> "SaytConfig":
@@ -81,45 +50,29 @@ class SaytConfig(BaseModel):
             raise ValueError("ngram_max_df must be in (0, 1]")
         return self
 
+    @model_validator(mode="after")
+    def _validate_weights(self) -> "SaytConfig":
+        if self.prefix_enable and self.prefix_weight <= 0:
+            raise ValueError("prefix_weight must be > 0")
+        if not self.prefix_enable:
+            self.prefix_weight = 0.0
 
-def _coerce_int(value: object, *, key: str) -> int:
-    """Convert a numeric-like input to an integer for config validation."""
-    # bool is a subclass of int; treat it as invalid here.
-    if isinstance(value, bool):
-        raise TypeError(f"{key} must be an int, not bool")
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        s = value.strip()
-        if s.isdigit() or (s.startswith("-") and s[1:].isdigit()):
-            return int(s)
-    raise TypeError(f"{key} must be an int")
+        if self.ngram_enable and self.ngram_weight <= 0:
+            raise ValueError("ngram_weight must be > 0")
+        if not self.ngram_enable:
+            self.ngram_weight = 0.0
 
+        if self.semantic_enable and self.semantic_weight <= 0:
+            raise ValueError("semantic_weight must be > 0")
+        if not self.semantic_enable:
+            self.semantic_weight = 0.0
 
-def _coerce_float(value: object, *, key: str) -> float:
-    """Convert a numeric-like input to a float for config validation."""
-    if isinstance(value, bool):
-        raise TypeError(f"{key} must be a float, not bool")
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.strip())
-        except ValueError as exc:  # pragma: no cover
-            raise TypeError(f"{key} must be a float") from exc
-    raise TypeError(f"{key} must be a float")
-
-
-def _coerce_bool(value: object, *, key: str) -> bool:
-    """Convert common boolean-like inputs to a strict bool value."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int) and value in (0, 1):
-        return bool(value)
-    if isinstance(value, str):
-        s = value.strip().lower()
-        if s in {"true", "t", "1", "yes", "y"}:
-            return True
-        if s in {"false", "f", "0", "no", "n"}:
-            return False
-    raise TypeError(f"{key} must be a bool")
+        total_weight = self.prefix_weight + self.ngram_weight + self.semantic_weight
+        if total_weight == 0.0:
+            raise ValueError(
+                "At least one of prefix, ngram, or semantic must be enabled with a positive weight"
+            )
+        self.prefix_weight /= total_weight
+        self.ngram_weight /= total_weight
+        self.semantic_weight /= total_weight
+        return self

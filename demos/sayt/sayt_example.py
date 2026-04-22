@@ -21,6 +21,10 @@ small_corpus = [
     ("Car servicing", "Car servicing"),
 ]
 suggester = SAYTSuggester(small_corpus)
+print(
+    "\nLoaded SAYT Suggester with config:\n",
+    suggester.get_config().model_dump_json(indent=2),
+)
 
 # %%
 for q in ["car", "cars", "waxi", "grom", "wash", "duplicate", "auto"]:
@@ -30,3 +34,5 @@ for q in ["car", "cars", "waxi", "grom", "wash", "duplicate", "auto"]:
     print("semantic", "->", suggester._get_semantic_suggestions(q))
     print("combined", "->", suggester.suggest(q))
     print()
+
+# %%

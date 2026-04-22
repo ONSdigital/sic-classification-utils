@@ -30,14 +30,14 @@ def test_constructor_rejects_unknown_kwargs(small_corpus):
 @pytest.mark.parametrize(
     "kwargs, exc_type",
     [
-        ({"min_chars": 2}, ValueError),
-        ({"min_chars": True}, TypeError),
-        ({"max_suggestions": 0}, ValueError),
-        ({"max_suggestions": 101}, ValueError),
-        ({"ngram_enable": True, "ngram_n": 1}, ValueError),
-        ({"ngram_enable": True, "ngram_n": 6}, ValueError),
-        ({"ngram_enable": True, "ngram_max_df": 0.0}, ValueError),
-        ({"ngram_enable": True, "ngram_max_df": 1.1}, ValueError),
+        ({"min_chars": 2}, ValidationError),
+        ({"min_chars": True}, ValidationError),
+        ({"max_suggestions": 0}, ValidationError),
+        ({"max_suggestions": 101}, ValidationError),
+        ({"ngram_enable": True, "ngram_n": 1}, ValidationError),
+        ({"ngram_enable": True, "ngram_n": 6}, ValidationError),
+        ({"ngram_enable": True, "ngram_max_df": 0.0}, ValidationError),
+        ({"ngram_enable": True, "ngram_max_df": 1.1}, ValidationError),
         ({"ngram_enable": True, "ngram_weight": 0.0}, ValueError),
     ],
 )

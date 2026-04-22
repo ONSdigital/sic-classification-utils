@@ -4,15 +4,12 @@ This module provides a lightweight SAYT implementation for suggesting free-text
 survey responses for organisation/industry description questions.
 """
 
-# pylint: disable=too-many-instance-attributes,too-few-public-methods,disable=consider-using-with
+# pylint: disable=too-many-instance-attributes,too-few-public-methods,consider-using-with
 
 import os
-import re
 import tempfile
-import warnings
 from bisect import bisect_left, bisect_right
 from collections.abc import Iterable
-from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import cast
 
@@ -24,28 +21,10 @@ from classifai.vectorisers import HuggingFaceVectoriser, VectoriserBase
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import CountVectorizer
 
+from .sayt_common import CleanCorpus, Suggestion, _normalise
 from .sayt_config import SaytConfig
 
-_WS_RE = re.compile(r"\s+")
-_NON_ALNUM_SPACE_RE = re.compile(r"[^a-z ]+")
 _FUZZY_PREFIX_MIN_RATIO = 0.75
-
-
-def _normalise(text: str | None) -> str:
-    if not isinstance(text, str):
-        return ""
-    text = text.strip().lower()
-    text = _NON_ALNUM_SPACE_RE.sub(" ", text)
-    text = _WS_RE.sub(" ", text).strip()
-    return text
-
-
-@dataclass(frozen=True, slots=True)
-class _Suggestion:
-    display_text: str
-    score: float
-    search_text: str = ""
-    row_id: str = ""
 
 
 class _L2NormalisingVectoriser(VectoriserBase):
@@ -101,108 +80,22 @@ class SAYTSuggester:
         corpus: Iterable[tuple[str, str]] | Iterable[str],
         **kwargs: object,
     ) -> None:
-        self._build_config(kwargs)
-        self._validate_weights()
+        self._corpus = CleanCorpus.model_validate(corpus)
+        self._config = SaytConfig.model_validate(
+            {**kwargs, "corpus_size": self._corpus.size}
+        )
 
         # Keep temporary vector-store dirs alive for the instance lifetime.
         self._tmp_dirs: list[tempfile.TemporaryDirectory[str]] = []
 
-        self._clean_corpus(corpus)
-
-        if self._prefix_enable:
+        if self._config.prefix_enable:
             self._init_prefix_index()
 
-        if self._ngram_enable:
+        if self._config.ngram_enable:
             self._init_ngram_index()
 
-        if self._semantic_enable:
+        if self._config.semantic_enable:
             self._init_semantic_index()
-
-    def _build_config(self, kwargs: dict[str, object]) -> None:
-        cfg = SaytConfig.model_validate(kwargs)
-
-        self._min_chars = cfg.min_chars
-        self._max_suggestions = cfg.max_suggestions
-
-        self._prefix_enable = cfg.prefix_enable
-        self._prefix_weight = cfg.prefix_weight if self._prefix_enable else 0.0
-
-        self._ngram_enable = cfg.ngram_enable
-        self._ngram_weight = cfg.ngram_weight if self._ngram_enable else 0.0
-        if self._ngram_enable:
-            self._ngram_n = cfg.ngram_n
-            self._ngram_max_df = cfg.ngram_max_df
-
-        self._semantic_enable = cfg.semantic_enable
-        self._semantic_weight = cfg.semantic_weight if self._semantic_enable else 0.0
-        if self._semantic_enable:
-            self._semantic_handler = cfg.semantic_handler
-
-    def _validate_weights(self) -> None:
-        if self._prefix_enable and self._prefix_weight <= 0:
-            raise ValueError("prefix_weight must be > 0")
-        if not self._prefix_enable:
-            self._prefix_weight = 0.0
-
-        if self._ngram_enable and self._ngram_weight <= 0:
-            raise ValueError("ngram_weight must be > 0")
-        if not self._ngram_enable:
-            self._ngram_weight = 0.0
-
-        if self._semantic_enable and self._semantic_weight <= 0:
-            raise ValueError("semantic_weight must be > 0")
-        if not self._semantic_enable:
-            self._semantic_weight = 0.0
-
-        total_weight = self._prefix_weight + self._ngram_weight + self._semantic_weight
-        if total_weight == 0.0:
-            raise ValueError(
-                "At least one of prefix, ngram, or semantic must be enabled with a positive weight"
-            )
-        self._prefix_weight /= total_weight
-        self._ngram_weight /= total_weight
-        self._semantic_weight /= total_weight
-
-    def _clean_corpus(
-        self, corpus: Iterable[str] | Iterable[tuple[str, str]]
-    ) -> list[tuple[str, str, str]]:
-        if not isinstance(corpus, Iterable):
-            raise TypeError(
-                "corpus must be an iterable of strings or (string, original) tuples"
-            )
-        cleaned: list[tuple[str, str]] = []
-        for item in corpus:
-            item_tuple = item if isinstance(item, tuple) else (item, item)
-            text = _normalise(item_tuple[0])
-            if not text or text == "-9":
-                warnings.warn(
-                    f"Skipping empty or invalid corpus item: {item!r}",
-                    stacklevel=2,
-                )
-                continue
-            display = str(item_tuple[1]).strip()
-            if pd.isna(item_tuple[1]) or not display:
-                warnings.warn(
-                    f"Empty display value for item: {item!r}, using search text as display",
-                    stacklevel=2,
-                )
-                display = str(item_tuple[0]).strip()
-            cleaned.append((text, display))
-        if not cleaned:
-            raise ValueError("corpus is empty after filtering")
-        rows: list[tuple[str, str, str]] = [
-            (f"{i:06d}", norm, display) for i, (norm, display) in enumerate(cleaned)
-        ]
-
-        self._corpus_rows = rows
-        self._id_to_search: dict[str, str] = {rid: s for rid, s, _ in rows}
-        self._id_to_display: dict[str, str] = {rid: d for rid, _, d in rows}
-        self._display_text_count: dict[str, int] = {}
-        for _, _, display in rows:
-            self._display_text_count[display] = (
-                self._display_text_count.get(display, 0) + 1
-            )
-        return rows
 
     def _init_prefix_index(self) -> None:
         # Prefix indexes operate over row_ids so duplicate normalised strings remain distinct.
@@ -210,7 +103,7 @@ class SAYTSuggester:
         self._prefix_terms: list[str] = []
         self._token_prefix_index: dict[str, set[str]] = {}
 
-        for row_id, search_norm, _ in self._corpus_rows:
+        for row_id, search_norm, _ in self._corpus.rows:
             self._prefix_sorted.append((search_norm, row_id))
             for token in search_norm.split():
                 for i in range(1, min(len(token), len(search_norm)) + 1):
@@ -234,9 +127,9 @@ class SAYTSuggester:
 
         df = pd.DataFrame(
             {
-                "label": [r[0] for r in self._corpus_rows],
-                "text": [r[1] for r in self._corpus_rows],
-                "display": [r[2] for r in self._corpus_rows],
+                "label": [r[0] for r in self._corpus.rows],
+                "text": [r[1] for r in self._corpus.rows],
+                "display": [r[2] for r in self._corpus.rows],
             }
         )
         df.to_csv(csv_path, index=False)
@@ -269,9 +162,9 @@ class SAYTSuggester:
 
     def _init_ngram_index(self) -> None:
         ngram_vectoriser = _CharNgramVectoriser(
-            [search for _, search, _ in self._corpus_rows],
-            n=self._ngram_n,
-            max_df=self._ngram_max_df,
+            [search for _, search, _ in self._corpus.rows],
+            n=self._config.ngram_n,
+            max_df=self._config.ngram_max_df,
         )
         self._ngram_vectoriser: VectoriserBase = ngram_vectoriser
 
@@ -286,19 +179,9 @@ class SAYTSuggester:
         )
 
     def _init_semantic_index(self) -> None:
-        handler = self._semantic_handler
-        if handler is None:
-            base_vectoriser: VectoriserBase = HuggingFaceVectoriser(
-                "sentence-transformers/all-MiniLM-L6-v2"
-            )
-        elif isinstance(handler, str):
-            base_vectoriser = HuggingFaceVectoriser(handler)
-        elif isinstance(handler, VectoriserBase):
-            base_vectoriser = handler
-        else:
-            raise TypeError(
-                "semantic_handler must be a classifai VectoriserBase, a model-name string, or None"
-            )
+        base_vectoriser: VectoriserBase = HuggingFaceVectoriser(
+            f"sentence-transformers/{self._config.semantic_model}"
+        )
 
         self._semantic_vectoriser: VectoriserBase = _L2NormalisingVectoriser(
             base_vectoriser
@@ -337,12 +220,12 @@ class SAYTSuggester:
 
     def _get_prefix_suggestions(
         self, q_norm: str, num_suggestions: int | None = None
-    ) -> list[_Suggestion]:
-        if not self._prefix_enable or (len(q_norm) < self._min_chars):
+    ) -> list[Suggestion]:
+        if not self._config.prefix_enable or (len(q_norm) < self._config.min_chars):
             return []
 
         if num_suggestions is None:
-            num_suggestions = self._max_suggestions
+            num_suggestions = self._config.max_suggestions
 
         scores: dict[str, float] = {}
 
@@ -366,21 +249,21 @@ class SAYTSuggester:
             scores.items(),
             key=lambda kv: (
                 -kv[1],
-                self._id_to_search.get(kv[0], ""),
-                len(self._id_to_display.get(kv[0], "")),
-                self._id_to_display.get(kv[0], "").lower(),
-                self._id_to_display.get(kv[0], ""),
+                self._corpus.id_to_search.get(kv[0], ""),
+                len(self._corpus.id_to_display.get(kv[0], "")),
+                self._corpus.id_to_display.get(kv[0], "").lower(),
+                self._corpus.id_to_display.get(kv[0], ""),
                 kv[0],
             ),
         )
 
-        out: list[_Suggestion] = []
-        for row_id, score in ranked[: self._max_suggestions]:
+        out: list[Suggestion] = []
+        for row_id, score in ranked[: self._config.max_suggestions]:
             out.append(
-                _Suggestion(
-                    display_text=self._id_to_display.get(row_id, ""),
+                Suggestion(
+                    display_text=self._corpus.id_to_display.get(row_id, ""),
                     score=float(score),
-                    search_text=self._id_to_search.get(row_id, ""),
+                    search_text=self._corpus.id_to_search.get(row_id, ""),
                     row_id=row_id,
                 )
             )
@@ -388,12 +271,12 @@ class SAYTSuggester:
 
     def _get_ngram_suggestions(
         self, q_norm: str, num_suggestions: int | None = None
-    ) -> list[_Suggestion]:
-        if not self._ngram_enable or len(q_norm) < self._min_chars:
+    ) -> list[Suggestion]:
+        if not self._config.ngram_enable or len(q_norm) < self._config.min_chars:
             return []
 
         if num_suggestions is None:
-            num_suggestions = self._max_suggestions
+            num_suggestions = self._config.max_suggestions
 
         q_vec = self._ngram_vectoriser.transform([q_norm])
         q_vec = np.asarray(q_vec, dtype=float)
@@ -405,18 +288,18 @@ class SAYTSuggester:
         if sims.size == 0:
             return []
 
-        k = min(self._max_suggestions, int(sims.size))
+        k = min(self._config.max_suggestions, int(sims.size))
         top_idx = np.argpartition(-sims, kth=k - 1)[:k]
         top_idx = top_idx[np.argsort(-sims[top_idx])]
 
-        out: list[_Suggestion] = []
+        out: list[Suggestion] = []
         for i in top_idx:
             sim = float(sims[int(i)])
             if sim <= 0:
                 continue
             row_id = str(self._ngram_doc_ids[int(i)])
             out.append(
-                _Suggestion(
+                Suggestion(
                     display_text=str(self._ngram_doc_display[int(i)]),
                     score=sim,
                     search_text=str(self._ngram_doc_search[int(i)]),
@@ -427,12 +310,12 @@ class SAYTSuggester:
 
     def _get_semantic_suggestions(
         self, q_norm: str, num_suggestions: int | None = None
-    ) -> list[_Suggestion]:
-        if not self._semantic_enable or len(q_norm) < self._min_chars:
+    ) -> list[Suggestion]:
+        if not self._config.semantic_enable or len(q_norm) < self._config.min_chars:
             return []
 
         if num_suggestions is None:
-            num_suggestions = self._max_suggestions
+            num_suggestions = self._config.max_suggestions
 
         q_vec = self._semantic_vectoriser.transform([q_norm])
         q_vec = np.asarray(q_vec, dtype=float)
@@ -444,18 +327,18 @@ class SAYTSuggester:
         if sims.size == 0:
             return []
 
-        k = min(self._max_suggestions, int(sims.size))
+        k = min(self._config.max_suggestions, int(sims.size))
         top_idx = np.argpartition(-sims, kth=k - 1)[:k]
         top_idx = top_idx[np.argsort(-sims[top_idx])]
 
-        out: list[_Suggestion] = []
+        out: list[Suggestion] = []
         for i in top_idx:
             sim = float(sims[int(i)])
             if sim <= 0:
                 continue
             row_id = str(self._semantic_doc_ids[int(i)])
             out.append(
-                _Suggestion(
+                Suggestion(
                     display_text=str(self._semantic_doc_display[int(i)]),
                     score=sim,
                     search_text=str(self._semantic_doc_search[int(i)]),
@@ -464,20 +347,20 @@ class SAYTSuggester:
             )
         return out
 
-    def _dedup_suggestions(self, suggestions: list[_Suggestion]) -> list[_Suggestion]:
+    def _dedup_suggestions(self, suggestions: list[Suggestion]) -> list[Suggestion]:
         # sort by score and deduplicate by display text, keeping the highest-scoring variant.
         sorted_suggestions = sorted(
             suggestions,
             key=lambda s: (
                 -s.score,
-                -self._display_text_count.get(s.display_text, 0),
+                -self._corpus.display_text_count.get(s.display_text, 0),
                 s.display_text.lower(),
                 s.search_text,
                 s.row_id,
             ),
         )
         seen: set[str] = set()
-        deduped: list[_Suggestion] = []
+        deduped: list[Suggestion] = []
         for s in sorted_suggestions:
             if s.display_text not in seen:
                 deduped.append(s)
@@ -487,16 +370,16 @@ class SAYTSuggester:
     def _combine_suggestions(
         self,
         *,
-        prefix_results: list[_Suggestion],
-        ngram_results: list[_Suggestion],
-        semantic_results: list[_Suggestion],
-    ) -> list[_Suggestion]:
-        w_prefix = self._prefix_weight if self._prefix_enable else 0.0
-        w_ngram = self._ngram_weight if self._ngram_enable else 0.0
-        w_sem = self._semantic_weight if self._semantic_enable else 0.0
+        prefix_results: list[Suggestion],
+        ngram_results: list[Suggestion],
+        semantic_results: list[Suggestion],
+    ) -> list[Suggestion]:
+        w_prefix = self._config.prefix_weight if self._config.prefix_enable else 0.0
+        w_ngram = self._config.ngram_weight if self._config.ngram_enable else 0.0
+        w_sem = self._config.semantic_weight if self._config.semantic_enable else 0.0
 
         def normalise_scores(
-            items: list[_Suggestion], weight: float
+            items: list[Suggestion], weight: float
         ) -> dict[str, float]:
             if not items:
                 return {}
@@ -522,10 +405,10 @@ class SAYTSuggester:
                 combined_scores[k] = combined_scores.get(k, 0.0) + v
 
         return [
-            _Suggestion(
-                display_text=self._id_to_display.get(row_id, ""),
+            Suggestion(
+                display_text=self._corpus.id_to_display.get(row_id, ""),
                 score=float(score),
-                search_text=self._id_to_search.get(row_id, ""),
+                search_text=self._corpus.id_to_search.get(row_id, ""),
                 row_id=row_id,
             )
             for row_id, score in combined_scores.items()
@@ -533,12 +416,12 @@ class SAYTSuggester:
 
     def suggest_with_scores(
         self, query: str | None, num_suggestions: int | None = None
-    ) -> list[_Suggestion]:
+    ) -> list[Suggestion]:
         """Return suggestions for the given query, with relevance scores."""
         if num_suggestions is None:
-            num_suggestions = self._max_suggestions
+            num_suggestions = self._config.max_suggestions
         q_norm = _normalise(query)
-        if len(q_norm) < self._min_chars:
+        if len(q_norm) < self._config.min_chars:
             return []
 
         # Ask for more suggestions, as some may be filtered out after deduplication
@@ -566,7 +449,7 @@ class SAYTSuggester:
     ) -> list[str]:
         """Return list of suggestions (display text only) upto a maximum limit."""
         if num_suggestions is None:
-            num_suggestions = self._max_suggestions
+            num_suggestions = self._config.max_suggestions
         return list(
             dict.fromkeys(
                 s.display_text
@@ -575,3 +458,7 @@ class SAYTSuggester:
                 )
             )
         )[:num_suggestions]
+
+    def get_config(self) -> SaytConfig:
+        """Return the validated configuration of this SAYT suggester instance."""
+        return self._config
