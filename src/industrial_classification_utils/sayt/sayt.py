@@ -18,6 +18,7 @@ from .sayt_retrievers import (
     PrefixRetriever,
     SemanticRetriever,
     _Suggestion,
+    _take_with_ties,
 )
 
 logger = get_logger(__name__)
@@ -88,24 +89,28 @@ class SAYTSuggester:
             raise ValueError(f"Column '{display_text_col}' not found in CSV")
         return cls(list(zip(df[search_text_col], df[display_text_col])), **kwargs)
 
-    def _dedup_suggestions(self, suggestions: list[_Suggestion]) -> list[_Suggestion]:
+    def _dedup_suggestions(
+        self, suggestions: list[tuple[str, float]]
+    ) -> list[tuple[str, float]]:
         # sort by score and deduplicate by display text, keeping the highest-scoring variant.
         sorted_suggestions = sorted(
             suggestions,
             key=lambda s: (
-                -s.score,
-                -self._corpus.display_text_count.get(s.display_text, 0),
-                s.display_text.lower(),
-                s.search_text,
-                s.row_id,
+                -s[1],
+                -self._corpus.display_text_count.get(
+                    self._corpus.id_to_display.get(s[0], ""), 0
+                ),
+                self._corpus.id_to_display.get(s[0], "").lower(),
+                s[0],
             ),
         )
         seen: set[str] = set()
-        deduped: list[_Suggestion] = []
+        deduped: list[tuple[str, float]] = []
         for s in sorted_suggestions:
-            if s.display_text not in seen:
+            display_text = self._corpus.id_to_display.get(s[0], "")
+            if display_text not in seen:
                 deduped.append(s)
-                seen.add(s.display_text)
+                seen.add(display_text)
         return deduped
 
     def _combine_suggestions(
@@ -114,7 +119,7 @@ class SAYTSuggester:
         prefix_results: list[_Suggestion],
         ngram_results: list[_Suggestion],
         semantic_results: list[_Suggestion],
-    ) -> list[_Suggestion]:
+    ) -> list[tuple[str, float]]:
         w_prefix = self._config.prefix_weight if self._config.prefix_enable else 0.0
         w_ngram = self._config.ngram_weight if self._config.ngram_enable else 0.0
         w_sem = self._config.semantic_weight if self._config.semantic_enable else 0.0
@@ -145,15 +150,7 @@ class SAYTSuggester:
             for k, v in d.items():
                 combined_scores[k] = combined_scores.get(k, 0.0) + v
 
-        return [
-            _Suggestion(
-                display_text=self._corpus.id_to_display.get(row_id, ""),
-                score=float(score),
-                search_text=self._corpus.id_to_search.get(row_id, ""),
-                row_id=row_id,
-            )
-            for row_id, score in combined_scores.items()
-        ]
+        return [(row_id, float(score)) for row_id, score in combined_scores.items()]
 
     def suggest_with_scores(
         self, query: str | None, num_suggestions: int | None = None
@@ -190,8 +187,18 @@ class SAYTSuggester:
             semantic_results=semantic_results,
         )
         ranked_results = self._dedup_suggestions(combined_result)
+        trimmed_results = _take_with_ties(ranked_results, self._corpus, num_suggestions)
+        out = [
+            _Suggestion(
+                row_id=row_id,
+                display_text=self._corpus.id_to_display.get(row_id, ""),
+                score=score,
+                search_text=self._corpus.id_to_search.get(row_id, ""),
+            )
+            for row_id, score in trimmed_results
+        ]
 
-        return ranked_results[:num_suggestions]
+        return out
 
     def suggest(
         self, query: str | None, num_suggestions: int | None = None
@@ -199,14 +206,8 @@ class SAYTSuggester:
         """Return list of suggestions (display text only) upto a maximum limit."""
         if num_suggestions is None:
             num_suggestions = self._config.max_suggestions
-        return list(
-            dict.fromkeys(
-                s.display_text
-                for s in self.suggest_with_scores(
-                    query, num_suggestions=num_suggestions
-                )
-            )
-        )[:num_suggestions]
+        results = self.suggest_with_scores(query, num_suggestions=num_suggestions)
+        return [result.display_text for result in results]
 
     def get_config(self) -> SaytConfig:
         """Return the validated configuration of this SAYT suggester instance."""

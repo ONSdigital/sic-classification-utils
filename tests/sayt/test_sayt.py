@@ -1,6 +1,5 @@
 """Tests for the SAYTSuggester public API."""
 
-# ruff: noqa: PLR2004
 # pylint: disable=protected-access,redefined-outer-name,too-few-public-methods,C0116,W0613
 
 from uuid import UUID
@@ -142,7 +141,7 @@ def test_suggest_returns_empty_for_short_or_non_string_query(small_corpus):
 
 
 def test_suggest_with_scores_defaults_to_config_max_suggestions(small_corpus):
-    """Use the configured max_suggestions when no override is supplied."""
+    """Use the configured max_suggestions, but keep ties at the cutoff."""
     suggester = SAYTSuggester(
         small_corpus,
         min_chars=3,
@@ -153,11 +152,16 @@ def test_suggest_with_scores_defaults_to_config_max_suggestions(small_corpus):
 
     results = suggester.suggest_with_scores("car")
 
-    assert len(results) == 2
+    assert [result.display_text for result in results] == [
+        "Car Waxing",
+        "Car Wash",
+        "CAR WASH (duplicate)",
+        "Carpentry services",
+    ]
 
 
 def test_suggest_respects_explicit_num_suggestions(small_corpus):
-    """Allow callers to override the configured suggestion limit."""
+    """Allow callers to override the configured limit, while keeping ties."""
     suggester = SAYTSuggester(
         small_corpus,
         min_chars=3,
@@ -166,7 +170,50 @@ def test_suggest_respects_explicit_num_suggestions(small_corpus):
         semantic_enable=False,
     )
 
-    assert len(suggester.suggest("car", num_suggestions=1)) == 1
+    assert suggester.suggest("car", num_suggestions=1) == [
+        "Car Waxing",
+        "Car Wash",
+        "CAR WASH (duplicate)",
+        "Carpentry services",
+    ]
+
+
+def test_suggest_with_scores_keeps_ties_at_cutoff(small_corpus):
+    """Keep all tied scored suggestions at the public cutoff."""
+    suggester = SAYTSuggester(
+        small_corpus,
+        min_chars=3,
+        ngram_enable=False,
+        semantic_enable=False,
+    )
+
+    results = suggester.suggest_with_scores("car", num_suggestions=1)
+
+    assert [result.display_text for result in results] == [
+        "Car Waxing",
+        "Car Wash",
+        "CAR WASH (duplicate)",
+        "Carpentry services",
+    ]
+
+
+def test_suggest_keeps_ties_at_cutoff(small_corpus):
+    """Keep all tied display suggestions at the public cutoff."""
+    suggester = SAYTSuggester(
+        small_corpus,
+        min_chars=3,
+        ngram_enable=False,
+        semantic_enable=False,
+    )
+
+    results = suggester.suggest("car", num_suggestions=1)
+
+    assert results == [
+        "Car Waxing",
+        "Car Wash",
+        "CAR WASH (duplicate)",
+        "Carpentry services",
+    ]
 
 
 def test_suggest_with_scores_skips_disabled_retrievers(monkeypatch, small_corpus):
@@ -277,4 +324,4 @@ def test_combine_and_dedup_ignore_invalid_scores_and_duplicate_display(small_cor
 
     deduped = suggester._dedup_suggestions(combined)
 
-    assert [suggestion.display_text for suggestion in deduped] == [first_display]
+    assert [suggestion[0] for suggestion in deduped] == [first_row_id]

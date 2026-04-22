@@ -127,6 +127,17 @@ def test_prefix_retriever_handles_empty_prefix_candidates(small_corpus):
     assert [result.display_text for result in results] == [corpus.rows[0][2]]
 
 
+def test_prefix_retriever_keeps_ties_at_cutoff():
+    """Return all prefix candidates tied on score at the suggestion cutoff."""
+    corpus = CleanCorpus.model_validate(
+        [("car wash", "Car Wash"), ("car waxing", "Car Waxing")]
+    )
+
+    results = PrefixRetriever(corpus, min_chars=3).suggest("car", num_suggestions=1)
+
+    assert [result.display_text for result in results] == ["Car Wash", "Car Waxing"]
+
+
 def test_l2_normalising_vectoriser_handles_one_dimensional_output():
     """Normalise a single returned embedding into a 2D unit vector."""
     vectoriser = _L2NormalisingVectoriser(_StubVectoriser(np.array([3.0, 4.0])))
@@ -167,8 +178,9 @@ def test_ngram_retriever_returns_empty_for_empty_query_vector(
     retriever._corpus = corpus
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
-        vector_store=_StubVectorStore([]),
-        num_vectors=1,
+        _vector_store=_StubVectorStore([]),
+        _num_vectors=1,
+        _corpus=corpus,
     )
 
     assert not retriever.suggest("car", num_suggestions=3)
@@ -188,11 +200,38 @@ def test_ngram_retriever_returns_empty_for_empty_similarity_matrix():
     retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
-        vector_store=_StubVectorStore([]),
-        num_vectors=0,
+        _vector_store=_StubVectorStore([]),
+        _num_vectors=0,
+        _corpus=retriever._corpus,
     )
 
     assert not retriever.suggest("car", num_suggestions=3)
+
+
+def test_dense_retriever_keeps_ties_at_cutoff(small_corpus):
+    """Return all dense candidates tied on score at the suggestion cutoff."""
+    corpus = CleanCorpus.model_validate(small_corpus)
+    retriever = NgramRetriever.__new__(NgramRetriever)
+    retriever._corpus = corpus
+    retriever._min_chars = 3
+    retriever._index = _DenseVectorIndex(
+        _vector_store=_StubVectorStore(
+            [
+                {"doc_label": corpus.rows[0][0], "score": 0.9},
+                {"doc_label": corpus.rows[1][0], "score": 0.9},
+                {"doc_label": corpus.rows[2][0], "score": 0.2},
+            ]
+        ),
+        _num_vectors=3,
+        _corpus=corpus,
+    )
+
+    results = retriever.suggest("car", num_suggestions=1)
+
+    assert [result.row_id for result in results] == [
+        corpus.rows[0][0],
+        corpus.rows[1][0],
+    ]
 
 
 def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
@@ -212,8 +251,9 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
     def _fake_build_dense_vector_index(*, corpus, vectoriser):
         captured["vectoriser_type"] = type(vectoriser).__name__
         return _DenseVectorIndex(
-            vector_store=_StubVectorStore([]),
-            num_vectors=1,
+            _vector_store=_StubVectorStore([]),
+            _num_vectors=1,
+            _corpus=corpus,
         )
 
     monkeypatch.setattr(
@@ -249,8 +289,9 @@ def test_semantic_retriever_returns_empty_for_empty_query_vector(small_corpus):
     retriever._corpus = corpus
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
-        vector_store=_StubVectorStore([]),
-        num_vectors=1,
+        _vector_store=_StubVectorStore([]),
+        _num_vectors=1,
+        _corpus=corpus,
     )
 
     assert not retriever.suggest("car", num_suggestions=3)
@@ -262,8 +303,9 @@ def test_semantic_retriever_returns_empty_for_empty_similarity_matrix():
     retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
-        vector_store=_StubVectorStore([]),
-        num_vectors=0,
+        _vector_store=_StubVectorStore([]),
+        _num_vectors=0,
+        _corpus=retriever._corpus,
     )
 
     assert not retriever.suggest("car", num_suggestions=3)

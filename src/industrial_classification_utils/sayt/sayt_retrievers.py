@@ -49,6 +49,36 @@ class _Suggestion:
     row_id: str = ""
 
 
+def _take_with_ties(
+    items: list[tuple[str, float]],
+    corpus: CleanCorpus,
+    limit: int,
+) -> list[tuple[str, float]]:
+    """Return the first ``limit`` items and any later items tied on score."""
+    if limit < 1 or not items:
+        return []
+
+    items = sorted(
+        items,
+        key=lambda kv: (
+            -kv[1],
+            -corpus.display_text_count.get(corpus.id_to_display.get(kv[0], ""), 0),
+            corpus.id_to_display.get(kv[0], "").lower(),
+            corpus.id_to_search.get(kv[0], ""),
+            kv[0],
+        ),
+    )
+
+    if limit >= len(items):
+        return items
+
+    cutoff_score = float(items[limit - 1][1])
+    end = limit
+    while end < len(items) and float(items[end][1]) == cutoff_score:
+        end += 1
+    return items[:end]
+
+
 @dataclass(frozen=True, slots=True)
 class _PrefixIndex:
     """Precomputed prefix lookup structures for prefix matching."""
@@ -111,18 +141,9 @@ class PrefixRetriever:
             if ratio >= _FUZZY_PREFIX_MIN_RATIO:
                 scores[row_id] = scores.get(row_id, 0.0) + (2.4 * ratio)
 
-        ranked = sorted(
-            scores.items(),
-            key=lambda kv: (
-                -kv[1],
-                self._corpus.id_to_search.get(kv[0], ""),
-                len(self._corpus.id_to_display.get(kv[0], "")),
-                self._corpus.id_to_display.get(kv[0], "").lower(),
-                self._corpus.id_to_display.get(kv[0], ""),
-                kv[0],
-            ),
+        ranked = _take_with_ties(
+            list(scores.items()), self._corpus, limit=num_suggestions
         )
-
         return [
             _Suggestion(
                 display_text=self._corpus.id_to_display.get(row_id, ""),
@@ -130,7 +151,7 @@ class PrefixRetriever:
                 search_text=self._corpus.id_to_search.get(row_id, ""),
                 row_id=row_id,
             )
-            for row_id, score in ranked[:num_suggestions]
+            for row_id, score in ranked
         ]
 
 
@@ -138,8 +159,9 @@ class PrefixRetriever:
 class _DenseVectorIndex:
     """ClassifAI-backed dense search index for in-memory query-time retrieval."""
 
-    vector_store: VectorStore
-    num_vectors: int
+    _vector_store: VectorStore
+    _num_vectors: int
+    _corpus: CleanCorpus
 
     @classmethod
     def from_corpus(
@@ -172,24 +194,25 @@ class _DenseVectorIndex:
                 )
 
         return cls(
-            vector_store=vector_store,
-            num_vectors=int(vector_store.num_vectors or 0),
+            _vector_store=vector_store,
+            _num_vectors=int(vector_store.num_vectors or 0),
+            _corpus=corpus,
         )
 
     def query(self, q_norm: str, num_suggestions: int) -> list[tuple[str, float]]:
         """Return the top dense-vector matches as row ids with scores."""
-        if self.num_vectors < 1 or num_suggestions < 1:
+        if self._num_vectors < 1 or num_suggestions < 1:
             return []
 
-        n_results = min(num_suggestions, self.num_vectors)
+        n_results = min(self._num_vectors, num_suggestions * 2)
         search_input = VectorStoreSearchInput({"id": ["q1"], "query": [q_norm]})
         with _silence_classifai_tqdm():
-            results = self.vector_store.search(search_input, n_results=n_results)
+            results = self._vector_store.search(search_input, n_results=n_results)
         out = [
             (row["doc_label"], float(row["score"]))
             for row in results.to_dict(orient="records")
         ]
-        return out
+        return _take_with_ties(out, self._corpus, limit=num_suggestions)
 
 
 class _L2NormalisingVectoriser(VectoriserBase):
