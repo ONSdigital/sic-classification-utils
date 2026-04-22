@@ -3,8 +3,11 @@
 # pylint: disable=protected-access, R0801
 
 # %%
+from survey_assist_utils.logging import get_logger
+
 from industrial_classification_utils.sayt import SAYTSuggester
 
+logger = get_logger(__name__)
 # %%
 ############# toy example to verify SAYT works #############
 small_corpus = [
@@ -21,10 +24,6 @@ small_corpus = [
     ("Car servicing", "Car servicing"),
 ]
 suggester = SAYTSuggester(small_corpus)
-print(
-    "\nLoaded SAYT Suggester with config:\n",
-    suggester.get_config().model_dump_json(indent=2),
-)
 
 # %%
 for q in ["car", "cars", "waxi", "grom", "wash", "duplicate", "auto"]:
