@@ -7,7 +7,6 @@ survey responses for organisation/industry description questions.
 import re
 import warnings
 from collections.abc import Iterable
-from dataclasses import dataclass
 from typing import cast
 
 import pandas as pd
@@ -29,16 +28,6 @@ def _normalise(text: str | None) -> str:
     text = _NON_ALNUM_SPACE_RE.sub(" ", text)
     text = _WS_RE.sub(" ", text).strip()
     return text
-
-
-@dataclass(frozen=True, slots=True)
-class Suggestion:
-    """Structured suggestion result from SAYT suggester methods."""
-
-    display_text: str
-    score: float
-    search_text: str = ""
-    row_id: str = ""
 
 
 class CleanCorpus(BaseModel):
