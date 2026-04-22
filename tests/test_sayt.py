@@ -4,6 +4,7 @@
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from industrial_classification_utils.sayt.sayt import SAYTSuggester
 
@@ -22,7 +23,7 @@ def small_corpus():
 
 
 def test_constructor_rejects_unknown_kwargs(small_corpus):
-    with pytest.raises(TypeError, match="Unexpected keyword argument"):
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         SAYTSuggester(small_corpus, does_not_exist=True)
 
 

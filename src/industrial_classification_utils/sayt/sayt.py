@@ -4,8 +4,7 @@ This module provides a lightweight SAYT implementation for suggesting free-text
 survey responses for organisation/industry description questions.
 """
 
-# ruff: noqa: PLR2004
-# pylint: disable=too-many-instance-attributes,too-many-locals,protected-access,too-few-public-methods,disable=consider-using-with
+# pylint: disable=too-many-instance-attributes,too-few-public-methods,disable=consider-using-with
 
 import os
 import re
@@ -15,7 +14,7 @@ from bisect import bisect_left, bisect_right
 from collections.abc import Iterable
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import NamedTuple, cast
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -25,66 +24,11 @@ from classifai.vectorisers import HuggingFaceVectoriser, VectoriserBase
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import CountVectorizer
 
+from .sayt_config import SaytConfig
+
 _WS_RE = re.compile(r"\s+")
 _NON_ALNUM_SPACE_RE = re.compile(r"[^a-z ]+")
 _FUZZY_PREFIX_MIN_RATIO = 0.75
-
-
-class _SaytDefaults(NamedTuple):
-    min_chars: int = 4
-    max_suggestions: int = 10
-    prefix_enable: bool = True
-    prefix_weight: float = 1.0
-    ngram_enable: bool = True
-    ngram_weight: float = 1.0
-    ngram_n: int = 3
-    ngram_max_df: float = 0.2
-    semantic_enable: bool = True
-    semantic_weight: float = 1.0
-    semantic_handler: VectoriserBase | str | None = None
-
-
-_DEFAULT_SAYT_KWARGS = _SaytDefaults()
-
-
-def _coerce_int(value: object, *, key: str) -> int:
-    # bool is a subclass of int; treat it as invalid here.
-    if isinstance(value, bool):
-        raise TypeError(f"{key} must be an int, not bool")
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        s = value.strip()
-        if s.isdigit() or (s.startswith("-") and s[1:].isdigit()):
-            return int(s)
-    raise TypeError(f"{key} must be an int")
-
-
-def _coerce_float(value: object, *, key: str) -> float:
-    if isinstance(value, bool):
-        raise TypeError(f"{key} must be a float, not bool")
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.strip())
-        except ValueError as exc:  # pragma: no cover
-            raise TypeError(f"{key} must be a float") from exc
-    raise TypeError(f"{key} must be a float")
-
-
-def _coerce_bool(value: object, *, key: str) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int) and value in (0, 1):
-        return bool(value)
-    if isinstance(value, str):
-        s = value.strip().lower()
-        if s in {"true", "t", "1", "yes", "y"}:
-            return True
-        if s in {"false", "f", "0", "no", "n"}:
-            return False
-    raise TypeError(f"{key} must be a bool")
 
 
 def _normalise(text: str | None) -> str:
@@ -175,57 +119,24 @@ class SAYTSuggester:
             self._init_semantic_index()
 
     def _build_config(self, kwargs: dict[str, object]) -> None:
-        defaults = _DEFAULT_SAYT_KWARGS._asdict()
-        unknown = set(kwargs) - set(defaults)
-        if unknown:
-            raise TypeError(
-                f"Unexpected keyword argument(s): {', '.join(sorted(unknown))}"
-            )
-        cfg = {**defaults, **kwargs}
+        cfg = SaytConfig.model_validate(kwargs)
 
-        self._min_chars = _coerce_int(cfg["min_chars"], key="min_chars")
-        if self._min_chars < 3:
-            raise ValueError("min_chars must be >= 3")
+        self._min_chars = cfg.min_chars
+        self._max_suggestions = cfg.max_suggestions
 
-        self._max_suggestions = _coerce_int(
-            cfg["max_suggestions"], key="max_suggestions"
-        )
-        if (self._max_suggestions < 1) | (self._max_suggestions > 100):
-            raise ValueError("max_suggestions must be between 1 and 100")
+        self._prefix_enable = cfg.prefix_enable
+        self._prefix_weight = cfg.prefix_weight if self._prefix_enable else 0.0
 
-        self._prefix_enable = _coerce_bool(cfg["prefix_enable"], key="prefix_enable")
-        self._prefix_weight = (
-            _coerce_float(cfg["prefix_weight"], key="prefix_weight")
-            if self._prefix_enable
-            else 0.0
-        )
-
-        self._ngram_enable = _coerce_bool(cfg["ngram_enable"], key="ngram_enable")
-        self._ngram_weight = (
-            _coerce_float(cfg["ngram_weight"], key="ngram_weight")
-            if self._ngram_enable
-            else 0.0
-        )
-
+        self._ngram_enable = cfg.ngram_enable
+        self._ngram_weight = cfg.ngram_weight if self._ngram_enable else 0.0
         if self._ngram_enable:
-            self._ngram_n = _coerce_int(cfg["ngram_n"], key="ngram_n")
-            if not 2 <= self._ngram_n <= 5:
-                raise ValueError("ngram_n must be between 2 and 5")
-            self._ngram_max_df = _coerce_float(cfg["ngram_max_df"], key="ngram_max_df")
-            if not 0.0 < self._ngram_max_df <= 1.0:
-                raise ValueError("ngram_max_df must be in (0, 1]")
+            self._ngram_n = cfg.ngram_n
+            self._ngram_max_df = cfg.ngram_max_df
 
-        self._semantic_enable = _coerce_bool(
-            cfg["semantic_enable"], key="semantic_enable"
-        )
-        self._semantic_weight = (
-            _coerce_float(cfg["semantic_weight"], key="semantic_weight")
-            if self._semantic_enable
-            else 0.0
-        )
-
+        self._semantic_enable = cfg.semantic_enable
+        self._semantic_weight = cfg.semantic_weight if self._semantic_enable else 0.0
         if self._semantic_enable:
-            self._semantic_handler = cfg.get("semantic_handler")
+            self._semantic_handler = cfg.semantic_handler
 
     def _validate_weights(self) -> None:
         if self._prefix_enable and self._prefix_weight <= 0:
@@ -621,7 +532,7 @@ class SAYTSuggester:
         ]
 
     def suggest_with_scores(
-        self, query: str, num_suggestions: int | None = None
+        self, query: str | None, num_suggestions: int | None = None
     ) -> list[_Suggestion]:
         """Return suggestions for the given query, with relevance scores."""
         if num_suggestions is None:
@@ -650,7 +561,9 @@ class SAYTSuggester:
 
         return ranked_results[:num_suggestions]
 
-    def suggest(self, query: str, num_suggestions: int | None = None) -> list[str]:
+    def suggest(
+        self, query: str | None, num_suggestions: int | None = None
+    ) -> list[str]:
         """Return list of suggestions (display text only) upto a maximum limit."""
         if num_suggestions is None:
             num_suggestions = self._max_suggestions
