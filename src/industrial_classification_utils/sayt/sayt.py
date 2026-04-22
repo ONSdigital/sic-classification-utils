@@ -6,6 +6,7 @@ survey responses for organisation/industry description questions.
 
 import os
 from collections.abc import Iterable
+from typing import cast
 
 import pandas as pd
 from survey_assist_utils.logging import get_logger
@@ -49,8 +50,9 @@ class SAYTSuggester:
         self._ngram_retriever = (
             NgramRetriever(
                 self._corpus,
-                n=self._config.ngram_n,
-                max_df=self._config.ngram_max_df,
+                # using cast to make mypy happy (conditional validation done in SaytConfig)
+                n=cast(int, self._config.ngram_n),
+                max_df=cast(float, self._config.ngram_max_df),
                 min_chars=self._config.min_chars,
             )
             if self._config.ngram_enable
@@ -59,7 +61,7 @@ class SAYTSuggester:
         self._semantic_retriever = (
             SemanticRetriever(
                 self._corpus,
-                model=self._config.semantic_model,
+                model=cast(str, self._config.semantic_model),
                 min_chars=self._config.min_chars,
             )
             if self._config.semantic_enable

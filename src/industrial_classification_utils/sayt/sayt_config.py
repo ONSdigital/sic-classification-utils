@@ -30,11 +30,11 @@ class SaytConfig(BaseModel):
     prefix_weight: float = 1.0
     ngram_enable: bool = True
     ngram_weight: float = 1.0
-    ngram_n: int = 3
-    ngram_max_df: float = 0.2
+    ngram_n: int | None = 3
+    ngram_max_df: float | None = 0.2
     semantic_enable: bool = True
     semantic_weight: float = 1.0
-    semantic_model: str = "all-MiniLM-L6-v2"
+    semantic_model: str | None = "all-MiniLM-L6-v2"
     corpus_size: int = 0
 
     @model_validator(mode="after")
@@ -44,10 +44,23 @@ class SaytConfig(BaseModel):
             raise ValueError("min_chars must be >= 3")
         if not 1 <= self.max_suggestions <= 100:
             raise ValueError("max_suggestions must be between 1 and 100")
-        if self.ngram_enable and not 2 <= self.ngram_n <= 5:
+
+        if not self.ngram_enable:
+            self.ngram_n = None
+        elif not self.ngram_n:
+            raise ValueError("ngram_n must be set when ngram is enabled")
+        elif not 2 <= self.ngram_n <= 5:
             raise ValueError("ngram_n must be between 2 and 5")
-        if self.ngram_enable and not 0.0 < self.ngram_max_df <= 1.0:
+
+        if not self.ngram_enable:
+            self.ngram_max_df = None
+        elif not self.ngram_max_df:
+            raise ValueError("ngram_max_df must be set when ngram is enabled")
+        elif not 0.0 < self.ngram_max_df <= 1.0:
             raise ValueError("ngram_max_df must be in (0, 1]")
+        elif self.ngram_max_df * self.corpus_size < 1:
+            raise ValueError("ngram_max_df is too low for the given corpus_size")
+
         return self
 
     @model_validator(mode="after")
@@ -66,6 +79,7 @@ class SaytConfig(BaseModel):
             raise ValueError("semantic_weight must be > 0")
         if not self.semantic_enable:
             self.semantic_weight = 0.0
+            self.semantic_model = None
 
         total_weight = self.prefix_weight + self.ngram_weight + self.semantic_weight
         if total_weight == 0.0:

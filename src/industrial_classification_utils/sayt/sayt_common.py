@@ -8,6 +8,7 @@ import re
 import warnings
 from collections.abc import Iterable
 from typing import cast
+from uuid import NAMESPACE_URL, uuid5
 
 import pandas as pd
 from pydantic import (
@@ -28,6 +29,10 @@ def _normalise(text: str | None) -> str:
     text = _NON_ALNUM_SPACE_RE.sub(" ", text)
     text = _WS_RE.sub(" ", text).strip()
     return text
+
+
+def _row_uid(index: int, search_text: str, display_text: str) -> str:
+    return str(uuid5(NAMESPACE_URL, f"{index}\0{search_text}\0{display_text}"))
 
 
 class CleanCorpus(BaseModel):
@@ -92,5 +97,6 @@ class CleanCorpus(BaseModel):
         if not cleaned:
             raise ValueError("corpus is empty after filtering")
         return [
-            (f"{i:06d}", norm, display) for i, (norm, display) in enumerate(cleaned)
+            (_row_uid(i, norm, display), norm, display)
+            for i, (norm, display) in enumerate(cleaned)
         ]
