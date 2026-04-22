@@ -2,12 +2,16 @@
 
 # pylint: disable=too-few-public-methods, R0801
 
+import csv
+import os
+import tempfile
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import cast
 
 import numpy as np
+from classifai.indexers import VectorStore, VectorStoreSearchInput
 from classifai.vectorisers import HuggingFaceVectoriser, VectoriserBase
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import CountVectorizer
@@ -114,11 +118,10 @@ class PrefixRetriever:
 
 @dataclass(frozen=True, slots=True)
 class _DenseVectorIndex:
-    """In-memory dense vector search index built from the corpus."""
+    """ClassifAI-backed dense search index for in-memory query-time retrieval."""
 
-    vectoriser: VectoriserBase
-    row_ids: list[str]
-    doc_matrix: np.ndarray
+    vector_store: VectorStore
+    num_vectors: int
 
     @classmethod
     def from_corpus(
@@ -127,52 +130,45 @@ class _DenseVectorIndex:
         corpus: CleanCorpus,
         vectoriser: VectoriserBase,
     ) -> "_DenseVectorIndex":
-        """Build a dense index directly from corpus rows using the vectoriser."""
-        doc_matrix = cls._embed_texts(
-            vectoriser, [search_text for _, search_text, _ in corpus.rows]
-        )
-        return cls(
-            vectoriser=vectoriser,
-            row_ids=[row_id for row_id, _, _ in corpus.rows],
-            doc_matrix=doc_matrix,
-        )
+        """Build a dense index using ClassifAI's native VectorStore pipeline."""
+        with tempfile.TemporaryDirectory(prefix="sayt_") as tmp_dir:
+            csv_path = os.path.join(tmp_dir, "corpus.csv")
 
-    @staticmethod
-    def _embed_texts(
-        vectoriser: VectoriserBase,
-        texts: list[str],
-    ) -> np.ndarray:
-        """Convert vectoriser output into a dense 2D float matrix."""
-        vectors = vectoriser.transform(texts)
-        matrix = np.asarray(vectors, dtype=float)
-        if matrix.ndim == 1:
-            matrix = matrix.reshape(1, -1)
-        if matrix.size == 0:
-            return np.zeros((len(texts), 0), dtype=float)
-        return matrix
+            with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=["label", "text"])
+                writer.writeheader()
+                writer.writerows(
+                    {"label": row_id, "text": search_text}
+                    for row_id, search_text, _ in corpus.rows
+                )
+
+            vector_store = VectorStore(
+                file_name=csv_path,
+                data_type="csv",
+                vectoriser=vectoriser,
+                batch_size=64,
+                output_dir=None,
+                overwrite=True,
+                hooks=None,
+            )
+
+        return cls(
+            vector_store=vector_store,
+            num_vectors=int(vector_store.num_vectors or 0),
+        )
 
     def query(self, q_norm: str, num_suggestions: int) -> list[tuple[str, float]]:
         """Return the top dense-vector matches as row ids with scores."""
-        q_vec = self.vectoriser.transform([q_norm])
-        q_vec = np.asarray(q_vec, dtype=float)
-        if q_vec.size == 0:
-            return []
-        q_vec = q_vec.reshape(-1)
-
-        sims = self.doc_matrix @ q_vec
-        if sims.size == 0:
+        if self.num_vectors < 1 or num_suggestions < 1:
             return []
 
-        k = min(num_suggestions, int(sims.size))
-        top_idx = np.argpartition(-sims, kth=k - 1)[:k]
-        top_idx = top_idx[np.argsort(-sims[top_idx])]
-
-        out: list[tuple[str, float]] = []
-        for i in top_idx:
-            sim = float(sims[int(i)])
-            if sim <= 0:
-                continue
-            out.append((self.row_ids[int(i)], sim))
+        n_results = min(num_suggestions, self.num_vectors)
+        search_input = VectorStoreSearchInput({"id": ["q1"], "query": [q_norm]})
+        results = self.vector_store.search(search_input, n_results=n_results)
+        out = [
+            (row["doc_label"], float(row["score"]))
+            for row in results.to_dict(orient="records")
+        ]
         return out
 
 
@@ -229,7 +225,7 @@ class _DenseRetriever:
         return [
             _Suggestion(
                 display_text=self._corpus.id_to_display.get(row_id, ""),
-                score=float(score),
+                score=score,
                 search_text=self._corpus.id_to_search.get(row_id, ""),
                 row_id=row_id,
             )

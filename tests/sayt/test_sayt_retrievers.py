@@ -84,6 +84,25 @@ class _StubVectoriser(VectoriserBase):
         return self._output
 
 
+class _StubSearchResults:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def to_dict(self, orient="dict"):
+        assert orient == "records"
+        return self._rows
+
+
+class _StubVectorStore:
+    def __init__(self, rows):
+        self._rows = rows
+        self.calls = []
+
+    def search(self, query, n_results=10):
+        self.calls.append((query, n_results))
+        return _StubSearchResults(self._rows)
+
+
 def test_prefix_retriever_returns_empty_for_short_queries(small_corpus):
     """Skip prefix work when the query is shorter than the minimum."""
     corpus = CleanCorpus.model_validate(small_corpus)
@@ -142,15 +161,14 @@ def test_char_ngram_vectoriser_accepts_single_string_input():
 def test_ngram_retriever_returns_empty_for_empty_query_vector(
     monkeypatch, small_corpus
 ):
-    """Stop early when the query vectoriser produces no features."""
+    """Return no suggestions when the vector store yields no matches."""
     corpus = CleanCorpus.model_validate(small_corpus)
     retriever = NgramRetriever.__new__(NgramRetriever)
     retriever._corpus = corpus
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
-        vectoriser=_StubVectoriser(np.zeros((1, 0))),
-        row_ids=[corpus.rows[0][0]],
-        doc_matrix=np.zeros((1, 0)),
+        vector_store=_StubVectorStore([]),
+        num_vectors=1,
     )
 
     assert not retriever.suggest("car", num_suggestions=3)
@@ -165,51 +183,16 @@ def test_ngram_retriever_returns_empty_for_short_queries():
 
 
 def test_ngram_retriever_returns_empty_for_empty_similarity_matrix():
-    """Stop early when the dense index contains no document vectors."""
+    """Stop early when the dense index contains no stored vectors."""
     retriever = NgramRetriever.__new__(NgramRetriever)
     retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
-        vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
-        row_ids=[],
-        doc_matrix=np.zeros((0, 2)),
+        vector_store=_StubVectorStore([]),
+        num_vectors=0,
     )
 
     assert not retriever.suggest("car", num_suggestions=3)
-
-
-def test_ngram_retriever_skips_non_positive_similarities(small_corpus):
-    """Discard candidate rows whose cosine similarity is not positive."""
-    corpus = CleanCorpus.model_validate(small_corpus)
-    retriever = NgramRetriever.__new__(NgramRetriever)
-    retriever._corpus = corpus
-    retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
-        vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
-        row_ids=[corpus.rows[0][0], corpus.rows[1][0]],
-        doc_matrix=np.array([[0.0, 0.0], [1.0, 0.0]]),
-    )
-
-    results = retriever.suggest("car", num_suggestions=2)
-
-    assert [result.display_text for result in results] == [corpus.rows[1][2]]
-
-
-def test_semantic_retriever_skips_non_positive_similarities(small_corpus):
-    """Apply the same filtering logic for semantic retrieval results."""
-    corpus = CleanCorpus.model_validate(small_corpus)
-    retriever = SemanticRetriever.__new__(SemanticRetriever)
-    retriever._corpus = corpus
-    retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
-        vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
-        row_ids=[corpus.rows[0][0], corpus.rows[1][0]],
-        doc_matrix=np.array([[0.0, 0.0], [1.0, 0.0]]),
-    )
-
-    results = retriever.suggest("car", num_suggestions=2)
-
-    assert [result.display_text for result in results] == [corpus.rows[1][2]]
 
 
 def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
@@ -229,9 +212,8 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
     def _fake_build_dense_vector_index(*, corpus, vectoriser):
         captured["vectoriser_type"] = type(vectoriser).__name__
         return _DenseVectorIndex(
-            vectoriser=vectoriser,
-            row_ids=[corpus.rows[0][0]],
-            doc_matrix=np.array([[1.0, 0.0]]),
+            vector_store=_StubVectorStore([]),
+            num_vectors=1,
         )
 
     monkeypatch.setattr(
@@ -261,29 +243,27 @@ def test_semantic_retriever_returns_empty_for_short_queries():
 
 
 def test_semantic_retriever_returns_empty_for_empty_query_vector(small_corpus):
-    """Stop early when semantic vectorisation produces no features."""
+    """Return no suggestions when semantic vector search yields no matches."""
     corpus = CleanCorpus.model_validate(small_corpus)
     retriever = SemanticRetriever.__new__(SemanticRetriever)
     retriever._corpus = corpus
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
-        vectoriser=_StubVectoriser(np.zeros((1, 0))),
-        row_ids=[corpus.rows[0][0]],
-        doc_matrix=np.zeros((1, 0)),
+        vector_store=_StubVectorStore([]),
+        num_vectors=1,
     )
 
     assert not retriever.suggest("car", num_suggestions=3)
 
 
 def test_semantic_retriever_returns_empty_for_empty_similarity_matrix():
-    """Stop early when semantic retrieval has no document vectors."""
+    """Stop early when semantic retrieval has no stored vectors."""
     retriever = SemanticRetriever.__new__(SemanticRetriever)
     retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
     retriever._index = _DenseVectorIndex(
-        vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
-        row_ids=[],
-        doc_matrix=np.zeros((0, 2)),
+        vector_store=_StubVectorStore([]),
+        num_vectors=0,
     )
 
     assert not retriever.suggest("car", num_suggestions=3)
