@@ -6,10 +6,12 @@ import csv
 import os
 import tempfile
 from bisect import bisect_left, bisect_right
+from contextlib import contextmanager
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import cast
 
+import classifai.indexers.main as classifai_indexers_main
 import numpy as np
 from classifai.indexers import VectorStore, VectorStoreSearchInput
 from classifai.vectorisers import HuggingFaceVectoriser, VectoriserBase
@@ -19,6 +21,22 @@ from sklearn.feature_extraction.text import CountVectorizer
 from .sayt_common import CleanCorpus
 
 _FUZZY_PREFIX_MIN_RATIO = 0.75
+
+
+def _silent_tqdm(iterable, **_kwargs):
+    """Pass through iterables unchanged to suppress ClassifAI progress bars."""
+    return iterable
+
+
+@contextmanager
+def _silence_classifai_tqdm():
+    """Temporarily replace ClassifAI's tqdm import with a no-op wrapper."""
+    previous_tqdm = classifai_indexers_main.tqdm
+    classifai_indexers_main.tqdm = _silent_tqdm
+    try:
+        yield
+    finally:
+        classifai_indexers_main.tqdm = previous_tqdm
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,15 +160,16 @@ class _DenseVectorIndex:
                     for row_id, search_text, _ in corpus.rows
                 )
 
-            vector_store = VectorStore(
-                file_name=csv_path,
-                data_type="csv",
-                vectoriser=vectoriser,
-                batch_size=64,
-                output_dir=None,
-                overwrite=True,
-                hooks=None,
-            )
+            with _silence_classifai_tqdm():
+                vector_store = VectorStore(
+                    file_name=csv_path,
+                    data_type="csv",
+                    vectoriser=vectoriser,
+                    batch_size=64,
+                    output_dir=None,
+                    overwrite=True,
+                    hooks=None,
+                )
 
         return cls(
             vector_store=vector_store,
@@ -164,7 +183,8 @@ class _DenseVectorIndex:
 
         n_results = min(num_suggestions, self.num_vectors)
         search_input = VectorStoreSearchInput({"id": ["q1"], "query": [q_norm]})
-        results = self.vector_store.search(search_input, n_results=n_results)
+        with _silence_classifai_tqdm():
+            results = self.vector_store.search(search_input, n_results=n_results)
         out = [
             (row["doc_label"], float(row["score"]))
             for row in results.to_dict(orient="records")
