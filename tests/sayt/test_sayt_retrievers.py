@@ -107,7 +107,12 @@ def test_prefix_retriever_returns_empty_for_short_queries(small_corpus):
     """Skip prefix work when the query is shorter than the minimum."""
     corpus = CleanCorpus.model_validate(small_corpus)
 
-    assert PrefixRetriever(corpus, min_chars=4).suggest("car", num_suggestions=5) == []
+    assert (
+        PrefixRetriever(corpus, min_chars=4).suggest_with_scores(
+            "car", num_suggestions=5
+        )
+        == []
+    )
 
 
 def test_prefix_retriever_handles_empty_prefix_candidates(small_corpus):
@@ -122,7 +127,7 @@ def test_prefix_retriever_handles_empty_prefix_candidates(small_corpus):
         token_index={},
     )
 
-    results = retriever.suggest("", num_suggestions=5)
+    results = retriever.suggest_with_scores("", num_suggestions=5)
 
     assert [result.display_text for result in results] == [corpus.rows[0][2]]
 
@@ -133,7 +138,9 @@ def test_prefix_retriever_keeps_ties_at_cutoff():
         [("car wash", "Car Wash"), ("car waxing", "Car Waxing")]
     )
 
-    results = PrefixRetriever(corpus, min_chars=3).suggest("car", num_suggestions=1)
+    results = PrefixRetriever(corpus, min_chars=3).suggest_with_scores(
+        "car", num_suggestions=1
+    )
 
     assert [result.display_text for result in results] == ["Car Wash", "Car Waxing"]
 
@@ -183,7 +190,7 @@ def test_ngram_retriever_returns_empty_for_empty_query_vector(
         _corpus=corpus,
     )
 
-    assert not retriever.suggest("car", num_suggestions=3)
+    assert not retriever.suggest_with_scores("car", num_suggestions=3)
 
 
 def test_ngram_retriever_returns_empty_for_short_queries():
@@ -191,7 +198,7 @@ def test_ngram_retriever_returns_empty_for_short_queries():
     retriever = NgramRetriever.__new__(NgramRetriever)
     retriever._min_chars = 4
 
-    assert not retriever.suggest("car", num_suggestions=3)
+    assert not retriever.suggest_with_scores("car", num_suggestions=3)
 
 
 def test_ngram_retriever_returns_empty_for_empty_similarity_matrix():
@@ -205,7 +212,7 @@ def test_ngram_retriever_returns_empty_for_empty_similarity_matrix():
         _corpus=retriever._corpus,
     )
 
-    assert not retriever.suggest("car", num_suggestions=3)
+    assert not retriever.suggest_with_scores("car", num_suggestions=3)
 
 
 def test_dense_retriever_keeps_ties_at_cutoff(small_corpus):
@@ -226,7 +233,7 @@ def test_dense_retriever_keeps_ties_at_cutoff(small_corpus):
         _corpus=corpus,
     )
 
-    results = retriever.suggest("car", num_suggestions=1)
+    results = retriever.suggest_with_scores("car", num_suggestions=1)
 
     assert [result.row_id for result in results] == [
         corpus.rows[0][0],
@@ -279,7 +286,7 @@ def test_semantic_retriever_returns_empty_for_short_queries():
     retriever = SemanticRetriever.__new__(SemanticRetriever)
     retriever._min_chars = 4
 
-    assert not retriever.suggest("car", num_suggestions=3)
+    assert not retriever.suggest_with_scores("car", num_suggestions=3)
 
 
 def test_semantic_retriever_returns_empty_for_empty_query_vector(small_corpus):
@@ -294,7 +301,7 @@ def test_semantic_retriever_returns_empty_for_empty_query_vector(small_corpus):
         _corpus=corpus,
     )
 
-    assert not retriever.suggest("car", num_suggestions=3)
+    assert not retriever.suggest_with_scores("car", num_suggestions=3)
 
 
 def test_semantic_retriever_returns_empty_for_empty_similarity_matrix():
@@ -308,4 +315,4 @@ def test_semantic_retriever_returns_empty_for_empty_similarity_matrix():
         _corpus=retriever._corpus,
     )
 
-    assert not retriever.suggest("car", num_suggestions=3)
+    assert not retriever.suggest_with_scores("car", num_suggestions=3)

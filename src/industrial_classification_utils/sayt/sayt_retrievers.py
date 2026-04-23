@@ -51,7 +51,6 @@ class _Suggestion:
 
 def _take_with_ties(
     items: list[tuple[str, float]],
-    corpus: CleanCorpus,
     limit: int,
 ) -> list[tuple[str, float]]:
     """Return the first ``limit`` items and any later items tied on score."""
@@ -60,13 +59,7 @@ def _take_with_ties(
 
     items = sorted(
         items,
-        key=lambda kv: (
-            -kv[1],
-            -corpus.display_text_count.get(corpus.id_to_display.get(kv[0], ""), 0),
-            corpus.id_to_display.get(kv[0], "").lower(),
-            corpus.id_to_search.get(kv[0], ""),
-            kv[0],
-        ),
+        key=lambda kv: (-kv[1],),
     )
 
     if limit >= len(items):
@@ -118,7 +111,9 @@ class PrefixRetriever:
             token_index=token_index,
         )
 
-    def suggest(self, q_norm: str, num_suggestions: int) -> list[_Suggestion]:
+    def suggest_with_scores(
+        self, q_norm: str, num_suggestions: int
+    ) -> list[_Suggestion]:
         """Return ranked prefix-based suggestions for a normalised query."""
         if len(q_norm) < self._min_chars:
             return []
@@ -141,9 +136,7 @@ class PrefixRetriever:
             if ratio >= _FUZZY_PREFIX_MIN_RATIO:
                 scores[row_id] = scores.get(row_id, 0.0) + (2.4 * ratio)
 
-        ranked = _take_with_ties(
-            list(scores.items()), self._corpus, limit=num_suggestions
-        )
+        ranked = _take_with_ties(list(scores.items()), limit=num_suggestions)
         return [
             _Suggestion(
                 display_text=self._corpus.id_to_display.get(row_id, ""),
@@ -212,7 +205,7 @@ class _DenseVectorIndex:
             (row["doc_label"], float(row["score"]))
             for row in results.to_dict(orient="records")
         ]
-        return _take_with_ties(out, self._corpus, limit=num_suggestions)
+        return _take_with_ties(out, limit=num_suggestions)
 
 
 class _L2NormalisingVectoriser(VectoriserBase):
@@ -261,7 +254,9 @@ class _DenseRetriever:
     _min_chars: int
     _index: _DenseVectorIndex
 
-    def suggest(self, q_norm: str, num_suggestions: int) -> list[_Suggestion]:
+    def suggest_with_scores(
+        self, q_norm: str, num_suggestions: int
+    ) -> list[_Suggestion]:
         """Return dense-vector matches after applying retriever-level gating."""
         if len(q_norm) < self._min_chars:
             return []

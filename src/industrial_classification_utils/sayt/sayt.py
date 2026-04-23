@@ -31,6 +31,22 @@ class SAYTSuggester:
     - Prefix: exact prefix, token-prefix, and fuzzy prefix (typo tolerant)
     - N-gram: char n-gram cosine similarity via classifai vectorisers/indexing
     - Semantic: embedding cosine similarity via classifai vectorisers/indexing
+
+    Configuration options allow enabling/disabling strategies, setting their relative
+    weights, and tuning their parameters (e.g. n-gram size, fuzzy matching ratio).
+
+    Example parameters:
+    - min_chars: minimum query length to trigger suggestions (default: 4)
+    - max_suggestions: maximum number of suggestions to return (default: 10)
+    - prefix_enable: whether to use prefix matching (default: True)
+    - prefix_weight: weight of prefix matching in combined scoring (default: 1.0)
+    - ngram_enable: whether to use n-gram matching (default: True)
+    - ngram_weight: weight of n-gram matching in combined scoring (default: 1.0)
+    - ngram_n: n-gram size (default: 3)
+    - ngram_max_df: max document frequency for n-grams (default: 0.2)
+    - semantic_enable: whether to use semantic matching (default: True)
+    - semantic_weight: weight of semantic matching in combined scoring (default: 1.0)
+    - semantic_model: sentence transformer model for semantic matching (default: "all-MiniLM-L6-v2")
     """
 
     def __init__(
@@ -42,6 +58,7 @@ class SAYTSuggester:
         self._config = SaytConfig.model_validate(
             {**kwargs, "corpus_size": self._corpus.size}
         )
+        self._max_duplication = max(self._corpus.display_text_count.values(), default=0)
 
         self._prefix_retriever = (
             PrefixRetriever(self._corpus, min_chars=self._config.min_chars)
@@ -90,26 +107,24 @@ class SAYTSuggester:
         return cls(list(zip(df[search_text_col], df[display_text_col])), **kwargs)
 
     def _dedup_suggestions(
-        self, suggestions: list[tuple[str, float]]
+        self, suggestions: list[_Suggestion]
     ) -> list[tuple[str, float]]:
         # sort by score and deduplicate by display text, keeping the highest-scoring variant.
         sorted_suggestions = sorted(
             suggestions,
             key=lambda s: (
-                -s[1],
-                -self._corpus.display_text_count.get(
-                    self._corpus.id_to_display.get(s[0], ""), 0
-                ),
-                self._corpus.id_to_display.get(s[0], "").lower(),
-                s[0],
+                -s.score,
+                -self._corpus.display_text_count.get(s.display_text, 0),
+                s.display_text.lower(),
+                s.row_id,
             ),
         )
         seen: set[str] = set()
         deduped: list[tuple[str, float]] = []
         for s in sorted_suggestions:
-            display_text = self._corpus.id_to_display.get(s[0], "")
+            display_text = s.display_text  # lower? normalised?
             if display_text not in seen:
-                deduped.append(s)
+                deduped.append((display_text, s.score))
                 seen.add(display_text)
         return deduped
 
@@ -165,19 +180,19 @@ class SAYTSuggester:
         # Ask for more suggestions, as some may be filtered out after deduplication
         prefix_results = []
         if self._prefix_retriever is not None:
-            prefix_results = self._prefix_retriever.suggest(
+            prefix_results = self._prefix_retriever.suggest_with_scores(
                 q_norm, num_suggestions=10 * num_suggestions
             )
 
         ngram_results = []
         if self._ngram_retriever is not None:
-            ngram_results = self._ngram_retriever.suggest(
+            ngram_results = self._ngram_retriever.suggest_with_scores(
                 q_norm, num_suggestions=10 * num_suggestions
             )
 
         semantic_results = []
         if self._semantic_retriever is not None:
-            semantic_results = self._semantic_retriever.suggest(
+            semantic_results = self._semantic_retriever.suggest_with_scores(
                 q_norm, num_suggestions=10 * num_suggestions
             )
 
@@ -186,8 +201,7 @@ class SAYTSuggester:
             ngram_results=ngram_results,
             semantic_results=semantic_results,
         )
-        ranked_results = self._dedup_suggestions(combined_result)
-        trimmed_results = _take_with_ties(ranked_results, self._corpus, num_suggestions)
+        ranked_results = _take_with_ties(combined_result, num_suggestions)
         out = [
             _Suggestion(
                 row_id=row_id,
@@ -195,7 +209,7 @@ class SAYTSuggester:
                 score=score,
                 search_text=self._corpus.id_to_search.get(row_id, ""),
             )
-            for row_id, score in trimmed_results
+            for row_id, score in ranked_results
         ]
 
         return out
@@ -206,8 +220,12 @@ class SAYTSuggester:
         """Return list of suggestions (display text only) upto a maximum limit."""
         if num_suggestions is None:
             num_suggestions = self._config.max_suggestions
-        results = self.suggest_with_scores(query, num_suggestions=num_suggestions)
-        return [result.display_text for result in results]
+        results = self.suggest_with_scores(
+            query, num_suggestions=num_suggestions * self._max_duplication
+        )
+        dedup_results = self._dedup_suggestions(results)
+        ranked_results = _take_with_ties(dedup_results, num_suggestions)
+        return [result[0] for result in ranked_results]
 
     def get_config(self) -> SaytConfig:
         """Return the validated configuration of this SAYT suggester instance."""

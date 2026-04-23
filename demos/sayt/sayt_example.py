@@ -23,15 +23,18 @@ small_corpus = [
     ("Car repair", "Car repair"),
     ("Car servicing", "Car servicing"),
 ]
-suggester = SAYTSuggester(small_corpus)
+# set max_df high to avoid filtering out n-grams in this tiny corpus
+suggester = SAYTSuggester(small_corpus, ngram_max_df=0.8)
+
 
 # %%
 for q in ["car", "cars", "waxi", "grom", "wash", "duplicate", "auto"]:
     print("searching for:", q)
-    print("prefix", "->", suggester._prefix_retriever.suggest(q, 5))
-    print("ngram", "->", suggester._ngram_retriever.suggest(q, 5))
-    print("semantic", "->", suggester._semantic_retriever.suggest(q, 5))
-    print("combined", "->", suggester.suggest(q, 5))
+    print("prefix", "->", suggester._prefix_retriever.suggest_with_scores(q, 5))
+    print("ngram", "->", suggester._ngram_retriever.suggest_with_scores(q, 5))
+    print("semantic", "->", suggester._semantic_retriever.suggest_with_scores(q, 5))
+    print("combined", "->", suggester.suggest_with_scores(q, 5))
+    print("combined_nice", "->", suggester.suggest(q, 5))
     print()
 
 # %%

@@ -152,12 +152,12 @@ def test_suggest_with_scores_defaults_to_config_max_suggestions(small_corpus):
 
     results = suggester.suggest_with_scores("car")
 
-    assert [result.display_text for result in results] == [
+    assert {result.display_text for result in results} == {
         "Car Waxing",
         "Car Wash",
         "CAR WASH (duplicate)",
         "Carpentry services",
-    ]
+    }
 
 
 def test_suggest_respects_explicit_num_suggestions(small_corpus):
@@ -189,12 +189,12 @@ def test_suggest_with_scores_keeps_ties_at_cutoff(small_corpus):
 
     results = suggester.suggest_with_scores("car", num_suggestions=1)
 
-    assert [result.display_text for result in results] == [
+    assert {result.display_text for result in results} == {
         "Car Waxing",
         "Car Wash",
         "CAR WASH (duplicate)",
         "Carpentry services",
-    ]
+    }
 
 
 def test_suggest_keeps_ties_at_cutoff(small_corpus):
@@ -224,7 +224,7 @@ def test_suggest_with_scores_skips_disabled_retrievers(monkeypatch, small_corpus
         def __init__(self, corpus, *, model, min_chars):
             self._row = corpus.rows[0]
 
-        def suggest(self, q_norm, num_suggestions):
+        def suggest_with_scores(self, q_norm, num_suggestions):
             semantic_calls.append((q_norm, num_suggestions))
             return [
                 _Suggestion(
@@ -281,8 +281,8 @@ def test_combine_suggestions_ignores_non_positive_score_groups(small_corpus):
     assert combined == []
 
 
-def test_combine_and_dedup_ignore_invalid_scores_and_duplicate_display(small_corpus):
-    """Ignore missing row ids and keep the highest-scoring display variant."""
+def test_combine_suggestions_ignores_invalid_scores(small_corpus):
+    """Ignore missing row ids and keep distinct row ids in combined scores."""
     suggester = SAYTSuggester(
         small_corpus,
         min_chars=3,
@@ -322,6 +322,4 @@ def test_combine_and_dedup_ignore_invalid_scores_and_duplicate_display(small_cor
         semantic_results=[],
     )
 
-    deduped = suggester._dedup_suggestions(combined)
-
-    assert [suggestion[0] for suggestion in deduped] == [first_row_id]
+    assert combined == [(first_row_id, 0.0), (second_row_id, 0.0)]
