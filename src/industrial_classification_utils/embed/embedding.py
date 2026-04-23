@@ -11,7 +11,6 @@ import csv
 import logging
 import os
 import posixpath
-import sqlite3  # noqa: F401 # pylint: disable=unused-import
 import tempfile
 import uuid
 from typing import Any, Optional, Union
@@ -50,8 +49,6 @@ class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
         vectors = super().transform(texts)
         vectors = self._normalize(vectors)
 
-        if single_input:
-            return vectors[0:1]
         return vectors
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
