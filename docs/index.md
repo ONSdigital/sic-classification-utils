@@ -4,4 +4,4 @@ This code is used to implement a Standard Industrial Classification (SIC) librar
 
 ## Available Utilities
 
-- [SIC Embedding and Vector Store](guide.md): Create a ChromaDB vector store and embeddings.
+- [SIC Embedding and Vector Store](guide.md): Create a Classifai vector store and embeddings.
