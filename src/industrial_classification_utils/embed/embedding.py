@@ -89,7 +89,7 @@ class EmbeddingHandler:
     def __init__(
         self,
         embedding_model_name: str = config["embedding"]["embedding_model_name"],
-        db_dir: str = config["embedding"]["db_dir"],
+        db_dir: str | None = config["embedding"]["db_dir"],
         k_matches: int = config["embedding"]["k_matches"],
     ):
         """Initializes the EmbeddingHandler.
@@ -97,7 +97,7 @@ class EmbeddingHandler:
         Args:
             embedding_model_name (str, optional): Name of the embedding model to use.
                 Defaults to the value in the configuration file.
-            db_dir (str, optional): Directory for the vector store database.
+            db_dir (str | None, optional): Directory for the vector store database.
                 Defaults to the value in the configuration file.
             k_matches (int, optional): Number of nearest matches to retrieve.
                 Defaults to the value in the configuration file.
