@@ -10,7 +10,6 @@ import csv
 # Optional but doesn't hurt
 import logging
 import os
-import posixpath
 import tempfile
 import uuid
 from typing import Any, Optional, Union
@@ -21,11 +20,15 @@ from classifai.indexers import VectorStore, VectorStoreSearchInput
 from classifai.vectorisers import (
     HuggingFaceVectoriser,
 )
-from google.cloud import storage
 from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
 from langchain_google_vertexai import VertexAIEmbeddings
 
 from industrial_classification_utils.utils.constants import get_default_config
+from industrial_classification_utils.utils.gcs_file_access import (
+    DownloadedVectorStore,
+    download_vector_store_from_gcs,
+    is_gcs_path,
+)
 from industrial_classification_utils.utils.sic_data_access import (
     load_sic_index,
     load_sic_structure,
@@ -73,7 +76,6 @@ logger = logging.getLogger(__name__)
 
 config = get_default_config()
 MAX_BATCH_SIZE = 5400
-EXPECTED_SPLIT_PARTS = 2
 
 embedding_config = {
     "embedding_model_name": config["embedding"]["embedding_model_name"],
@@ -130,7 +132,6 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
         embedding_model_name: str = config["embedding"]["embedding_model_name"],
         db_dir: str = config["embedding"]["db_dir"],
         knowledgebase_csv: Optional[str] = None,
-        meta_data: Optional[dict[str, type]] = None,
         k_matches: int = config["embedding"]["k_matches"],
         sic_index_file=None,
         sic_structure_file=None,
@@ -143,7 +144,6 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
             db_dir (str, optional): Directory for the vector store database.
                 Defaults to the value in the configuration file.
             knowledgebase_csv (str, optional): Path to a CSV file containing the knowledge base.
-            meta_data (dict[str, type], optional): Metadata schema for the vector store.
             k_matches (int, optional): Number of nearest matches to retrieve.
                 Defaults to 20.
             sic_index_file (optional): Optional override for the SIC index source.
@@ -161,7 +161,6 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
 
         self.db_dir = db_dir
         self.knowledgebase_csv = knowledgebase_csv
-        self.meta_data = meta_data or {}
         self.k_matches = k_matches
         self.spell = Speller()
 
@@ -170,7 +169,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
             sic_structure_file or config["lookups"]["sic_structure"]
         )
 
-        self._vector_store_tmp_dir: tempfile.TemporaryDirectory | None = None
+        self._downloaded_vector_store: DownloadedVectorStore | None = None
         self.vector_store = self._load_or_build_vector_store()
         self._index_size = self.vector_store.num_vectors
 
@@ -189,96 +188,18 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
 
         logger.debug("EmbeddingHandler initialised with config: %s", embedding_config)
 
-    def _is_gcs_path(self, path: str) -> bool:
-        return path.startswith("gs://")
-
-    def _parse_gcs_uri(self, gcs_uri: str) -> tuple[str, str]:
-        """Parse gs://bucket/path/to/folder into (bucket_name, prefix)."""
-        if not gcs_uri.startswith("gs://"):
-            raise ValueError(f"Not a valid GCS URI: {gcs_uri}")
-
-        without_scheme = gcs_uri[5:]
-        parts = without_scheme.split("/", 1)
-        bucket_name = parts[0]
-        prefix = parts[1].rstrip("/") if len(parts) > 1 else ""
-
-        if not bucket_name:
-            raise ValueError(f"Invalid GCS URI, bucket missing: {gcs_uri}")
-
-        return bucket_name, prefix
-
-    def _download_vector_store_from_gcs(self, gcs_uri: str) -> str:
-        """Download metadata.json and vectors.parquet from a GCS folder into a
-        temporary local directory and return that directory path.
-
-        Raises:
-            FileNotFoundError: if either metadata.json or vectors.parquet is missing.
-        """
-        bucket_name, prefix = self._parse_gcs_uri(gcs_uri)
-
-        metadata_blob_name = (
-            posixpath.join(prefix, "metadata.json") if prefix else "metadata.json"
-        )
-        vectors_blob_name = (
-            posixpath.join(prefix, "vectors.parquet") if prefix else "vectors.parquet"
-        )
-
-        logger.info(
-            "Attempting to load ClassifAI vector store from GCS bucket=%s prefix=%s",
-            bucket_name,
-            prefix,
-        )
-
-        client = storage.Client()
-        bucket = client.bucket(bucket_name)
-
-        metadata_blob = bucket.blob(metadata_blob_name)
-        vectors_blob = bucket.blob(vectors_blob_name)
-
-        missing = []
-        if not metadata_blob.exists():
-            missing.append(f"gs://{bucket_name}/{metadata_blob_name}")
-        if not vectors_blob.exists():
-            missing.append(f"gs://{bucket_name}/{vectors_blob_name}")
-
-        if missing:
-            raise FileNotFoundError(
-                "Required vector store file(s) not found in GCS: " + ", ".join(missing)
-            )
-
-        tmp_dir = tempfile.TemporaryDirectory()  # pylint: disable=consider-using-with
-        local_dir = tmp_dir.name
-
-        # Keep the tempdir alive for the lifetime of the handler
-        self._vector_store_tmp_dir = tmp_dir
-
-        local_metadata = os.path.join(local_dir, "metadata.json")
-        local_vectors = os.path.join(local_dir, "vectors.parquet")
-
-        metadata_blob.download_to_filename(local_metadata)
-        vectors_blob.download_to_filename(local_vectors)
-
-        logger.info(
-            "Downloaded vector store files from gs://%s/%s to %s",
-            bucket_name,
-            prefix,
-            local_dir,
-        )
-
-        return local_dir
-
     def _load_existing_vector_store(self) -> Optional[VectorStore]:
         """Load an existing vector store from either a local folder or a GCS folder.
         Returns None if no existing store is found locally.
         Raises FileNotFoundError for missing required files in GCS.
         """
-        if self._is_gcs_path(self.db_dir):
-            local_dir = self._download_vector_store_from_gcs(self.db_dir)
+        if is_gcs_path(self.db_dir):
+            self._downloaded_vector_store = download_vector_store_from_gcs(self.db_dir)
             logger.info(
                 "Loading existing ClassifAI vector store from GCS URI %s", self.db_dir
             )
             return VectorStore.from_filespace(
-                folder_path=local_dir,
+                folder_path=self._downloaded_vector_store.path,
                 vectoriser=self.embeddings,
                 hooks=None,
             )
@@ -344,7 +265,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
         if not rows:
             raise ValueError("No SIC rows were generated for vector store build.")
 
-        meta_data = self.meta_data or {
+        meta_data = {
             "code": str,
             "four_digit_code": str,
             "two_digit_code": str,

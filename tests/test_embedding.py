@@ -1,8 +1,9 @@
 # pylint: disable=missing-function-docstring
-"""Tests for the EmbeddingHandler class."""
+"""Tests for the EmbeddingHandler class and GCS file access helpers."""
 
 from __future__ import annotations
 
+import tempfile
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from industrial_classification_utils.embed.embedding import EmbeddingHandler
+from industrial_classification_utils.utils.gcs_file_access import (
+    DownloadedVectorStore,
+)
 
 # pylint: disable=redefined-outer-name, protected-access
 
@@ -18,9 +22,6 @@ EXPECTED_TOY_INDEX_SIZE = 4
 EXPECTED_SIC_INDEX_SIZE = 2
 EXPECTED_MULTI_RESULTS = 4
 EXPECTED_TOP_DISTANCE = 0.1
-EXPECTED_MALFORMED_LINES_INDEX_SIZE = 2
-FAKE_GCS_LOCAL_DIR = "fake-local-vector-store"
-NON_GCS_PATH = "local/path"
 
 
 class FakeSearchResults:  # pylint: disable=too-few-public-methods
@@ -46,42 +47,6 @@ class FakeSearchResultsWithToDicts:  # pylint: disable=too-few-public-methods
         return self._rows
 
 
-class _FakeBlob:
-    """Fake GCS blob."""
-
-    def __init__(self, exists: bool):
-        self._exists = exists
-        self.downloaded_to: str | None = None
-
-    def exists(self):
-        return self._exists
-
-    def download_to_filename(self, filename: str):
-        """Simulate downloading the blob by writing dummy content to the specified filename."""
-        self.downloaded_to = filename
-        Path(filename).write_text("test", encoding="utf-8")
-
-
-class _FakeBucket:  # pylint: disable=too-few-public-methods
-    """Fake GCS bucket."""
-
-    def __init__(self, blob_map: dict[str, _FakeBlob]):
-        self._blob_map = blob_map
-
-    def blob(self, name: str):
-        return self._blob_map[name]
-
-
-class _FakeStorageClient:  # pylint: disable=too-few-public-methods
-    """Fake GCS storage client."""
-
-    def __init__(self, bucket_map: dict[str, _FakeBucket]):
-        self._bucket_map = bucket_map
-
-    def bucket(self, name: str):
-        return self._bucket_map[name]
-
-
 @pytest.fixture
 def toy_index_file() -> StringIO:
     """Return a toy index as an in-memory file."""
@@ -99,7 +64,7 @@ def toy_index_file() -> StringIO:
 
 @pytest.fixture
 def embedding_handler_for_embed(tmp_path: Path) -> EmbeddingHandler:
-    """Return a handler safe for embed_index tests."""
+    """Return a handler safe for embedding-related tests."""
     placeholder_store = SimpleNamespace(num_vectors=0)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
@@ -162,7 +127,7 @@ def embedding_handler_search(tmp_path: Path) -> EmbeddingHandler:
 
 @pytest.fixture
 def embedding_handler_sic(tmp_path: Path) -> EmbeddingHandler:
-    """Return an embedding handler backed by a mocked classifai vector store."""
+    """Return an embedding handler backed by a mocked vector store."""
     built_store = SimpleNamespace(num_vectors=2)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
@@ -183,9 +148,7 @@ def embedding_handler_sic(tmp_path: Path) -> EmbeddingHandler:
 
 
 @pytest.mark.embed
-def test_embedding_handler_init_sets_vector_store(
-    tmp_path: Path,
-) -> None:
+def test_embedding_handler_init_sets_vector_store(tmp_path: Path) -> None:
     built_store = SimpleNamespace(num_vectors=EXPECTED_TOY_INDEX_SIZE)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
@@ -206,9 +169,7 @@ def test_embedding_handler_init_sets_vector_store(
 
 
 @pytest.mark.embed
-def test_embedding_handler_init_sets_index_size(
-    tmp_path: Path,
-) -> None:
+def test_embedding_handler_init_sets_index_size(tmp_path: Path) -> None:
     built_store = SimpleNamespace(num_vectors=EXPECTED_TOY_INDEX_SIZE)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
@@ -230,8 +191,7 @@ def test_embedding_handler_init_sets_index_size(
 
 @pytest.mark.embed
 def test_search_index(embedding_handler_search: EmbeddingHandler):
-    query = "mens best friend"
-    results = embedding_handler_search.search_index(query)
+    results = embedding_handler_search.search_index("mens best friend")
 
     assert results[0]["code"] == "02"
     assert results[0]["title"] == "dog"
@@ -242,8 +202,9 @@ def test_search_index(embedding_handler_search: EmbeddingHandler):
 def test_search_index_returns_tuples_when_requested(
     embedding_handler_search: EmbeddingHandler,
 ):
-    query = "mens best friend"
-    results = embedding_handler_search.search_index(query, return_dicts=False)
+    results = embedding_handler_search.search_index(
+        "mens best friend", return_dicts=False
+    )
 
     assert results == [("dog", 0.99), ("cat", 0.75)]
 
@@ -400,106 +361,6 @@ def test_get_embed_config_returns_expected_keys(
 
 
 @pytest.mark.embed
-def test_is_gcs_path():
-    handler = EmbeddingHandler.__new__(EmbeddingHandler)
-
-    assert handler._is_gcs_path("gs://bucket/path") is True
-    assert handler._is_gcs_path(NON_GCS_PATH) is False
-
-
-@pytest.mark.embed
-def test_parse_gcs_uri_valid():
-    handler = EmbeddingHandler.__new__(EmbeddingHandler)
-
-    bucket, prefix = handler._parse_gcs_uri("gs://my-bucket/path/to/store")
-
-    assert bucket == "my-bucket"
-    assert prefix == "path/to/store"
-
-
-@pytest.mark.embed
-def test_parse_gcs_uri_bucket_only():
-    handler = EmbeddingHandler.__new__(EmbeddingHandler)
-
-    bucket, prefix = handler._parse_gcs_uri("gs://my-bucket")
-
-    assert bucket == "my-bucket"
-    assert prefix == ""
-
-
-@pytest.mark.embed
-def test_parse_gcs_uri_invalid():
-    handler = EmbeddingHandler.__new__(EmbeddingHandler)
-
-    with pytest.raises(ValueError, match="Not a valid GCS URI"):
-        handler._parse_gcs_uri("local/not-gcs")
-
-
-@pytest.mark.embed
-def test_parse_gcs_uri_missing_bucket():
-    handler = EmbeddingHandler.__new__(EmbeddingHandler)
-
-    with pytest.raises(ValueError, match="bucket missing"):
-        handler._parse_gcs_uri("gs://")
-
-
-@pytest.mark.embed
-def test_download_vector_store_from_gcs_success():
-    handler = EmbeddingHandler.__new__(EmbeddingHandler)
-    handler._vector_store_tmp_dir = None
-
-    metadata_blob = _FakeBlob(exists=True)
-    vectors_blob = _FakeBlob(exists=True)
-
-    fake_client = _FakeStorageClient(
-        {
-            "my-bucket": _FakeBucket(
-                {
-                    "prefix/metadata.json": metadata_blob,
-                    "prefix/vectors.parquet": vectors_blob,
-                }
-            )
-        }
-    )
-
-    with patch(
-        "industrial_classification_utils.embed.embedding.storage.Client",
-        return_value=fake_client,
-    ):
-        local_dir = handler._download_vector_store_from_gcs("gs://my-bucket/prefix")
-
-    assert Path(local_dir, "metadata.json").exists()
-    assert Path(local_dir, "vectors.parquet").exists()
-    assert handler._vector_store_tmp_dir is not None
-
-
-@pytest.mark.embed
-def test_download_vector_store_from_gcs_missing_files():
-    handler = EmbeddingHandler.__new__(EmbeddingHandler)
-    handler._vector_store_tmp_dir = None
-
-    metadata_blob = _FakeBlob(exists=False)
-    vectors_blob = _FakeBlob(exists=True)
-
-    fake_client = _FakeStorageClient(
-        {
-            "my-bucket": _FakeBucket(
-                {
-                    "prefix/metadata.json": metadata_blob,
-                    "prefix/vectors.parquet": vectors_blob,
-                }
-            )
-        }
-    )
-
-    with patch(
-        "industrial_classification_utils.embed.embedding.storage.Client",
-        return_value=fake_client,
-    ), pytest.raises(FileNotFoundError, match="metadata.json"):
-        handler._download_vector_store_from_gcs("gs://my-bucket/prefix")
-
-
-@pytest.mark.embed
 def test_load_existing_vector_store_local(tmp_path: Path):
     db_dir = tmp_path / "vector_store"
     db_dir.mkdir()
@@ -509,10 +370,14 @@ def test_load_existing_vector_store_local(tmp_path: Path):
     handler = EmbeddingHandler.__new__(EmbeddingHandler)
     handler.db_dir = str(db_dir)
     handler.embeddings = object()
+    handler._downloaded_vector_store = None
 
     fake_store = SimpleNamespace(num_vectors=42)
 
     with patch(
+        "industrial_classification_utils.embed.embedding.is_gcs_path",
+        return_value=False,
+    ), patch(
         "industrial_classification_utils.embed.embedding.VectorStore.from_filespace",
         return_value=fake_store,
     ) as mock_from_filespace:
@@ -535,8 +400,13 @@ def test_load_existing_vector_store_local_missing_files(tmp_path: Path):
     handler = EmbeddingHandler.__new__(EmbeddingHandler)
     handler.db_dir = str(db_dir)
     handler.embeddings = object()
+    handler._downloaded_vector_store = None
 
-    result = handler._load_existing_vector_store()
+    with patch(
+        "industrial_classification_utils.embed.embedding.is_gcs_path",
+        return_value=False,
+    ):
+        result = handler._load_existing_vector_store()
 
     assert result is None
 
@@ -546,22 +416,33 @@ def test_load_existing_vector_store_gcs():
     handler = EmbeddingHandler.__new__(EmbeddingHandler)
     handler.db_dir = "gs://my-bucket/prefix"
     handler.embeddings = object()
-    handler._vector_store_tmp_dir = None
+    handler._downloaded_vector_store = None
 
     fake_store = SimpleNamespace(num_vectors=55)
 
-    with patch.object(
-        handler, "_download_vector_store_from_gcs", return_value=FAKE_GCS_LOCAL_DIR
-    ) as mock_download, patch(
-        "industrial_classification_utils.embed.embedding.VectorStore.from_filespace",
-        return_value=fake_store,
-    ) as mock_from_filespace:
-        result = handler._load_existing_vector_store()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        downloaded = DownloadedVectorStore(
+            path=temp_dir,
+            temp_dir=None,
+        )
+
+        with patch(
+            "industrial_classification_utils.embed.embedding.is_gcs_path",
+            return_value=True,
+        ), patch(
+            "industrial_classification_utils.embed.embedding.download_vector_store_from_gcs",
+            return_value=downloaded,
+        ) as mock_download, patch(
+            "industrial_classification_utils.embed.embedding.VectorStore.from_filespace",
+            return_value=fake_store,
+        ) as mock_from_filespace:
+            result = handler._load_existing_vector_store()
 
     assert result is fake_store
+    assert handler._downloaded_vector_store is downloaded
     mock_download.assert_called_once_with("gs://my-bucket/prefix")
     mock_from_filespace.assert_called_once_with(
-        folder_path=FAKE_GCS_LOCAL_DIR,
+        folder_path=downloaded.path,
         vectoriser=handler.embeddings,
         hooks=None,
     )
@@ -597,7 +478,6 @@ def test_load_or_build_vector_store_builds_from_sic_sources(tmp_path: Path):
     handler = EmbeddingHandler.__new__(EmbeddingHandler)
     handler.db_dir = str(tmp_path / "vector_store")
     handler.embeddings = object()
-    handler.meta_data = {}
     handler.sic_index_file = "sic-index.csv"
     handler.sic_structure_file = "sic-structure.csv"
 
@@ -641,7 +521,6 @@ def test_load_or_build_vector_store_uses_default_metadata(tmp_path: Path):
     handler = EmbeddingHandler.__new__(EmbeddingHandler)
     handler.db_dir = str(tmp_path / "vector_store")
     handler.embeddings = object()
-    handler.meta_data = None
     handler.sic_index_file = "sic-index.csv"
     handler.sic_structure_file = "sic-structure.csv"
 
@@ -678,10 +557,8 @@ def test_load_or_build_vector_store_uses_default_metadata(tmp_path: Path):
 
 
 @pytest.mark.embed
-def test_embedding_handler_builds_vector_store_from_sic(
-    tmp_path: Path,
-) -> None:
-    """It builds or loads the classifai vector store during handler setup."""
+def test_embedding_handler_builds_vector_store_from_sic(tmp_path: Path) -> None:
+    """It builds or loads the vector store during handler setup."""
     built_store = SimpleNamespace(num_vectors=2)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
