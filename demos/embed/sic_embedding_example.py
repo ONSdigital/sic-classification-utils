@@ -16,7 +16,6 @@ EXAMPLE_QUERY = "school teacher primary education"
 print("Creating embeddings index...")
 # Create the embeddings index
 embed = EmbeddingHandler(db_dir="./data/vector_store")
-embed.embed_index(from_empty=True)
 print(
     f"Embeddings index created with {embed._index_size} entries."  # pylint: disable=protected-access
 )
