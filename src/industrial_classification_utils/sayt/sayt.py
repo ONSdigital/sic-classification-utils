@@ -229,4 +229,4 @@ class SAYTSuggester:
 
     def get_config(self) -> SaytConfig:
         """Return the validated configuration of this SAYT suggester instance."""
-        return self._config
+        return self._config.model_copy(deep=True)
