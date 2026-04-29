@@ -141,7 +141,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
         Args:
             embedding_model_name (str, optional): Name of the embedding model to use.
                 Defaults to the value in the configuration file.
-            db_dir (str | None, optional): Directory for the vector store database.
+            db_dir (str, optional): Directory for the vector store database.
                 Defaults to the value in the configuration file.
             knowledgebase_csv (str, optional): Path to a CSV file containing the knowledge base.
             k_matches (int, optional): Number of nearest matches to retrieve.
@@ -328,7 +328,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
         # ClassifAI returns a dataframe-like object.
         # Depending on the exact backend/version, one of these usually works.
         if hasattr(results, "to_dicts"):  # noqa: SIM108
-            rows = results.to_dicts()  # type: ignore
+            rows = results.to_dicts()
         else:
             rows = results.to_dict(orient="records")
 
