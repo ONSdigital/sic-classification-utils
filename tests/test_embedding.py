@@ -68,16 +68,13 @@ def embedding_handler_for_embed(tmp_path: Path) -> EmbeddingHandler:
     placeholder_store = SimpleNamespace(num_vectors=0)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
-            return_value=fake_embeddings,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=placeholder_store,
-        ),
+    with patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=placeholder_store,
     ):
         handler = EmbeddingHandler(
             embedding_model_name="other",
@@ -112,16 +109,13 @@ def embedding_handler_search(tmp_path: Path) -> EmbeddingHandler:
     )
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
-            return_value=fake_embeddings,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=fake_store,
-        ),
+    with patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=fake_store,
     ):
         handler = EmbeddingHandler(
             embedding_model_name="other",
@@ -137,16 +131,13 @@ def embedding_handler_sic(tmp_path: Path) -> EmbeddingHandler:
     built_store = SimpleNamespace(num_vectors=2)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
-            return_value=fake_embeddings,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=built_store,
-        ),
+    with patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=built_store,
     ):
         handler = EmbeddingHandler(
             embedding_model_name="other",
@@ -161,16 +152,13 @@ def test_embedding_handler_init_sets_vector_store(tmp_path: Path) -> None:
     built_store = SimpleNamespace(num_vectors=EXPECTED_TOY_INDEX_SIZE)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
-            return_value=fake_embeddings,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=built_store,
-        ),
+    with patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=built_store,
     ):
         handler = EmbeddingHandler(
             embedding_model_name="other",
@@ -185,16 +173,13 @@ def test_embedding_handler_init_sets_index_size(tmp_path: Path) -> None:
     built_store = SimpleNamespace(num_vectors=EXPECTED_TOY_INDEX_SIZE)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
-            return_value=fake_embeddings,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=built_store,
-        ),
+    with patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=built_store,
     ):
         handler = EmbeddingHandler(
             embedding_model_name="other",
@@ -241,16 +226,13 @@ def test_search_index_uses_to_dicts_when_available(tmp_path: Path):
     )
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
-            return_value=fake_embeddings,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=fake_store,
-        ),
+    with patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=fake_store,
     ):
         handler = EmbeddingHandler(
             embedding_model_name="other",
@@ -268,32 +250,26 @@ def test_search_index_multi(tmp_path: Path):
     placeholder_store = SimpleNamespace(num_vectors=0)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
-            return_value=fake_embeddings,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=placeholder_store,
-        ),
+    with patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=placeholder_store,
     ):
         handler = EmbeddingHandler(
             embedding_model_name="other",
             db_dir=str(tmp_path / "vector_store"),
         )
 
-    with (
-        patch.object(handler, "spell", side_effect=lambda x: x),
-        patch.object(
-            handler,
-            "search_index",
-            side_effect=[
-                [{"code": "03", "distance": 0.4}, {"code": "04", "distance": 0.6}],
-                [{"code": "03", "distance": 0.1}, {"code": "04", "distance": 0.2}],
-            ],
-        ),
+    with patch.object(handler, "spell", side_effect=lambda x: x), patch.object(
+        handler,
+        "search_index",
+        side_effect=[
+            [{"code": "03", "distance": 0.4}, {"code": "04", "distance": 0.6}],
+            [{"code": "03", "distance": 0.1}, {"code": "04", "distance": 0.2}],
+        ],
     ):
         results = handler.search_index_multi(["has gills", "has scales"])
 
@@ -307,30 +283,24 @@ def test_search_index_multi_filters_none_values(tmp_path: Path):
     placeholder_store = SimpleNamespace(num_vectors=0)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
-            return_value=fake_embeddings,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=placeholder_store,
-        ),
+    with patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=placeholder_store,
     ):
         handler = EmbeddingHandler(
             embedding_model_name="other",
             db_dir=str(tmp_path / "vector_store"),
         )
 
-    with (
-        patch.object(handler, "spell", side_effect=lambda x: x),
-        patch.object(
-            handler,
-            "search_index",
-            return_value=[{"code": "03", "distance": 0.3}],
-        ) as mock_search,
-    ):
+    with patch.object(handler, "spell", side_effect=lambda x: x), patch.object(
+        handler,
+        "search_index",
+        return_value=[{"code": "03", "distance": 0.3}],
+    ) as mock_search:
         results = handler.search_index_multi([None, "has gills"])
 
     assert results == [{"code": "03", "distance": 0.3}]
@@ -354,18 +324,14 @@ def test_embed_index_with_sic_object(embedding_handler_sic: EmbeddingHandler):
 def test_embedding_handler_initialization(model_name, expected_class, tmp_path: Path):
     mock_vector_store = SimpleNamespace(num_vectors=123)
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.CustomVertexAIEmbeddings"
-        ) as mock_google,
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser"
-        ) as mock_hf,
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=mock_vector_store,
-        ),
+    with patch(
+        "industrial_classification_utils.embed.embedding.CustomVertexAIEmbeddings"
+    ) as mock_google, patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser"
+    ) as mock_hf, patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=mock_vector_store,
     ):
         EmbeddingHandler(model_name, db_dir=str(tmp_path / "vector_store"))
 
@@ -408,16 +374,13 @@ def test_load_existing_vector_store_local(tmp_path: Path):
 
     fake_store = SimpleNamespace(num_vectors=42)
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.is_gcs_path",
-            return_value=False,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding.VectorStore.from_filespace",
-            return_value=fake_store,
-        ) as mock_from_filespace,
-    ):
+    with patch(
+        "industrial_classification_utils.embed.embedding.is_gcs_path",
+        return_value=False,
+    ), patch(
+        "industrial_classification_utils.embed.embedding.VectorStore.from_filespace",
+        return_value=fake_store,
+    ) as mock_from_filespace:
         result = handler._load_existing_vector_store()
 
     assert result is fake_store
@@ -463,20 +426,16 @@ def test_load_existing_vector_store_gcs():
             temp_dir=None,
         )
 
-        with (
-            patch(
-                "industrial_classification_utils.embed.embedding.is_gcs_path",
-                return_value=True,
-            ),
-            patch(
-                "industrial_classification_utils.embed.embedding.download_vector_store_from_gcs",
-                return_value=downloaded,
-            ) as mock_download,
-            patch(
-                "industrial_classification_utils.embed.embedding.VectorStore.from_filespace",
-                return_value=fake_store,
-            ) as mock_from_filespace,
-        ):
+        with patch(
+            "industrial_classification_utils.embed.embedding.is_gcs_path",
+            return_value=True,
+        ), patch(
+            "industrial_classification_utils.embed.embedding.download_vector_store_from_gcs",
+            return_value=downloaded,
+        ) as mock_download, patch(
+            "industrial_classification_utils.embed.embedding.VectorStore.from_filespace",
+            return_value=fake_store,
+        ) as mock_from_filespace:
             result = handler._load_existing_vector_store()
 
     assert result is fake_store
@@ -535,25 +494,19 @@ def test_load_or_build_vector_store_builds_from_sic_sources(tmp_path: Path):
 
     built_store = SimpleNamespace(num_vectors=2)
 
-    with (
-        patch.object(handler, "_load_existing_vector_store", return_value=None),
-        patch(
-            "industrial_classification_utils.embed.embedding.load_sic_index",
-            return_value=MagicMock(),
-        ) as mock_load_index,
-        patch(
-            "industrial_classification_utils.embed.embedding.load_sic_structure",
-            return_value=MagicMock(),
-        ) as mock_load_structure,
-        patch(
-            "industrial_classification_utils.embed.embedding.load_hierarchy",
-            return_value=fake_sic,
-        ) as mock_load_hierarchy,
-        patch(
-            "industrial_classification_utils.embed.embedding.VectorStore",
-            return_value=built_store,
-        ) as mock_vector_store,
-    ):
+    with patch.object(handler, "_load_existing_vector_store", return_value=None), patch(
+        "industrial_classification_utils.embed.embedding.load_sic_index",
+        return_value=MagicMock(),
+    ) as mock_load_index, patch(
+        "industrial_classification_utils.embed.embedding.load_sic_structure",
+        return_value=MagicMock(),
+    ) as mock_load_structure, patch(
+        "industrial_classification_utils.embed.embedding.load_hierarchy",
+        return_value=fake_sic,
+    ) as mock_load_hierarchy, patch(
+        "industrial_classification_utils.embed.embedding.VectorStore",
+        return_value=built_store,
+    ) as mock_vector_store:
         result = handler._load_or_build_vector_store()
 
     assert result is built_store
@@ -581,25 +534,19 @@ def test_load_or_build_vector_store_uses_default_metadata(tmp_path: Path):
 
     built_store = SimpleNamespace(num_vectors=1)
 
-    with (
-        patch.object(handler, "_load_existing_vector_store", return_value=None),
-        patch(
-            "industrial_classification_utils.embed.embedding.load_sic_index",
-            return_value=MagicMock(),
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding.load_sic_structure",
-            return_value=MagicMock(),
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding.load_hierarchy",
-            return_value=fake_sic,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding.VectorStore",
-            return_value=built_store,
-        ) as mock_vector_store,
-    ):
+    with patch.object(handler, "_load_existing_vector_store", return_value=None), patch(
+        "industrial_classification_utils.embed.embedding.load_sic_index",
+        return_value=MagicMock(),
+    ), patch(
+        "industrial_classification_utils.embed.embedding.load_sic_structure",
+        return_value=MagicMock(),
+    ), patch(
+        "industrial_classification_utils.embed.embedding.load_hierarchy",
+        return_value=fake_sic,
+    ), patch(
+        "industrial_classification_utils.embed.embedding.VectorStore",
+        return_value=built_store,
+    ) as mock_vector_store:
         handler._load_or_build_vector_store()
 
     assert mock_vector_store.call_args.kwargs["meta_data"] == {
@@ -615,17 +562,14 @@ def test_embedding_handler_builds_vector_store_from_sic(tmp_path: Path) -> None:
     built_store = SimpleNamespace(num_vectors=2)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
-    with (
-        patch(
-            "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
-            return_value=fake_embeddings,
-        ),
-        patch(
-            "industrial_classification_utils.embed.embedding."
-            "EmbeddingHandler._load_or_build_vector_store",
-            return_value=built_store,
-        ) as mock_load_or_build,
-    ):
+    with patch(
+        "industrial_classification_utils.embed.embedding.ChromaDBesqueHFVectoriser",
+        return_value=fake_embeddings,
+    ), patch(
+        "industrial_classification_utils.embed.embedding."
+        "EmbeddingHandler._load_or_build_vector_store",
+        return_value=built_store,
+    ) as mock_load_or_build:
         handler = EmbeddingHandler(
             embedding_model_name="other",
             db_dir=str(tmp_path / "vector_store"),

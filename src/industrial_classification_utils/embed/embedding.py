@@ -12,7 +12,7 @@ import logging
 import os
 import tempfile
 import uuid
-from typing import Any
+from typing import Any, Optional, Union
 
 import numpy as np
 from autocorrect import Speller
@@ -131,7 +131,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
         self,
         embedding_model_name: str = config["embedding"]["embedding_model_name"],
         db_dir: str = config["embedding"]["db_dir"],
-        knowledgebase_csv: str | None = None,
+        knowledgebase_csv: Optional[str] = None,
         k_matches: int = config["embedding"]["k_matches"],
         sic_index_file=None,
         sic_structure_file=None,
@@ -188,7 +188,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
 
         logger.debug("EmbeddingHandler initialised with config: %s", embedding_config)
 
-    def _load_existing_vector_store(self) -> VectorStore | None:
+    def _load_existing_vector_store(self) -> Optional[VectorStore]:
         """Load an existing vector store from either a local folder or a GCS folder.
         Returns None if no existing store is found locally.
         Raises FileNotFoundError for missing required files in GCS.
@@ -309,7 +309,7 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
 
     def search_index(
         self, query: str, return_dicts: bool = True
-    ) -> list[dict] | list[tuple[str, float]]:
+    ) -> Union[list[dict], list[tuple[str, float]]]:
         """Returns k index entries with the highest relevance to the query.
 
         Args:

@@ -22,7 +22,7 @@ Constants:
     MAX_ALT_CANDIDATES: Maximum number of alternative candidates allowed in certain models.
 """
 
-from typing import Annotated
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -81,17 +81,17 @@ class SicResponse(BaseModel):
         SIC code, False otherwise.""",
         default=False,
     )
-    followup: str | None = Field(
+    followup: Optional[str] = Field(
         description="""Question to ask user in order to collect additional information
         to enable reliable SIC assignment. Empty if codable=True.""",
         default=None,
     )
-    sic_code: str | None = Field(
+    sic_code: Optional[str] = Field(
         description="""Full SIC code (to the required number of digits) assigned based
         on provided the company activity description.  Empty if codable=False.""",
         default=None,
     )
-    sic_descriptive: str | None = Field(
+    sic_descriptive: Optional[str] = Field(
         description="""Descriptive label of the SIC category associated with sic_code
         if provided. Empty if codable=False.""",
         default=None,
@@ -201,17 +201,17 @@ class RagResponse(BaseModel):
         description="""True if enough information is provided to decide
         classification code, False otherwise."""
     )
-    followup: str | None = Field(
+    followup: Optional[str] = Field(
         description="""Question to ask user in order to collect additional information
         to enable reliable classification assignment. Empty if codable=True.""",
         default=None,
     )
-    class_code: str | None = Field(
+    class_code: Optional[str] = Field(
         description="""Full classification code (to the required number of digits)
         assigned based on provided respondent's data. Empty if codable=False.""",
         default=None,
     )
-    class_descriptive: str | None = Field(
+    class_descriptive: Optional[str] = Field(
         description="""Descriptive label of the classification category associated
         with class_code if provided. Empty if codable=False.""",
         default=None,
@@ -253,12 +253,12 @@ class SurveyAssistSicResponse(BaseModel):
         description="""Question to ask user in order to collect additional information
         to enable reliable classification assignment.""",
     )
-    sic_code: str | None = Field(
+    sic_code: Optional[str] = Field(
         description="""Full classification code (to the required number of digits)
         of the most likely canddate assigned based on provided respondent's data.""",
         default="",
     )
-    sic_descriptive: str | None = Field(
+    sic_descriptive: Optional[str] = Field(
         description="""Descriptive label of the most likely classification category
         associated with sic_code.""",
         default="",
@@ -295,14 +295,14 @@ class UnambiguousResponse(BaseModel):
         "classification code, False otherwise."
     )
 
-    class_code: str | None = Field(
+    class_code: Optional[str] = Field(
         default=None,
         description="Full classification code (to the required number of digits) "
         "assigned based on provided respondent's data. Must be present if codable=True, "
         "must be None if codable=False.",
     )
 
-    class_descriptive: str | None = Field(
+    class_descriptive: Optional[str] = Field(
         default=None,
         description="Descriptive label of the classification category. "
         "Must be present if codable=True, must be None if codable=False.",
@@ -472,16 +472,16 @@ class FinalSICAssignment(BaseModel):
         description="True only if enough information is provided to decide an unambiguous "
         "classification code, False otherwise."
     )
-    unambiguous_code: str | None = Field(
+    unambiguous_code: Optional[str] = Field(
         description="Full 5-digit classification code "
         "assigned based on provided respondent's data. Must be present if codable=True, "
         "must be None if codable=False."
     )
-    unambiguous_code_descriptive: str | None = Field(
+    unambiguous_code_descriptive: Optional[str] = Field(
         description="Descriptive label of the classification category. "
         "Must be present if codable=True, must be None if codable=False."
     )
-    higher_level_code: str | None = Field(
+    higher_level_code: Optional[str] = Field(
         description="Classification code with X notation to pad to 5 digits. "
         "Must be present if codable=False, must be None if codable=True."
     )
@@ -501,7 +501,7 @@ class OpenFollowUp(BaseModel):
             assign classification code.
     """
 
-    followup: str | None = Field(
+    followup: Optional[str] = Field(
         description="""Question to ask user in order to collect additional information
         to enable reliable classification assignment.""",
         default="",
@@ -547,7 +547,7 @@ class ClosedFollowUp(BaseModel):
             assign classification code.
     """
 
-    followup: str | None = Field(
+    followup: Optional[str] = Field(
         description="""Question to ask user in order to collect additional information
         to enable reliable classification assignment.""",
         default="",

@@ -49,7 +49,7 @@ class CleanCorpus(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _coerce_input(cls, data: object) -> object:
-        if isinstance(data, cls | dict):
+        if isinstance(data, (cls, dict)):
             return data
         return {"corpus": data}
 
