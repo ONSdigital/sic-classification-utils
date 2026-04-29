@@ -53,7 +53,7 @@ Typical usage example:
 
 import json
 import logging
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts.prompt import PromptTemplate
@@ -95,8 +95,8 @@ class SyntheticResponder:
 
     def __init__(
         self,
-        get_question_function: Optional[Callable] = None,
-        persona: Optional[dict] = None,
+        get_question_function: Callable | None = None,
+        persona: dict | None = None,
         model_name: str = config["llm"]["llm_model_name"],
         model_location: str = config["llm"]["model_location"],
     ):
@@ -187,7 +187,7 @@ class SyntheticResponder:
         industry_description: str,
         followup_question: str,
         followup_answer: str,
-    ) -> tuple[str, Optional[dict[str, str]]]:
+    ) -> tuple[str, dict[str, str] | None]:
         """Rephrases the description with question and answer, to create an informative string.
 
         Args:
