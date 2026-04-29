@@ -1,12 +1,12 @@
 ---
     name: CI
-
+    
     on: # yamllint disable-line rule:truthy
       push:
         branches: [main]
       pull_request:
         branches: [main]
-
+    
     concurrency:
       group: "${{ github.head_ref || github.ref }}-${{ github.workflow }}"
       cancel-in-progress: true
@@ -22,7 +22,7 @@
             steps:
                 - uses: actions/checkout@v4
                 - name: Install Poetry
-                  run: pipx install poetry==2.3.4
+                  run: pipx install poetry==1.7.1
 
                 - name: Set up Python
                   uses: actions/setup-python@v5
@@ -45,21 +45,21 @@
                 - name: Install dependencies
                   run: |
                     poetry install --no-cache --no-interaction
-
+  
                 - name: Install dependencies
                   run: make install-dev
-
+                
                 - name: Install SQLite headers
                   run: sudo apt-get install -y libsqlite3-dev
-
+                
                 - name: Check Poetry Virtual Environment
                   run: |
                     poetry env info
-                    poetry env list
+                    poetry env list      
 
                 - name: Check Versions
-                  run: poetry show | grep langchain
-
+                  run: poetry show | grep langchain 
+                
                 - name: Check Import path
                   run: |
                     poetry run python -c "import sys; print(sys.path)"
@@ -76,3 +76,5 @@
 
                 - name: Cleanup residue file
                   run: make clean
+    
+    
