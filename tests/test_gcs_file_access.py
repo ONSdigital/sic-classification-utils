@@ -134,8 +134,11 @@ def test_download_vector_store_from_gcs_missing_files():
         }
     )
 
-    with patch(
-        "industrial_classification_utils.utils.gcs_file_access.storage.Client",
-        return_value=fake_client,
-    ), pytest.raises(FileNotFoundError, match="metadata.json"):
+    with (
+        patch(
+            "industrial_classification_utils.utils.gcs_file_access.storage.Client",
+            return_value=fake_client,
+        ),
+        pytest.raises(FileNotFoundError, match="metadata.json"),
+    ):
         download_vector_store_from_gcs("gs://my-bucket/prefix")

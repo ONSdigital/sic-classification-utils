@@ -104,7 +104,9 @@ class SAYTSuggester:
             display_text_col = search_text_col
         if display_text_col not in df.columns:
             raise ValueError(f"Column '{display_text_col}' not found in CSV")
-        return cls(list(zip(df[search_text_col], df[display_text_col])), **kwargs)
+        return cls(
+            list(zip(df[search_text_col], df[display_text_col], strict=False)), **kwargs
+        )
 
     def _dedup_suggestions(
         self, suggestions: list[_Suggestion]
