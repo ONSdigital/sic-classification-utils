@@ -9,8 +9,6 @@ Classes:
                            followup question.
 """
 
-from typing import Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -39,12 +37,10 @@ class FollowupAnswerRequest(BaseModel):
             followup_question (str): The LLM-generated followup question.
     """
 
-    org_description: Optional[str] = Field(description="The company's main activity.")
-    job_title: Optional[str] = Field(description="The respondant's job title.")
-    job_description: Optional[str] = Field(
-        description="The respondant's job description."
-    )
-    followup_question: Optional[str] = Field(
+    org_description: str | None = Field(description="The company's main activity.")
+    job_title: str | None = Field(description="The respondant's job title.")
+    job_description: str | None = Field(description="The respondant's job description.")
+    followup_question: str | None = Field(
         description="The LLM-generated followup question."
     )
 

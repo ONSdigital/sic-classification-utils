@@ -18,7 +18,7 @@ Functions:
 import time
 from collections import defaultdict
 from functools import lru_cache
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
@@ -88,11 +88,11 @@ class ClassificationLLM:
         self,
         model_name: str = config["llm"]["llm_model_name"],
         model_location: str = config["llm"]["model_location"],
-        llm: Optional[Union[ChatVertexAI, ChatOpenAI]] = None,
+        llm: ChatVertexAI | ChatOpenAI | None = None,
         max_tokens: int = 1600,
         temperature: float = 0.0,
         verbose: bool = True,
-        openai_api_key: Optional[SecretStr] = None,
+        openai_api_key: SecretStr | None = None,
     ):
         """Initialises the ClassificationLLM object."""
         logger.info(
@@ -281,7 +281,7 @@ class ClassificationLLM:
         candidates_limit: int = config["llm"]["candidates_limit"],
         activities_limit: int = 3,
         code_digits: int = config["llm"]["code_digits"],
-        filtered_list: Optional[list[str]] = None,
+        filtered_list: list[str] | None = None,
     ) -> str:
         """Create candidate list for the prompt based on the given parameters.
 
@@ -338,12 +338,12 @@ class ClassificationLLM:
     async def sa_rag_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
-        job_title: Optional[str] = None,
-        job_description: Optional[str] = None,
+        job_title: str | None = None,
+        job_description: str | None = None,
         code_digits: int = config["llm"]["code_digits"],
         candidates_limit: int = config["llm"]["candidates_limit"],
-        short_list: Optional[list[dict[Any, Any]]] = None,
-    ) -> tuple[SicResponse, Optional[list[dict[Any, Any]]], Optional[Any]]:
+        short_list: list[dict[Any, Any]] | None = None,
+    ) -> tuple[SicResponse, list[dict[Any, Any]] | None, Any | None]:
         """Generates a SIC classification based on respondent's data using RAG approach.
 
         Args:
@@ -470,12 +470,12 @@ class ClassificationLLM:
         self,
         industry_descr: str,
         semantic_search_results: list[dict],
-        job_title: Optional[str] = None,
-        job_description: Optional[str] = None,
+        job_title: str | None = None,
+        job_description: str | None = None,
         candidates_limit: int = config["llm"]["candidates_limit"],
         code_digits: int = config["llm"]["code_digits"],
-        correlation_id: Optional[str] = None,
-    ) -> tuple[UnambiguousResponse, Optional[Any]]:
+        correlation_id: str | None = None,
+    ) -> tuple[UnambiguousResponse, Any | None]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
         Args:
@@ -625,13 +625,13 @@ class ClassificationLLM:
     async def reranker_sic(  # noqa: PLR0913
         self,
         industry_descr: str,
-        job_title: Optional[str] = None,
-        job_description: Optional[str] = None,
+        job_title: str | None = None,
+        job_description: str | None = None,
         code_digits: int = config["llm"]["code_digits"],
         candidates_limit: int = config["llm"]["candidates_limit"],
         output_limit: int = 5,
-        short_list: Optional[list[dict[Any, Any]]] = None,
-    ) -> Union[tuple[Any, Optional[list], Optional[dict[str, Any]]], dict[str, Any]]:
+        short_list: list[dict[Any, Any]] | None = None,
+    ) -> tuple[Any, list | None, dict[str, Any] | None] | dict[str, Any]:
         """Generates a set of relevant SIC codes based on respondent's data
             using reranking approach.
 
@@ -748,14 +748,14 @@ class ClassificationLLM:
     async def final_sic_code(  # noqa: PLR0913
         self,
         industry_descr: str,
-        job_title: Optional[str] = None,
-        job_description: Optional[str] = None,
-        sic_candidates: Optional[str] = None,
-        open_question: Optional[str] = None,
-        answer_to_open_question: Optional[str] = None,
-        closed_question: Optional[str] = None,
-        answer_to_closed_question: Optional[str] = None,
-    ) -> tuple[FinalSICAssignment, Optional[Any]]:
+        job_title: str | None = None,
+        job_description: str | None = None,
+        sic_candidates: str | None = None,
+        open_question: str | None = None,
+        answer_to_open_question: str | None = None,
+        closed_question: str | None = None,
+        answer_to_closed_question: str | None = None,
+    ) -> tuple[FinalSICAssignment, Any | None]:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data
             and answers to follow-up questions.
 
@@ -897,10 +897,10 @@ class ClassificationLLM:
     async def formulate_open_question(
         self,
         industry_descr: str,
-        job_title: Optional[str] = None,
-        job_description: Optional[str] = None,
-        llm_output: Optional[SicCandidate] = None,
-        correlation_id: Optional[str] = None,
+        job_title: str | None = None,
+        job_description: str | None = None,
+        llm_output: SicCandidate | None = None,
+        correlation_id: str | None = None,
     ) -> tuple[OpenFollowUp, Any]:
         """Formulates an open-ended question using respondent data and survey design guidelines.
 
@@ -1051,10 +1051,10 @@ class ClassificationLLM:
     async def formulate_closed_question(
         self,
         industry_descr: str,
-        job_title: Optional[str] = None,
-        job_description: Optional[str] = None,
-        llm_output: Optional[UnambiguousResponse] = None,
-        correlation_id: Optional[str] = None,
+        job_title: str | None = None,
+        job_description: str | None = None,
+        llm_output: UnambiguousResponse | None = None,
+        correlation_id: str | None = None,
     ) -> tuple[ClosedFollowUp, Any]:
         """Formulates a closed follow-up question using respondent data
             and survey design guidelines.
