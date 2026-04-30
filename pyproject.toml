@@ -54,6 +54,8 @@ gcsfs = "^2025.9.0"
 deptry = "^0.25.1"
 tqdm = "^4.67.3"
 requests = "^2.33.1"
+scikit-learn = "^1.3.0"
+scipy = "^1.15.0"
 
 [tool.deptry]
 known_first_party = ["industrial_classification_utils"]
