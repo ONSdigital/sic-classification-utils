@@ -34,15 +34,31 @@ config = get_default_config()
 class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
     """Custom HuggingFaceVectoriser that normalizes vectors to unit length after embedding."""
 
-    def _normalize(self, vectors):
+    def _normalize(self, vectors: np.ndarray) -> np.ndarray:
+        """Normalizes row vectors to unit length.
+
+        Zero-norm vectors are left unchanged to avoid division by zero.
+
+        Args:
+            vectors: 2-D array of shape (n, d).
+
+        Returns:
+            Array of the same shape with each row scaled to unit L2 norm.
+        """
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
         norms = np.where(norms == 0, 1.0, norms)
         return vectors / norms
 
-    def transform(self, texts):
-        """Transforms texts into normalized vectors."""
-        single_input = isinstance(texts, str)
-        if single_input:
+    def transform(self, texts: list[str] | str) -> np.ndarray:
+        """Transforms texts into normalized unit-length vectors.
+
+        Args:
+            texts: A single string or a list of strings to embed.
+
+        Returns:
+            2-D array of shape (n, d) with L2-normalised row vectors.
+        """
+        if isinstance(texts, str):
             texts = [texts]
 
         vectors = super().transform(texts)
@@ -59,11 +75,11 @@ class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
         return self.transform([text]).tolist()[0]
 
     def aembed_documents(self, texts: list[str]) -> list[list[float]]:
-        """Asynchronously embeds a list of documents into normalized vectors."""
+        """(A)synchronously embeds a list of documents into normalized vectors."""
         return self.embed_documents(texts)
 
     def aembed_query(self, text: str) -> list[float]:
-        """Asynchronously embeds a single query into a normalized vector."""
+        """(A)synchronously embeds a single query into a normalized vector."""
         return self.embed_query(text)
 
 
@@ -71,11 +87,15 @@ class EmbeddingHandler:
     """Handles embedding operations for the Classifai vector store.
 
     Attributes:
-        embeddings (Any): The embedding model used for vectorization.
-        db_dir (str): Directory where the (classifai) vector store database is located.
-        vector_store (VectorStore): The Classifai vector store instance.
-        k_matches (int): Number of nearest matches to retrieve during search.
-        spell (Speller): Autocorrect spell checker instance.
+        embedding_model_name (str): Name of the HuggingFace sentence-transformer model.
+        db_dir (str): Directory where the Classifai vector store database is located.
+            When loaded from GCS this is updated to the local temp directory path.
+        index_source_file (str | None): Path or URI that the current vector store was
+            built from.  Set to ``db_dir`` when an existing store is loaded.
+        k_matches (int): Number of nearest neighbours returned per search query.
+        spell (Speller): Autocorrect spell-checker used in :meth:`search_index_multi`.
+        embeddings (Any): The underlying vectoriser instance.
+        vector_store (VectorStore): The loaded or built Classifai vector store.
         index_size (int): Number of entries in the vector store.
     """
 
@@ -139,13 +159,16 @@ class EmbeddingHandler:
         )
 
     def _load_existing_vector_store(self) -> VectorStore:
-        """Load an existing vector store from either a local folder or a GCS folder.
-        Returns None if no existing store is found locally.
-        Raises FileNotFoundError for missing required files in GCS.
+        """Load an existing vector store from a local folder or a GCS URI.
+
+        Returns:
+            A :class:`VectorStore` loaded from ``db_dir``.
+
+        Raises:
+            FileNotFoundError: If ``db_dir`` does not contain the required
+                ``metadata.json`` and ``vectors.parquet`` files.
         """
-        logger.info(
-            "Loading existing ClassifAI vector store from GCS URI %s", self.db_dir
-        )
+        logger.info("Loading existing ClassifAI vector store from %s", self.db_dir)
         db_dir = self.db_dir
 
         if is_gcs_path(db_dir):
@@ -174,10 +197,17 @@ class EmbeddingHandler:
             hooks=None,
         )
 
-    def _build_vector_store(
-        self,
-    ) -> VectorStore:
-        """Build Classifai vector store from csv source file. Overwrite by default."""
+    def _build_vector_store(self) -> VectorStore:
+        """Build a Classifai vector store from a CSV source file.
+
+        The store is always written to ``db_dir``, overwriting any existing files.
+
+        Returns:
+            A newly created :class:`VectorStore`.
+
+        Raises:
+            ValueError: If ``db_dir`` is not set.
+        """
         if not self.db_dir:
             raise ValueError("db_dir must be provided.")
 
@@ -255,21 +285,29 @@ class EmbeddingHandler:
             list[dict]: List of top k index entries by relevance.
         """
         query = [x for x in query if x is not None]
-        search_terms_list = set()
-        for i in range(len(query)):
-            x = " ".join(query[: (i + 1)])
-            search_terms_list.add(x)
-            search_terms_list.add(self.spell(x))
-        short_list = [y for x in search_terms_list for y in self.search_index(query=x)]
+        search_terms_list: set[str] = set()
+        for i in range(1, len(query) + 1):
+            term = " ".join(query[:i])
+            search_terms_list.add(term)
+            search_terms_list.add(self.spell(term))
+        short_list = [
+            hit for term in search_terms_list for hit in self.search_index(query=term)
+        ]
         return sorted(short_list, key=lambda x: x["distance"])  # type: ignore
 
-    def get_embed_config(self) -> dict:
-        """Returns the current embedding configuration as a dictionary."""
+    def get_embed_config(self) -> dict[str, Any]:
+        """Return the current embedding configuration.
+
+        Returns:
+            Dictionary with keys compatible with vector-store-api:
+            ``embedding_model_name``, ``db_dir``,
+            ``matches``, ``sic_condensed``, ``index_size``.
+        """
         embed_config = {
             "embedding_model_name": self.embedding_model_name,
             "db_dir": self.db_dir,
-            "k_matches": self.k_matches,
-            "index_source_file": self.index_source_file,
+            "matches": self.k_matches,
+            "sic_condensed": self.index_source_file,
             "index_size": self.index_size,
         }
         return embed_config
