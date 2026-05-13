@@ -10,6 +10,7 @@ import pytest
 
 from industrial_classification_utils.utils.gcs_file_access import (
     DownloadedVectorStore,
+    download_one_file_from_gcs,
     download_vector_store_from_gcs,
     is_gcs_path,
     parse_gcs_uri,
@@ -142,3 +143,55 @@ def test_download_vector_store_from_gcs_missing_files():
         pytest.raises(FileNotFoundError, match="metadata.json"),
     ):
         download_vector_store_from_gcs("gs://my-bucket/prefix")
+
+
+@pytest.mark.embed
+def test_download_one_file_from_gcs_success():
+    file_blob = _FakeBlob(exists=True)
+
+    fake_client = _FakeStorageClient(
+        {
+            "my-bucket": _FakeBucket(
+                {
+                    "path/to/data.csv": file_blob,
+                }
+            )
+        }
+    )
+
+    with patch(
+        "industrial_classification_utils.utils.gcs_file_access.storage.Client",
+        return_value=fake_client,
+    ):
+        downloaded = download_one_file_from_gcs("gs://my-bucket/path/to/data.csv")
+
+    assert isinstance(downloaded, DownloadedVectorStore)
+    assert Path(downloaded.path).name == "data.csv"
+    assert Path(downloaded.path).exists()
+    assert downloaded.temp_dir is not None
+
+    downloaded.temp_dir.cleanup()
+
+
+@pytest.mark.embed
+def test_download_one_file_from_gcs_missing_file():
+    file_blob = _FakeBlob(exists=False)
+
+    fake_client = _FakeStorageClient(
+        {
+            "my-bucket": _FakeBucket(
+                {
+                    "path/to/data.csv": file_blob,
+                }
+            )
+        }
+    )
+
+    with (
+        patch(
+            "industrial_classification_utils.utils.gcs_file_access.storage.Client",
+            return_value=fake_client,
+        ),
+        pytest.raises(FileNotFoundError, match="gs://my-bucket/path/to/data.csv"),
+    ):
+        download_one_file_from_gcs("gs://my-bucket/path/to/data.csv")

@@ -26,6 +26,7 @@ from industrial_classification_utils.models.response_model import (
 from industrial_classification_utils.utils.constants import get_default_config
 from industrial_classification_utils.utils.gcs_file_access import (
     DownloadedVectorStore,
+    download_one_file_from_gcs,
     download_vector_store_from_gcs,
     is_gcs_path,
 )
@@ -216,10 +217,11 @@ class EmbeddingHandler:
         if not self.db_dir:
             raise ValueError("db_dir must be provided.")
 
+        index_source_file = str(self.index_source_file)
         logger.info(
             "Building vector store in %s from source file %s.",
             self.db_dir,
-            self.index_source_file,
+            index_source_file,
         )
 
         if os.path.exists(os.path.join(self.db_dir, "vectors.parquet")):
@@ -228,8 +230,12 @@ class EmbeddingHandler:
                 self.db_dir,
             )
 
+        if is_gcs_path(index_source_file):
+            downloaded_file = download_one_file_from_gcs(index_source_file)
+            index_source_file = downloaded_file.path
+
         vector_store = VectorStore(
-            file_name=str(self.index_source_file),
+            file_name=str(index_source_file),
             data_type="csv",
             vectoriser=self.embeddings,
             batch_size=8,
