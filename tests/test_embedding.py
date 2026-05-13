@@ -369,19 +369,6 @@ def test_embedding_handler_initialization(tmp_path: Path):
 
 
 @pytest.mark.embed
-def test_get_embed_config_returns_expected_keys(
-    embedding_handler_for_embed: EmbeddingHandler,
-):
-    config = embedding_handler_for_embed.get_embed_config()
-
-    assert "embedding_model_name" in config
-    assert "db_dir" in config
-    assert "matches" in config
-    assert "sic_condensed" in config
-    assert "index_size" in config
-
-
-@pytest.mark.embed
 def test_load_existing_vector_store_local(tmp_path: Path):
     db_dir = tmp_path / "vector_store"
     db_dir.mkdir()
@@ -786,10 +773,10 @@ def test_get_embed_config_returns_correct_values(tmp_path: Path):
 
     cfg = handler.get_embed_config()
 
-    assert cfg["embedding_model_name"] == "other"
-    assert cfg["db_dir"] == str(tmp_path / "vector_store")
-    assert cfg["matches"] == 5
-    assert cfg["index_size"] == 7
+    assert cfg.embedding_model_name == "other"
+    assert cfg.db_dir == str(tmp_path / "vector_store")
+    assert cfg.k_matches == 5
+    assert cfg.index_size == 7
 
 
 # ---------------------------------------------------------------------------

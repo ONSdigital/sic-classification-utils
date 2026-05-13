@@ -25,7 +25,7 @@ config = get_default_config()
 
 def load_embedding_handler_from_sic_index_files(
     *,
-    db_dir: str = config["embedding"]["db_dir"],
+    db_dir: str = config["embedding"].db_dir,
     sic_index_file: tuple[str, str] = config["lookups"]["sic_index"],
     sic_structure_file: tuple[str, str] = config["lookups"]["sic_structure"],
     **kwargs,

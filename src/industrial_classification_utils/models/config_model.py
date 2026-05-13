@@ -11,8 +11,10 @@ Classes:
 
 from typing import TypedDict
 
+from pydantic import BaseModel
 
-class EmbeddingConfig(TypedDict):
+
+class EmbeddingConfig(BaseModel):
     """Configuration for embedding model and vector store.
 
     Attributes:
@@ -23,7 +25,9 @@ class EmbeddingConfig(TypedDict):
 
     embedding_model_name: str
     db_dir: str
+    index_source_file: str | None = None
     k_matches: int
+    index_size: int | None = None  # Optional field to track the size of the index
 
 
 class LLMConfig(TypedDict):

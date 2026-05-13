@@ -18,6 +18,7 @@ from classifai.vectorisers import (
     HuggingFaceVectoriser,
 )
 
+from industrial_classification_utils.models.config_model import EmbeddingConfig
 from industrial_classification_utils.models.response_model import (
     SearchIndexItem,
     SearchIndexResponse,
@@ -105,9 +106,9 @@ class EmbeddingHandler:
 
     def __init__(
         self,
-        embedding_model_name: str = config["embedding"]["embedding_model_name"],
-        db_dir: str = config["embedding"]["db_dir"],
-        k_matches: int = config["embedding"]["k_matches"],
+        embedding_model_name: str = config["embedding"].embedding_model_name,
+        db_dir: str = config["embedding"].db_dir,
+        k_matches: int = config["embedding"].k_matches,
         index_source_file: str | None = None,
     ):
         """Initializes the EmbeddingHandler.
@@ -298,19 +299,17 @@ class EmbeddingHandler:
         ]
         return SearchIndexResponse(results=sorted(short_list, key=lambda x: x.distance))
 
-    def get_embed_config(self) -> dict[str, Any]:
+    def get_embed_config(self) -> EmbeddingConfig:
         """Return the current embedding configuration.
 
         Returns:
-            Dictionary with keys compatible with vector-store-api:
-            ``embedding_model_name``, ``db_dir``,
-            ``matches``, ``sic_condensed``, ``index_size``.
+            EmbeddingConfig: The current embedding configuration.
         """
-        embed_config = {
-            "embedding_model_name": self.embedding_model_name,
-            "db_dir": self.db_dir,
-            "matches": self.k_matches,
-            "sic_condensed": self.index_source_file,
-            "index_size": self.index_size,
-        }
+        embed_config = EmbeddingConfig(
+            embedding_model_name=self.embedding_model_name,
+            db_dir=self.db_dir,
+            k_matches=self.k_matches,
+            index_source_file=self.index_source_file,
+            index_size=self.index_size,
+        )
         return embed_config

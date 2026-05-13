@@ -3,7 +3,11 @@
 This module contains constants used across the industrial classification utilities.
 """
 
-from industrial_classification_utils.models.config_model import FullConfig
+from industrial_classification_utils.models.config_model import (
+    EmbeddingConfig,
+    FullConfig,
+    LLMConfig,
+)
 
 MAX_ALT_CANDIDATES = 10
 DEFAULT_TRUNCATE_LEN = 8
@@ -31,21 +35,23 @@ def get_default_config() -> FullConfig:
     """Returns the configuration dictionary for the LLM.
 
     Returns:
-        dict: A dictionary containing configuration details for the embedding model
+        FullConfig: A dictionary containing configuration details for the embedding model
         and lookup file paths.
     """
     return {
-        "embedding": {
-            "embedding_model_name": "all-MiniLM-L6-v2",  # text-embedding-004
-            "db_dir": "src/industrial_classification_utils/data/vector_store",
-            "k_matches": 20,
-        },
-        "llm": {
-            "llm_model_name": "gemini-2.5-flash",
-            "model_location": "europe-west2",
-            "code_digits": 5,
-            "candidates_limit": 10,
-        },
+        "embedding": EmbeddingConfig(
+            embedding_model_name="all-MiniLM-L6-v2",  # text-embedding-004
+            db_dir="src/industrial_classification_utils/data/vector_store",
+            index_source_file="src/industrial_classification_utils/data/sic_index/"
+            + "uksic2007indexeswithaddendumdecember2022.csv",
+            k_matches=20,
+        ),
+        "llm": LLMConfig(
+            llm_model_name="gemini-2.5-flash",
+            model_location="europe-west2",
+            code_digits=5,
+            candidates_limit=10,
+        ),
         "lookups": {
             "sic_index": (
                 "industrial_classification_utils.data.sic_index",
