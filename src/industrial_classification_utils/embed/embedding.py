@@ -255,7 +255,12 @@ class EmbeddingHandler:
             SearchIndexResponse: List of top k index entries by relevance.
         """
         search_input = VectorStoreSearchInput({"id": ["q1"], "query": [query]})
-        results = self.vector_store.search(search_input, n_results=self.k_matches)
+
+        n_results = min(
+            self.index_size if self.index_size is not None else int("inf"),
+            self.k_matches,
+        )
+        results = self.vector_store.search(search_input, n_results=n_results)
 
         # ClassifAI returns a dataframe-like object.
         # Depending on the exact backend/version, one of these usually works.

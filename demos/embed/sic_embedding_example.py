@@ -8,22 +8,42 @@ which can be used for tasks such as similarity searches or classification.
 """
 
 # %%
+from importlib.resources import files
+
 from industrial_classification_utils.embed import (
+    EmbeddingHandler,
     load_embedding_handler_from_sic_index_files,
 )
 
-EXAMPLE_QUERY = "school teacher primary education"
+DB_DIR = "./data/vector_store"
 
 # %%
-print("Creating embeddings index...")
+print("Creating embeddings example index...")
 # Create the embeddings index
-embed = load_embedding_handler_from_sic_index_files(db_dir="./data/vector_store")
+
+example_data = files("industrial_classification_utils.data.example").joinpath(
+    "toy_index.txt"
+)
+embed1 = EmbeddingHandler(db_dir=DB_DIR, index_source_file=str(example_data))
 print(
-    f"Embeddings index created with {embed.index_size} entries."  # pylint: disable=protected-access
+    f"Embeddings index created with {embed1.index_size} entries."  # pylint: disable=protected-access
+)
+
+print("\nExample search for most 'loyal' in the toy index:")
+print(embed1.search_index("loyal").model_dump_json(indent=2))
+
+
+# %%
+# Alternative loading method using large published sic indices (xlsx)
+embed2 = load_embedding_handler_from_sic_index_files(db_dir=DB_DIR)
+print(
+    f"Embeddings index created with {embed2.index_size} entries."  # pylint: disable=protected-access
 )
 
 # %%
-results = embed.search_index(EXAMPLE_QUERY)
-print(f"Search results for '{EXAMPLE_QUERY}': {results}")
+EXAMPLE_QUERY = "Primary education"
+results = embed2.search_index(EXAMPLE_QUERY)
+
+print(f"Results for query '{EXAMPLE_QUERY}':", results.model_dump_json(indent=2))
 
 # %%
