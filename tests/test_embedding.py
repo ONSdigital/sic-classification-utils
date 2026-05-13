@@ -18,6 +18,10 @@ from industrial_classification_utils.embed import (
     load_embedding_handler_from_sic_index_files,
 )
 from industrial_classification_utils.embed.embedding import ChromaDBesqueHFVectoriser
+from industrial_classification_utils.models.response_model import (
+    SearchIndexItem,
+    SearchIndexResponse,
+)
 from industrial_classification_utils.utils.gcs_file_access import (
     DownloadedVectorStore,
 )
@@ -208,22 +212,12 @@ def test_embedding_handler_init_sets_index_size(tmp_path: Path) -> None:
 
 @pytest.mark.embed
 def test_search_index(embedding_handler_search: EmbeddingHandler):
-    results = embedding_handler_search.search_index("mens best friend")
+    response = embedding_handler_search.search_index("mens best friend")
 
-    assert results[0]["code"] == "02"
-    assert results[0]["title"] == "dog"
-    assert results[0]["distance"] == pytest.approx(0.01)
-
-
-@pytest.mark.embed
-def test_search_index_returns_tuples_when_requested(
-    embedding_handler_search: EmbeddingHandler,
-):
-    results = embedding_handler_search.search_index(
-        "mens best friend", return_dicts=False
-    )
-
-    assert results == [("02", 0.99), ("01", 0.75)]
+    assert isinstance(response, SearchIndexResponse)
+    assert response.results[0].code == "02"
+    assert response.results[0].title == "dog"
+    assert response.results[0].distance == pytest.approx(0.01)
 
 
 @pytest.mark.embed
@@ -259,8 +253,9 @@ def test_search_index_uses_to_dicts_when_available(tmp_path: Path):
 
     results = handler.search_index("dog")
 
-    assert results[0]["code"] == "02"
-    assert results[0]["title"] == "dog"
+    assert isinstance(results, SearchIndexResponse)
+    assert results.results[0].code == "02"
+    assert results.results[0].title == "dog"
 
 
 @pytest.mark.embed
@@ -290,16 +285,26 @@ def test_search_index_multi(tmp_path: Path):
             handler,
             "search_index",
             side_effect=[
-                [{"code": "03", "distance": 0.4}, {"code": "04", "distance": 0.6}],
-                [{"code": "03", "distance": 0.1}, {"code": "04", "distance": 0.2}],
+                SearchIndexResponse(
+                    results=[
+                        SearchIndexItem(code="03", title="fish", distance=0.4),
+                        SearchIndexItem(code="04", title="lizard", distance=0.6),
+                    ]
+                ),
+                SearchIndexResponse(
+                    results=[
+                        SearchIndexItem(code="03", title="fish", distance=0.1),
+                        SearchIndexItem(code="04", title="lizard", distance=0.2),
+                    ]
+                ),
             ],
         ),
     ):
-        results = handler.search_index_multi(["has gills", "has scales"])
+        response = handler.search_index_multi(["has gills", "has scales"])
 
-    assert len(results) == EXPECTED_MULTI_RESULTS
-    assert results[0]["code"] == "03"
-    assert results[0]["distance"] == EXPECTED_TOP_DISTANCE
+    assert len(response.results) == EXPECTED_MULTI_RESULTS
+    assert response.results[0].code == "03"
+    assert response.results[0].distance == EXPECTED_TOP_DISTANCE
 
 
 @pytest.mark.embed
@@ -328,12 +333,14 @@ def test_search_index_multi_filters_none_values(tmp_path: Path):
         patch.object(
             handler,
             "search_index",
-            return_value=[{"code": "03", "distance": 0.3}],
+            return_value=SearchIndexResponse(
+                results=[SearchIndexItem(code="03", title="fish", distance=0.3)]
+            ),
         ) as mock_search,
     ):
-        results = handler.search_index_multi([None, "has gills"])
+        response = handler.search_index_multi([None, "has gills"])
 
-    assert results == [{"code": "03", "distance": 0.3}]
+    assert response.results == [SearchIndexItem(code="03", title="fish", distance=0.3)]
     mock_search.assert_called_once_with(query="has gills")
 
 
@@ -744,9 +751,10 @@ def test_build_vector_store_logs_warning_when_parquet_exists(tmp_path: Path, cap
 def test_search_index_multi_all_none_returns_empty(
     embedding_handler_for_embed: EmbeddingHandler,
 ):
-    results = embedding_handler_for_embed.search_index_multi([None, None])
+    response = embedding_handler_for_embed.search_index_multi([None, None])
 
-    assert results == []
+    assert isinstance(response, SearchIndexResponse)
+    assert response.results == []
 
 
 # ---------------------------------------------------------------------------

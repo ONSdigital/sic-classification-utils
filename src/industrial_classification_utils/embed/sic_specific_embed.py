@@ -50,7 +50,10 @@ def load_embedding_handler_from_sic_index_files(
 
     sic = load_hierarchy(sic_df, sic_index_df)
 
-    df = sic.all_leaf_text().rename(columns={"code": "label"})
+    df = sic.all_leaf_text()
+    df["label"] = df["code"].apply(
+        lambda x: (x.replace(".", "").replace("/", "") + "0")[:5]
+    )
 
     # write to temporary csv for vector store build
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as temp_csv:

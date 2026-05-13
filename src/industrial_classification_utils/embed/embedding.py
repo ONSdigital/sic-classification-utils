@@ -18,6 +18,10 @@ from classifai.vectorisers import (
     HuggingFaceVectoriser,
 )
 
+from industrial_classification_utils.models.response_model import (
+    SearchIndexItem,
+    SearchIndexResponse,
+)
 from industrial_classification_utils.utils.constants import get_default_config
 from industrial_classification_utils.utils.gcs_file_access import (
     DownloadedVectorStore,
@@ -237,19 +241,17 @@ class EmbeddingHandler:
         return vector_store
 
     def search_index(
-        self, query: str, return_dicts: bool = True
-    ) -> list[dict] | list[tuple[str, float]]:
+        self,
+        query: str,
+    ) -> SearchIndexResponse:
         """Returns k index entries with the highest relevance to the query.
 
         Args:
             query (str): Query string for which the most relevant index entries
                 will be returned.
-            return_dicts (bool, optional): If True, returns data as a list of
-                dictionaries. Otherwise, returns simple tuples. Defaults to True.
 
         Returns:
-            Union[list[dict], list[tuple[str, float]]]: List of top k index entries
-            by relevance.
+            SearchIndexResponse: List of top k index entries by relevance.
         """
         search_input = VectorStoreSearchInput({"id": ["q1"], "query": [query]})
         results = self.vector_store.search(search_input, n_results=self.k_matches)
@@ -261,19 +263,18 @@ class EmbeddingHandler:
         else:
             rows = results.to_dict(orient="records")
 
-        if return_dicts:
-            return [
-                {
-                    "distance": float(1.0 - row["score"]),
-                    "title": row["doc_text"],
-                    "code": row["doc_label"],
-                }
+        return SearchIndexResponse(
+            results=[
+                SearchIndexItem(
+                    distance=float(1.0 - row["score"]),
+                    title=row["doc_text"],
+                    code=row["doc_label"],
+                )
                 for row in rows
             ]
+        )
 
-        return [(row["doc_label"], float(row["score"])) for row in rows]
-
-    def search_index_multi(self, query: list[str]) -> list[dict]:
+    def search_index_multi(self, query: list[str]) -> SearchIndexResponse:
         """Returns k document chunks with the highest relevance to a list of query fields.
 
         Args:
@@ -282,7 +283,7 @@ class EmbeddingHandler:
                 Example: [industry_descr, job_title, job_descr].
 
         Returns:
-            list[dict]: List of top k index entries by relevance.
+            SearchIndexResponse: List of top k index entries by relevance.
         """
         query = [x for x in query if x is not None]
         search_terms_list: set[str] = set()
@@ -291,9 +292,11 @@ class EmbeddingHandler:
             search_terms_list.add(term)
             search_terms_list.add(self.spell(term))
         short_list = [
-            hit for term in search_terms_list for hit in self.search_index(query=term)
+            hit
+            for term in search_terms_list
+            for hit in self.search_index(query=term).results
         ]
-        return sorted(short_list, key=lambda x: x["distance"])  # type: ignore
+        return SearchIndexResponse(results=sorted(short_list, key=lambda x: x.distance))
 
     def get_embed_config(self) -> dict[str, Any]:
         """Return the current embedding configuration.
