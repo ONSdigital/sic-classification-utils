@@ -8,16 +8,18 @@ which can be used for tasks such as similarity searches or classification.
 """
 
 # %%
-from industrial_classification_utils.embed import EmbeddingHandler
+from industrial_classification_utils.embed import (
+    load_embedding_handler_from_sic_index_files,
+)
 
 EXAMPLE_QUERY = "school teacher primary education"
 
 # %%
 print("Creating embeddings index...")
 # Create the embeddings index
-embed = EmbeddingHandler(db_dir="./data/vector_store")
+embed = load_embedding_handler_from_sic_index_files(db_dir="./data/vector_store")
 print(
-    f"Embeddings index created with {embed._index_size} entries."  # pylint: disable=protected-access
+    f"Embeddings index created with {embed.index_size} entries."  # pylint: disable=protected-access
 )
 
 # %%

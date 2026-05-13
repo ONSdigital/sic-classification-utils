@@ -1,17 +1,12 @@
-"""This module provides utilities for embedding and searching industrial classification data
-using Classifai vector stores and language models.
+"""This module provides utilities for embedding and searching index data (SIC or SOC)
+using Classifai vector store.
 
-It includes functionality for embedding SIC hierarchy data, managing vector stores,
-and performing similarity searches.
+It includes functionality to load existing vector store, create embeddings from
+flat csv file, manage vector stores, and perform similarity searches.
 """
 
-import csv
-
-# Optional but doesn't hurt
 import logging
 import os
-import tempfile
-import uuid
 from typing import Any
 
 import numpy as np
@@ -20,8 +15,6 @@ from classifai.indexers import VectorStore, VectorStoreSearchInput
 from classifai.vectorisers import (
     HuggingFaceVectoriser,
 )
-from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
-from langchain_google_vertexai import VertexAIEmbeddings
 
 from industrial_classification_utils.utils.constants import get_default_config
 from industrial_classification_utils.utils.gcs_file_access import (
@@ -29,10 +22,11 @@ from industrial_classification_utils.utils.gcs_file_access import (
     download_vector_store_from_gcs,
     is_gcs_path,
 )
-from industrial_classification_utils.utils.sic_data_access import (
-    load_sic_index,
-    load_sic_structure,
-)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+config = get_default_config()
 
 
 class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
@@ -71,50 +65,6 @@ class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
         return self.embed_query(text)
 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-config = get_default_config()
-MAX_BATCH_SIZE = 5400
-
-embedding_config = {
-    "embedding_model_name": config["embedding"]["embedding_model_name"],
-    "db_dir": config["embedding"]["db_dir"],
-    "sic_index": config["lookups"]["sic_index"],
-    "sic_structure": config["lookups"]["sic_structure"],
-    "sic_condensed": config["lookups"]["sic_condensed"],
-    "matches": config["embedding"]["k_matches"],
-    "index_size": None,
-}
-
-
-class CustomVertexAIEmbeddings(VertexAIEmbeddings):
-    """Custom VertexAIEmbeddings to specify task type for embeddings."""
-
-    def embed_documents(
-        self,
-        texts: list[str],
-        batch_size: int = 0,
-        *,
-        embeddings_task_type="SEMANTIC_SIMILARITY",
-    ) -> list[list[float]]:
-        """Embeds a list of documents using the specified task type."""
-        return super().embed_documents(
-            texts,
-            batch_size=batch_size,
-            embeddings_task_type=embeddings_task_type,
-        )
-
-    def embed_query(
-        self,
-        text: str,
-        *,
-        embeddings_task_type="SEMANTIC_SIMILARITY",
-    ) -> list[float]:
-        """Embeds a single query using the specified task type."""
-        return super().embed_query(text, embeddings_task_type=embeddings_task_type)
-
-
 class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
     """Handles embedding operations for the Classifai vector store.
 
@@ -127,183 +77,130 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
         _index_size (int): Number of entries in the vector store.
     """
 
-    def __init__(  # noqa: PLR0913 # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         embedding_model_name: str = config["embedding"]["embedding_model_name"],
         db_dir: str = config["embedding"]["db_dir"],
-        knowledgebase_csv: str | None = None,
         k_matches: int = config["embedding"]["k_matches"],
-        sic_index_file=None,
-        sic_structure_file=None,
+        index_source_file: str | None = None,
     ):
         """Initializes the EmbeddingHandler.
 
         Args:
-            embedding_model_name (str, optional): Name of the embedding model to use.
+            embedding_model_name: Name of the embedding model to use.
                 Defaults to the value in the configuration file.
-            db_dir (str, optional): Directory for the vector store database.
+            db_dir: Directory for the vector store database.
                 Defaults to the value in the configuration file.
-            knowledgebase_csv (str, optional): Path to a CSV file containing the knowledge base.
-            k_matches (int, optional): Number of nearest matches to retrieve.
+            k_matches: Number of nearest matches to retrieve.
                 Defaults to 20.
-            sic_index_file (optional): Optional override for the SIC index source.
-            sic_structure_file (optional): Optional override for the SIC structure source.
+            index_source_file: Optional override for the index source. When provided the
+                vector store (db_dir) will be overwritten with newly embedded index.
         """
-        self.embeddings: Any
-        if embedding_model_name.startswith(("textembedding-", "text-embedding-")):
-            self.embeddings = CustomVertexAIEmbeddings(model=embedding_model_name)
-        else:
-            self.embeddings = ChromaDBesqueHFVectoriser(
-                model_name=f"sentence-transformers/{embedding_model_name}"
-            )
+        self.embedding_model_name = embedding_model_name
+        self.k_matches = k_matches
+        self.db_dir = db_dir
+        self.index_source_file = index_source_file
 
+        self.embeddings: Any = ChromaDBesqueHFVectoriser(
+            model_name=f"sentence-transformers/{embedding_model_name}"
+        )
         logger.info("Using embedding model: %s", embedding_model_name)
 
-        self.db_dir = db_dir
-        self.knowledgebase_csv = knowledgebase_csv
-        self.k_matches = k_matches
         self.spell = Speller()
 
-        self.sic_index_file = sic_index_file or config["lookups"]["sic_index"]
-        self.sic_structure_file = (
-            sic_structure_file or config["lookups"]["sic_structure"]
-        )
-
         self._downloaded_vector_store: DownloadedVectorStore | None = None
-        self.vector_store = self._load_or_build_vector_store()
-        self._index_size = self.vector_store.num_vectors
+        self.vector_store: VectorStore
+        if not self.index_source_file:
+            self.vector_store = self._load_existing_vector_store()
+            # Update index_source_file to reflect the data source and db_dir to reflect
+            # the actual location of the vector store (local or temp dir if downloaded from GCS).
+            self.index_source_file = self.db_dir
+            self.db_dir = (
+                self.db_dir
+                if self._downloaded_vector_store is None
+                else self._downloaded_vector_store.temp_dir.name
+            )
+        else:
+            self.vector_store = self._build_vector_store()
+
+        self.index_size = self.vector_store.num_vectors
 
         logger.info(
-            "Vector store created in: %s containing %s entries.",
+            "Vector store created in: %s containing %s entries from: %s.",
             self.db_dir,
-            self._index_size,
+            self.index_size,
+            self.index_source_file,
         )
 
-        embedding_config["embedding_model_name"] = embedding_model_name
-        embedding_config["db_dir"] = db_dir
-        embedding_config["matches"] = self.k_matches
-        embedding_config["index_size"] = self._index_size
-        embedding_config["sic_index"] = self.sic_index_file
-        embedding_config["sic_structure"] = self.sic_structure_file
+        logger.debug(
+            "EmbeddingHandler initialised with config: %s", self.get_embed_config()
+        )
 
-        logger.debug("EmbeddingHandler initialised with config: %s", embedding_config)
-
-    def _load_existing_vector_store(self) -> VectorStore | None:
+    def _load_existing_vector_store(self) -> VectorStore:
         """Load an existing vector store from either a local folder or a GCS folder.
         Returns None if no existing store is found locally.
         Raises FileNotFoundError for missing required files in GCS.
         """
-        if is_gcs_path(self.db_dir):
-            self._downloaded_vector_store = download_vector_store_from_gcs(self.db_dir)
-            logger.info(
-                "Loading existing ClassifAI vector store from GCS URI %s", self.db_dir
-            )
-            return VectorStore.from_filespace(
-                folder_path=self._downloaded_vector_store.path,
-                vectoriser=self.embeddings,
-                hooks=None,
-            )
+        logger.info(
+            "Loading existing ClassifAI vector store from GCS URI %s", self.db_dir
+        )
+        db_dir = self.db_dir
 
-        metadata_path = os.path.join(self.db_dir, "metadata.json")
-        vectors_path = os.path.join(self.db_dir, "vectors.parquet")
+        if is_gcs_path(db_dir):
+            self._downloaded_vector_store = download_vector_store_from_gcs(db_dir)
+            db_dir = self._downloaded_vector_store.temp_dir.name
+
+        metadata_path = os.path.join(db_dir, "metadata.json")
+        vectors_path = os.path.join(db_dir, "vectors.parquet")
 
         has_existing_store = (
-            os.path.isdir(self.db_dir)
+            os.path.isdir(db_dir)
             and os.path.exists(metadata_path)
             and os.path.exists(vectors_path)
         )
 
-        if has_existing_store:
-            logger.info("Loading existing ClassifAI vector store from %s", self.db_dir)
-            return VectorStore.from_filespace(
-                folder_path=self.db_dir,
-                vectoriser=self.embeddings,
-                hooks=None,
+        if not has_existing_store:
+            raise FileNotFoundError(
+                f"No existing vector store found in {self.db_dir}. "
+                "Please ensure the directory contains metadata.json and vectors.parquet, "
+                "or provide a valid index source file."
             )
 
-        return None
+        return VectorStore.from_filespace(
+            folder_path=db_dir,
+            vectoriser=self.embeddings,
+            hooks=None,
+        )
 
-    def _load_or_build_vector_store(  # pylint: disable=too-many-locals
+    def _build_vector_store(
         self,
     ) -> VectorStore:
-        """Load an existing ClassifAI vector store, or build one from SIC source files."""
+        """Build Classifai vector store from csv source file. Overwrite by default."""
         if not self.db_dir:
             raise ValueError("db_dir must be provided.")
 
-        existing_store = self._load_existing_vector_store()
-        if existing_store is not None:
-            return existing_store
-
         logger.info(
-            "No existing vector store found in %s. Building from SIC source files.",
+            "Building vector store in %s from source file %s.",
             self.db_dir,
+            self.index_source_file,
         )
 
-        sic_index_file = self.sic_index_file
-        sic_structure_file = self.sic_structure_file
-
-        logger.info("Loading SIC index file: %s", sic_index_file)
-        logger.info("Loading SIC structure file: %s", sic_structure_file)
-
-        sic_index_df = load_sic_index(sic_index_file)
-        sic_df = load_sic_structure(sic_structure_file)
-        sic = load_hierarchy(sic_df, sic_index_df)
-
-        rows: list[dict[str, str]] = []
-        for _, row in sic.all_leaf_text().iterrows():
-            code = (row["code"].replace(".", "").replace("/", "") + "0")[:5]
-            rows.append(
-                {
-                    "label": str(uuid.uuid3(uuid.NAMESPACE_URL, row["text"])),
-                    "text": row["text"],
-                    "code": code,
-                    "four_digit_code": code[0:4],
-                    "two_digit_code": code[0:2],
-                }
-            )
-
-        if not rows:
-            raise ValueError("No SIC rows were generated for vector store build.")
-
-        meta_data = {
-            "code": str,
-            "four_digit_code": str,
-            "two_digit_code": str,
-        }
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            csv_path = os.path.join(tmp_dir, "sic_vectors.csv")
-
-            with open(csv_path, "w", newline="", encoding="utf-8") as csvfile:
-                writer = csv.DictWriter(
-                    csvfile,
-                    fieldnames=[
-                        "label",
-                        "text",
-                        "code",
-                        "four_digit_code",
-                        "two_digit_code",
-                    ],
-                )
-                writer.writeheader()
-                writer.writerows(rows)
-
-            logger.info(
-                "Building new ClassifAI vector store in %s from temporary CSV %s",
+        if os.path.exists(os.path.join(self.db_dir, "vectors.parquet")):
+            logger.warning(
+                "Existing vector store files found in %s. They will be overwritten.",
                 self.db_dir,
-                csv_path,
             )
 
-            vector_store = VectorStore(
-                file_name=csv_path,
-                data_type="csv",
-                vectoriser=self.embeddings,
-                batch_size=8,
-                meta_data=meta_data,
-                output_dir=self.db_dir,
-                overwrite=False,
-                hooks=None,
-            )
+        vector_store = VectorStore(
+            file_name=str(self.index_source_file),
+            data_type="csv",
+            vectoriser=self.embeddings,
+            batch_size=8,
+            meta_data=None,
+            output_dir=self.db_dir,
+            overwrite=True,
+            hooks=None,
+        )
 
         return vector_store
 
@@ -337,14 +234,12 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
                 {
                     "distance": float(1.0 - row["score"]),
                     "title": row["doc_text"],
-                    "code": row.get("code"),
-                    "four_digit_code": row.get("four_digit_code"),
-                    "two_digit_code": row.get("two_digit_code"),
+                    "code": row["doc_label"],
                 }
                 for row in rows
             ]
 
-        return [(row["doc_text"], float(row["score"])) for row in rows]
+        return [(row["doc_label"], float(row["score"])) for row in rows]
 
     def search_index_multi(self, query: list[str]) -> list[dict]:
         """Returns k document chunks with the highest relevance to a list of query fields.
@@ -368,12 +263,11 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
 
     def get_embed_config(self) -> dict:
         """Returns the current embedding configuration as a dictionary."""
-        return {
-            "embedding_model_name": str(embedding_config["embedding_model_name"]),
-            "db_dir": str(embedding_config["db_dir"]),
-            "sic_index": str(embedding_config["sic_index"]),
-            "sic_structure": str(embedding_config["sic_structure"]),
-            "sic_condensed": str(embedding_config["sic_condensed"]),
-            "matches": embedding_config["matches"],
-            "index_size": embedding_config["index_size"],
+        embed_config = {
+            "embedding_model_name": self.embedding_model_name,
+            "db_dir": self.db_dir,
+            "k_matches": self.k_matches,
+            "index_source_file": self.index_source_file,
+            "index_size": self.index_size,
         }
+        return embed_config
