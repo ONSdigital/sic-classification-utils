@@ -5,6 +5,8 @@ It includes functionality to load existing vector store, create embeddings from
 flat csv file, manage vector stores, and perform similarity searches.
 """
 
+# pylint: disable=too-many-instance-attributes
+
 import logging
 import os
 from typing import Any
@@ -65,7 +67,7 @@ class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
         return self.embed_query(text)
 
 
-class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
+class EmbeddingHandler:
     """Handles embedding operations for the Classifai vector store.
 
     Attributes:
@@ -74,10 +76,10 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
         vector_store (VectorStore): The Classifai vector store instance.
         k_matches (int): Number of nearest matches to retrieve during search.
         spell (Speller): Autocorrect spell checker instance.
-        _index_size (int): Number of entries in the vector store.
+        index_size (int): Number of entries in the vector store.
     """
 
-    def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
+    def __init__(
         self,
         embedding_model_name: str = config["embedding"]["embedding_model_name"],
         db_dir: str = config["embedding"]["db_dir"],
@@ -93,8 +95,8 @@ class EmbeddingHandler:  # pylint: disable=too-many-instance-attributes
                 Defaults to the value in the configuration file.
             k_matches: Number of nearest matches to retrieve.
                 Defaults to 20.
-            index_source_file: Optional override for the index source. When provided the
-                vector store (db_dir) will be overwritten with newly embedded index.
+            index_source_file: Optional csv source file to build new embedding index.
+                When provided, the vector store (db_dir) will be overwritten.
         """
         self.embedding_model_name = embedding_model_name
         self.k_matches = k_matches
