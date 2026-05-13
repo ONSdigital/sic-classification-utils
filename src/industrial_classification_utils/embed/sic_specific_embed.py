@@ -25,12 +25,23 @@ config = get_default_config()
 
 def load_embedding_handler_from_sic_index_files(
     *,
-    db_dir: str,
+    db_dir: str = config["embedding"]["db_dir"],
     sic_index_file: tuple[str, str] = config["lookups"]["sic_index"],
     sic_structure_file: tuple[str, str] = config["lookups"]["sic_structure"],
     **kwargs,
 ) -> EmbeddingHandler:
-    """Utility function to load an EmbeddingHandler instance with default configuration."""
+    """Utility function to load an EmbeddingHandler instance with default configuration.
+
+    Args:
+        db_dir: Directory where the vector store is located or will be created.
+        sic_index_file: Tuple of (file_path, file_type) for the SIC index file (xls).
+        sic_structure_file: Tuple of (file_path, file_type) for the SIC structure file (xls).
+        **kwargs: Additional keyword arguments to pass to the EmbeddingHandler constructor
+            (e.g., embedding_model_name, k_matches).
+
+    Returns:
+        An instance of EmbeddingHandler initialized with the (published) SIC index data.
+    """
     logger.info("Loading SIC index file: %s", sic_index_file)
     sic_index_df = load_sic_index(sic_index_file)
 
