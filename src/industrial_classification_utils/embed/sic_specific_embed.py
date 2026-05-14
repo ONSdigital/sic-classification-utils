@@ -6,6 +6,7 @@ and builds an embedding vector store using the EmbeddingHandler class.
 """
 
 import logging
+import os
 import tempfile
 
 from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
@@ -55,10 +56,13 @@ def load_embedding_handler_from_sic_index_files(
         lambda x: (x.replace(".", "").replace("/", "") + "0")[:5]
     )
 
-    # write to temporary csv for vector store build
+    # write to temporary csv for vector store build, then clean up
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as temp_csv:
-        df.to_csv(temp_csv.name, index=False)
-        logger.info("Temporary CSV for vector store created at: %s", temp_csv.name)
-        return EmbeddingHandler(
-            db_dir=db_dir, index_source_file=temp_csv.name, **kwargs
-        )
+        csv_path = temp_csv.name
+        df.to_csv(csv_path, index=False)
+        logger.info("Temporary CSV for vector store created at: %s", csv_path)
+
+    try:
+        return EmbeddingHandler(db_dir=db_dir, index_source_file=csv_path, **kwargs)
+    finally:
+        os.unlink(csv_path)

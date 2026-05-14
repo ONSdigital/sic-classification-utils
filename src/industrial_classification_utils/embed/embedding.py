@@ -262,9 +262,10 @@ class EmbeddingHandler:
         """
         search_input = VectorStoreSearchInput({"id": ["q1"], "query": [query]})
 
-        n_results = min(
-            self.index_size if self.index_size is not None else int("inf"),
-            self.k_matches,
+        n_results = (
+            self.k_matches
+            if self.index_size is None
+            else min(self.index_size, self.k_matches)
         )
         results = self.vector_store.search(search_input, n_results=n_results)
 

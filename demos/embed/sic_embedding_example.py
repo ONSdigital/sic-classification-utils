@@ -22,7 +22,7 @@ print("Creating embeddings example index...")
 # Create the embeddings index
 
 example_data = files("industrial_classification_utils.data.example").joinpath(
-    "toy_index.txt"
+    "toy_index.csv"
 )
 embed1 = EmbeddingHandler(db_dir=DB_DIR, index_source_file=str(example_data))
 print(
