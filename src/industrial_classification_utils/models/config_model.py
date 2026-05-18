@@ -11,7 +11,7 @@ Classes:
 
 from typing import TypedDict
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class EmbeddingConfig(BaseModel):
@@ -29,6 +29,15 @@ class EmbeddingConfig(BaseModel):
     index_source_file: str | None = None
     k_matches: int
 
+    @field_validator("k_matches")
+    @classmethod
+    def _validate_k_matches(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("k_matches must be at least 1")
+        if v > 100:  # noqa: PLR2004
+            raise ValueError("k_matches must be at most 100")
+        return v
+
 
 class EmbeddingStatus(EmbeddingConfig):
     """Extended configuration model that includes the status and size of the embedding index.
@@ -43,6 +52,19 @@ class EmbeddingStatus(EmbeddingConfig):
 
     status: str
     index_size: int
+
+    @model_validator(mode="after")
+    def _validate_ready_state(self) -> "EmbeddingStatus":
+        if self.status == "ready":
+            if self.index_size < 1:
+                raise ValueError("index_size must be at least 1 when ready")
+            for field, val in [
+                ("embedding_model_name", self.embedding_model_name),
+                ("db_dir", self.db_dir),
+            ]:
+                if not val or val == "unknown":
+                    raise ValueError(f"{field} must be a valid value when ready")
+        return self
 
 
 class LLMConfig(TypedDict):

@@ -7,6 +7,7 @@ flat csv file, manage vector stores, and perform similarity searches.
 
 # pylint: disable=too-many-instance-attributes
 
+import json
 import logging
 import os
 from typing import Any
@@ -95,9 +96,8 @@ class EmbeddingHandler:
     Attributes:
         embedding_model_name (str): Name of the HuggingFace sentence-transformer model.
         db_dir (str): Directory where the Classifai vector store database is located.
-            When loaded from GCS this is updated to the local temp directory path.
-        index_source_file (str | None): Path or URI that the current vector store was
-            built from.  Set to ``db_dir`` when an existing store is loaded.
+        index_source_file (str | None): Path or URI to the source file CSV that the current
+            vector store was built from.
         k_matches (int): Number of nearest neighbours returned per search query.
         spell (Speller): Autocorrect spell-checker used in :meth:`search_index_multi`.
         embeddings (Any): The underlying vectoriser instance.
@@ -139,14 +139,9 @@ class EmbeddingHandler:
         self._downloaded_vector_store: DownloadedVectorStore | None = None
         self.vector_store: VectorStore
         if not self.index_source_file:
-            self.vector_store = self._load_existing_vector_store()
-            # Update index_source_file to reflect the data source and db_dir to reflect
-            # the actual location of the vector store (local or temp dir if downloaded from GCS).
-            self.index_source_file = self.db_dir
-            self.db_dir = (
-                self.db_dir
-                if self._downloaded_vector_store is None
-                else self._downloaded_vector_store.temp_dir.name
+            # Update index_source_file to reflect the data source of the loaded vector store.
+            self.vector_store, self.index_source_file = (
+                self._load_existing_vector_store()
             )
         else:
             self.vector_store = self._build_vector_store()
@@ -156,21 +151,15 @@ class EmbeddingHandler:
         )
 
         logger.info(
-            "Vector store created in: %s containing %s entries from: %s.",
-            self.db_dir,
-            self.index_size,
-            self.index_source_file,
-        )
-
-        logger.debug(
             "EmbeddingHandler initialised with config: %s", self.get_embed_config()
         )
 
-    def _load_existing_vector_store(self) -> VectorStore:
+    def _load_existing_vector_store(self) -> tuple[VectorStore, str | None]:
         """Load an existing vector store from a local folder or a GCS URI.
 
         Returns:
-            A :class:`VectorStore` loaded from ``db_dir``.
+            A tuple containing a :class:`VectorStore` loaded from ``db_dir`` and
+                the optional index source file.
 
         Raises:
             FileNotFoundError: If ``db_dir`` does not contain the required
@@ -199,11 +188,18 @@ class EmbeddingHandler:
                 "or provide a valid index source file."
             )
 
-        return VectorStore.from_filespace(
+        vs = VectorStore.from_filespace(
             folder_path=db_dir,
             vectoriser=self.embeddings,
             hooks=None,
         )
+
+        logger.info("Existing vector store loaded successfully from %s", self.db_dir)
+        # read the source+index_file from metadata
+        with open(metadata_path, encoding="utf-8") as f:
+            meta = json.load(f)
+        index_source_file = meta.get("index_source_file", None)
+        return (vs, index_source_file)
 
     def _build_vector_store(self) -> VectorStore:
         """Build a Classifai vector store from a CSV source file.
@@ -247,6 +243,23 @@ class EmbeddingHandler:
             hooks=None,
         )
 
+        # add file name to metadata for traceability
+        metadata_path = os.path.join(self.db_dir, "metadata.json")
+        if os.path.exists(metadata_path):
+            with open(metadata_path, encoding="utf-8") as f:
+                metadata = json.load(f)
+        else:
+            metadata = {}
+        metadata["index_source_file"] = str(self.index_source_file)
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump(metadata, f)
+
+        logger.info(
+            "Vector store built successfully in %s with data from %s.",
+            self.db_dir,
+            self.index_source_file,
+        )
+
         return vector_store
 
     def search_index(
@@ -274,7 +287,7 @@ class EmbeddingHandler:
         # ClassifAI returns a dataframe-like object.
         # Depending on the exact backend/version, one of these usually works.
         if hasattr(results, "to_dicts"):  # noqa: SIM108
-            rows = results.to_dicts()
+            rows = results.to_dicts()  # type: ignore
         else:
             rows = results.to_dict(orient="records")
 

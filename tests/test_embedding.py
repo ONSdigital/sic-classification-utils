@@ -18,6 +18,7 @@ from industrial_classification_utils.embed import (
     load_embedding_handler_from_sic_index_files,
 )
 from industrial_classification_utils.embed.embedding import ChromaDBesqueHFVectoriser
+from industrial_classification_utils.models.config_model import EmbeddingStatus
 from industrial_classification_utils.models.response_model import (
     SearchIndexItem,
     SearchIndexResponse,
@@ -75,7 +76,7 @@ def toy_index_file() -> StringIO:
 @pytest.fixture
 def embedding_handler_for_embed(tmp_path: Path) -> EmbeddingHandler:
     """Return a handler safe for embedding-related tests."""
-    placeholder_store = SimpleNamespace(num_vectors=0)
+    placeholder_store = SimpleNamespace(num_vectors=1)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
     with (
@@ -86,7 +87,7 @@ def embedding_handler_for_embed(tmp_path: Path) -> EmbeddingHandler:
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=placeholder_store,
+            return_value=(placeholder_store, "mock-source.csv"),
         ),
     ):
         handler = EmbeddingHandler(
@@ -126,7 +127,7 @@ def embedding_handler_search(tmp_path: Path) -> EmbeddingHandler:
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=fake_store,
+            return_value=(fake_store, "mock-source.csv"),
         ),
     ):
         handler = EmbeddingHandler(
@@ -151,7 +152,7 @@ def embedding_handler_sic(tmp_path: Path) -> EmbeddingHandler:
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=built_store,
+            return_value=(built_store, "mock-source.csv"),
         ),
     ):
         handler = EmbeddingHandler(
@@ -175,7 +176,7 @@ def test_embedding_handler_init_sets_vector_store(tmp_path: Path) -> None:
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=built_store,
+            return_value=(built_store, "mock-source.csv"),
         ),
     ):
         handler = EmbeddingHandler(
@@ -199,7 +200,7 @@ def test_embedding_handler_init_sets_index_size(tmp_path: Path) -> None:
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=built_store,
+            return_value=(built_store, "mock-source.csv"),
         ),
     ):
         handler = EmbeddingHandler(
@@ -243,7 +244,7 @@ def test_search_index_uses_to_dicts_when_available(tmp_path: Path):
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=fake_store,
+            return_value=(fake_store, "mock-source.csv"),
         ),
     ):
         handler = EmbeddingHandler(
@@ -260,7 +261,7 @@ def test_search_index_uses_to_dicts_when_available(tmp_path: Path):
 
 @pytest.mark.embed
 def test_search_index_multi(tmp_path: Path):
-    placeholder_store = SimpleNamespace(num_vectors=0)
+    placeholder_store = SimpleNamespace(num_vectors=1)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
     with (
@@ -271,7 +272,7 @@ def test_search_index_multi(tmp_path: Path):
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=placeholder_store,
+            return_value=(placeholder_store, "mock-source.csv"),
         ),
     ):
         handler = EmbeddingHandler(
@@ -309,7 +310,7 @@ def test_search_index_multi(tmp_path: Path):
 
 @pytest.mark.embed
 def test_search_index_multi_filters_none_values(tmp_path: Path):
-    placeholder_store = SimpleNamespace(num_vectors=0)
+    placeholder_store = SimpleNamespace(num_vectors=1)
     fake_embeddings = SimpleNamespace(model_name="sentence-transformers/other")
 
     with (
@@ -320,7 +321,7 @@ def test_search_index_multi_filters_none_values(tmp_path: Path):
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=placeholder_store,
+            return_value=(placeholder_store, "mock-source.csv"),
         ),
     ):
         handler = EmbeddingHandler(
@@ -360,7 +361,7 @@ def test_embedding_handler_initialization(tmp_path: Path):
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=mock_vector_store,
+            return_value=(mock_vector_store, "mock-source.csv"),
         ),
     ):
         EmbeddingHandler("other", db_dir=str(tmp_path / "vector_store"))
@@ -394,7 +395,7 @@ def test_load_existing_vector_store_local(tmp_path: Path):
     ):
         result = handler._load_existing_vector_store()
 
-    assert result is fake_store
+    assert result == (fake_store, None)
     mock_from_filespace.assert_called_once_with(
         folder_path=str(db_dir),
         vectoriser=handler.embeddings,
@@ -457,7 +458,7 @@ def test_load_existing_vector_store_gcs():
         ):
             result = handler._load_existing_vector_store()
 
-    assert result is fake_store
+    assert result == (fake_store, None)
     assert handler._downloaded_vector_store is downloaded
     mock_download.assert_called_once_with("gs://my-bucket/prefix")
     mock_from_filespace.assert_called_once_with(
@@ -506,7 +507,7 @@ def test_init_calls_load_existing_when_no_index_source(tmp_path: Path):
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=existing_store,
+            return_value=(existing_store, "mock-source.csv"),
         ) as mock_existing,
     ):
         handler = EmbeddingHandler(
@@ -565,8 +566,10 @@ def test_load_embedding_handler_from_sic_index_files_builds(tmp_path: Path):
 
 @pytest.mark.embed
 def test_build_vector_store_passes_none_metadata(tmp_path: Path):
+    db_dir = tmp_path / "vector_store"
+    db_dir.mkdir()
     handler = EmbeddingHandler.__new__(EmbeddingHandler)
-    handler.db_dir = str(tmp_path / "vector_store")
+    handler.db_dir = str(db_dir)
     handler.embeddings = object()
     handler.index_source_file = "some-file.csv"
 
@@ -679,7 +682,7 @@ def test_init_updates_db_dir_to_temp_dir_when_loading_from_gcs(tmp_path: Path):
 
     def fake_load(self):
         self._downloaded_vector_store = downloaded_store
-        return downloaded_store
+        return (downloaded_store, original_db_dir)
 
     with (
         patch(
@@ -693,7 +696,7 @@ def test_init_updates_db_dir_to_temp_dir_when_loading_from_gcs(tmp_path: Path):
             db_dir=original_db_dir,
         )
 
-    assert handler.db_dir == str(gcs_temp_dir)
+    assert handler.db_dir == original_db_dir
     assert handler.index_source_file == original_db_dir
 
 
@@ -762,7 +765,7 @@ def test_get_embed_config_returns_correct_values(tmp_path: Path):
         patch(
             "industrial_classification_utils.embed.embedding."
             "EmbeddingHandler._load_existing_vector_store",
-            return_value=store,
+            return_value=(store, "mock-source.csv"),
         ),
     ):
         handler = EmbeddingHandler(
@@ -822,3 +825,75 @@ def test_load_embedding_handler_from_sic_index_files_forwards_kwargs(tmp_path: P
 
     call_kwargs = mock_handler_cls.call_args.kwargs
     assert call_kwargs.get("k_matches") == 42
+
+
+# ---------------------------------------------------------------------------
+# EmbeddingStatus
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.embed
+def test_embedding_status_valid():
+    status = EmbeddingStatus(
+        embedding_model_name="all-MiniLM-L6-v2",
+        db_dir="/some/dir",
+        k_matches=10,
+        index_source_file="source.csv",
+        status="ready",
+        index_size=100,
+    )
+    assert status.status == "ready"
+    assert status.index_size == 100
+
+
+@pytest.mark.embed
+def test_embedding_status_rejects_zero_index_size():
+    with pytest.raises(ValueError, match="index_size must be at least 1"):
+        EmbeddingStatus(
+            embedding_model_name="all-MiniLM-L6-v2",
+            db_dir="/some/dir",
+            k_matches=10,
+            index_source_file="source.csv",
+            status="ready",
+            index_size=0,
+        )
+
+
+@pytest.mark.embed
+def test_embedding_status_rejects_empty_model_name():
+    with pytest.raises(ValueError, match="embedding_model_name must be a valid value"):
+        EmbeddingStatus(
+            embedding_model_name="",
+            db_dir="/some/dir",
+            k_matches=10,
+            index_source_file="source.csv",
+            status="ready",
+            index_size=5,
+        )
+
+
+@pytest.mark.embed
+def test_embedding_status_rejects_unknown_db_dir():
+    with pytest.raises(ValueError, match="db_dir must be a valid value"):
+        EmbeddingStatus(
+            embedding_model_name="all-MiniLM-L6-v2",
+            db_dir="unknown",
+            k_matches=10,
+            index_source_file="source.csv",
+            status="ready",
+            index_size=5,
+        )
+
+
+@pytest.mark.embed
+def test_embedding_status_non_ready_skips_validation():
+    # index_size=0 and index_source_file=None are fine when not "ready"
+    status = EmbeddingStatus(
+        embedding_model_name="all-MiniLM-L6-v2",
+        db_dir="/some/dir",
+        k_matches=10,
+        index_source_file=None,
+        status="initialised",
+        index_size=0,
+    )
+    assert status.status == "initialised"
