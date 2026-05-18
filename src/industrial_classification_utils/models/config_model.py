@@ -20,6 +20,7 @@ class EmbeddingConfig(BaseModel):
     Attributes:
         embedding_model_name (str): Name of the embedding model.
         db_dir (str): Directory for the database.
+        index_source_file (str | None): Optional path to the source file for the index.
         k_matches (int): Number of matches to return in similarity search.
     """
 
@@ -27,7 +28,21 @@ class EmbeddingConfig(BaseModel):
     db_dir: str
     index_source_file: str | None = None
     k_matches: int
-    index_size: int | None = None  # Optional field to track the size of the index
+
+
+class EmbeddingStatus(EmbeddingConfig):
+    """Extended configuration model that includes the status and size of the embedding index.
+
+    Attributes:
+        embedding_model_name (str): Name of the embedding model.
+        db_dir (str): Directory for the database.
+        k_matches (int): Number of matches to return in similarity search.
+        status (str): Status of the embedding index (e.g., "initialized", "updated
+        index_size (int | None): Optional field to track the size of the index.
+    """
+
+    status: str
+    index_size: int
 
 
 class LLMConfig(TypedDict):

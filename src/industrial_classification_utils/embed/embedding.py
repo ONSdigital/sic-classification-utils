@@ -18,7 +18,7 @@ from classifai.vectorisers import (
     HuggingFaceVectoriser,
 )
 
-from industrial_classification_utils.models.config_model import EmbeddingConfig
+from industrial_classification_utils.models.config_model import EmbeddingStatus
 from industrial_classification_utils.models.response_model import (
     SearchIndexItem,
     SearchIndexResponse,
@@ -151,7 +151,9 @@ class EmbeddingHandler:
         else:
             self.vector_store = self._build_vector_store()
 
-        self.index_size = self.vector_store.num_vectors
+        self.index_size = (
+            self.vector_store.num_vectors if self.vector_store.num_vectors else 0
+        )
 
         logger.info(
             "Vector store created in: %s containing %s entries from: %s.",
@@ -311,17 +313,18 @@ class EmbeddingHandler:
         ]
         return SearchIndexResponse(results=sorted(short_list, key=lambda x: x.distance))
 
-    def get_embed_config(self) -> EmbeddingConfig:
+    def get_embed_config(self) -> EmbeddingStatus:
         """Return the current embedding configuration.
 
         Returns:
-            EmbeddingConfig: The current embedding configuration.
+            EmbeddingStatus: The current embedding configuration.
         """
-        embed_config = EmbeddingConfig(
+        embed_config = EmbeddingStatus(
             embedding_model_name=self.embedding_model_name,
             db_dir=self.db_dir,
             k_matches=self.k_matches,
             index_source_file=self.index_source_file,
             index_size=self.index_size,
+            status="ready",
         )
         return embed_config
