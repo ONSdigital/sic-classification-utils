@@ -1,7 +1,7 @@
-"""Search-as-you-type (SAYT) utilities.
+"""Search-as-you-type (SAYT) orchestration.
 
-This module provides a lightweight SAYT implementation for suggesting free-text
-survey responses for organisation/industry description questions.
+This module provides the public suggester API that coordinates configured
+retrievers and combines their scores into ranked suggestions.
 """
 
 import os
@@ -37,17 +37,53 @@ class _ConfiguredRetriever:
 
 
 class SAYTSuggester:
-    """Suggests industry/organisation description text as the user types.
+    """Suggest free-text responses as a user types.
 
-    Matching strategies:
-    - The suggester orchestrates whichever retrievers are supplied at construction time.
-    - By default it uses prefix, n-gram, and semantic retriever specs.
-    - Each retriever carries its own configuration and relative weight.
+    The suggester:
+    - validates and cleans the supplied corpus
+    - builds the configured retrievers for that corpus
+    - combines retriever-local scores into a shared weighted ranking
 
-    Example parameters:
-    - min_chars: minimum query length to trigger suggestions (default: 4)
-    - max_suggestions: maximum number of suggestions to return (default: 10)
-    - retrievers: optional explicit retriever specs; defaults to the standard set
+    By default it uses the standard prefix, n-gram, and semantic retriever
+    specifications. Use ``retrievers=`` to override that mix.
+
+    Suggester-wide settings are currently passed as keyword arguments and
+    validated by ``SaytConfig``. At present these include:
+    - ``min_chars``: minimum query length before retrieval runs
+    - ``max_suggestions``: default maximum number of ranked suggestions to return
+
+    Examples:
+        Basic usage with an in-memory corpus:
+
+            ```python
+            from industrial_classification_utils.sayt import SAYTSuggester
+
+            suggester = SAYTSuggester(
+                corpus=[
+                    ("Car wash", "Car Wash"),
+                    ("Dog grooming", "Dog grooming"),
+                ],
+                min_chars=3,
+                max_suggestions=5,
+            )
+
+            results = suggester.suggest("car")
+            ```
+
+        Usage with custom retriever specifications:
+
+            ```python
+            from industrial_classification_utils.sayt import (
+                PrefixRetrieverSpec,
+                SAYTSuggester,
+            )
+
+            suggester = SAYTSuggester(
+                corpus=[("Car wash", "Car Wash")],
+                retrievers=[PrefixRetrieverSpec()],
+                min_chars=3,
+            )
+            ```
     """
 
     def __init__(
@@ -57,6 +93,17 @@ class SAYTSuggester:
         retrievers: Sequence[RetrieverSpec] | None = None,
         **kwargs: object,
     ) -> None:
+        """Initialise a suggester for a cleaned response corpus.
+
+        Args:
+            corpus: Iterable of search strings or ``(search_text, display_text)``
+                pairs.
+            retrievers: Optional retriever specifications. When omitted, the
+                standard prefix, n-gram, and semantic spec set is used.
+            **kwargs: Suggester-wide keyword arguments validated by
+                ``SaytConfig``, currently including ``min_chars`` and
+                ``max_suggestions``.
+        """
         self._corpus = CleanCorpus.model_validate(corpus)
         self._config = SaytConfig.model_validate(kwargs)
         self._max_duplication = max(self._corpus.display_text_count.values(), default=0)
@@ -99,7 +146,23 @@ class SAYTSuggester:
         retrievers: Sequence[RetrieverSpec] | None = None,
         **kwargs: object,
     ) -> "SAYTSuggester":
-        """Alternative constructor to build a SAYTSuggester from a CSV file."""
+        """Build a suggester from CSV input.
+
+        Args:
+            file_path: Path to the CSV file containing suggestion rows.
+            search_text_col: Column containing the searchable text.
+            display_text_col: Optional column containing display text. When
+                omitted, the search column is reused for display values.
+            retrievers: Optional retriever specifications. When omitted, the
+                standard retriever set is used.
+            **kwargs: Keyword arguments validated by ``SaytConfig``.
+
+        Returns:
+            A configured ``SAYTSuggester`` instance.
+
+        Raises:
+            ValueError: If the requested search or display column is missing.
+        """
         df = pd.read_csv(file_path)
         if search_text_col not in df.columns:
             raise ValueError(f"Column '{search_text_col}' not found in CSV")
@@ -181,7 +244,18 @@ class SAYTSuggester:
     def suggest_with_scores(
         self, query: str | None, num_suggestions: int | None = None
     ) -> list[Suggestion]:
-        """Return suggestions for the given query, with relevance scores."""
+        """Return ranked suggestions and their combined scores.
+
+        Args:
+            query: Raw user query text.
+            num_suggestions: Optional maximum number of ranked suggestions to
+                return. When omitted, the configured default is used.
+
+        Returns:
+            A list of combined suggestions ordered by descending score. Returns
+            an empty list when the normalised query is shorter than
+            ``SaytConfig.min_chars``.
+        """
         if num_suggestions is None:
             num_suggestions = self._config.max_suggestions
         q_norm = _normalise(query)
@@ -211,7 +285,17 @@ class SAYTSuggester:
     def suggest(
         self, query: str | None, num_suggestions: int | None = None
     ) -> list[str]:
-        """Return list of suggestions (display text only) upto a maximum limit."""
+        """Return deduplicated display-text suggestions.
+
+        Args:
+            query: Raw user query text.
+            num_suggestions: Optional maximum number of display values to
+                return. When omitted, the configured default is used.
+
+        Returns:
+            A list of display-text suggestions ordered by descending combined
+            score, while preserving ties at the cutoff.
+        """
         if num_suggestions is None:
             num_suggestions = self._config.max_suggestions
         results = self.suggest_with_scores(
@@ -222,5 +306,9 @@ class SAYTSuggester:
         return [result[0] for result in ranked_results]
 
     def get_config(self) -> SaytConfig:
-        """Return the validated configuration of this SAYT suggester instance."""
+        """Return a copy of the validated suggester configuration.
+
+        Returns:
+            A deep copy of the ``SaytConfig`` used by this suggester.
+        """
         return self._config.model_copy(deep=True)

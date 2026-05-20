@@ -1,6 +1,6 @@
 # pylint: disable=too-few-public-methods
 
-"""Retriever composition surface for SAYT."""
+"""Public retriever protocols and configuration objects for SAYT."""
 
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -18,7 +18,15 @@ class Retriever(Protocol):
     def suggest_with_scores(
         self, q_norm: str, num_suggestions: int
     ) -> list[Suggestion]:
-        """Return scored suggestions for a normalised query string."""
+        """Return scored suggestions for a normalised query string.
+
+        Args:
+            q_norm: Normalised query text.
+            num_suggestions: Maximum number of scored suggestions to return.
+
+        Returns:
+            Ranked ``Suggestion`` objects for the query.
+        """
 
 
 class RetrieverSpec(Protocol):
@@ -33,7 +41,15 @@ class RetrieverSpec(Protocol):
         """Return the contribution weight applied during score combination."""
 
     def build(self, corpus: CleanCorpus, *, min_chars: int) -> Retriever:
-        """Build a corpus-bound retriever instance from this configuration."""
+        """Build a corpus-bound retriever instance from this configuration.
+
+        Args:
+            corpus: Cleaned corpus to bind to the retriever.
+            min_chars: Minimum query length required before retrieval runs.
+
+        Returns:
+            A configured retriever instance bound to ``corpus``.
+        """
 
 
 def _validate_retriever_weight(weight: float) -> None:
@@ -53,7 +69,15 @@ class PrefixRetrieverSpec:
         _validate_retriever_weight(self.weight)
 
     def build(self, corpus: CleanCorpus, *, min_chars: int) -> Retriever:
-        """Build a prefix retriever for the provided cleaned corpus."""
+        """Build a prefix retriever for the provided cleaned corpus.
+
+        Args:
+            corpus: Cleaned corpus to search.
+            min_chars: Minimum query length required before retrieval runs.
+
+        Returns:
+            A configured ``PrefixRetriever``.
+        """
         return PrefixRetriever(corpus, min_chars=min_chars)
 
 
@@ -75,7 +99,19 @@ class NgramRetrieverSpec:
             raise ValueError("ngram max_df must be in (0, 1]")
 
     def build(self, corpus: CleanCorpus, *, min_chars: int) -> Retriever:
-        """Build a character n-gram retriever for the provided corpus."""
+        """Build a character n-gram retriever for the provided corpus.
+
+        Args:
+            corpus: Cleaned corpus to search.
+            min_chars: Minimum query length required before retrieval runs.
+
+        Returns:
+            A configured ``NgramRetriever``.
+
+        Raises:
+            ValueError: If ``max_df`` would remove every n-gram feature from the
+                provided corpus.
+        """
         if self.max_df * corpus.size < 1:
             raise ValueError("ngram max_df is too low for the given corpus")
         return NgramRetriever(
@@ -101,12 +137,24 @@ class SemanticRetrieverSpec:
             raise ValueError("semantic model must be a non-empty string")
 
     def build(self, corpus: CleanCorpus, *, min_chars: int) -> Retriever:
-        """Build a semantic retriever for the provided cleaned corpus."""
+        """Build a semantic retriever for the provided cleaned corpus.
+
+        Args:
+            corpus: Cleaned corpus to search.
+            min_chars: Minimum query length required before retrieval runs.
+
+        Returns:
+            A configured ``SemanticRetriever``.
+        """
         return SemanticRetriever(corpus, model=self.model, min_chars=min_chars)
 
 
 def default_retriever_specs() -> list[RetrieverSpec]:
-    """Return the standard runtime retriever set used by SAYT."""
+    """Return the standard runtime retriever set used by SAYT.
+
+    Returns:
+        The default prefix, character n-gram, and semantic retriever specs.
+    """
     return [
         PrefixRetrieverSpec(),
         NgramRetrieverSpec(),

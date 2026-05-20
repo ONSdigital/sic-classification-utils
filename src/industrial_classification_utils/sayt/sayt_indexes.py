@@ -1,6 +1,6 @@
 # pylint: disable=too-few-public-methods
 
-"""Dense index and vectoriser helpers for SAYT retrieval."""
+"""Dense index construction helpers for SAYT retrievers."""
 
 import csv
 import os
@@ -37,7 +37,7 @@ def _silence_classifai_tqdm():
 
 @dataclass(frozen=True, slots=True)
 class DenseVectorIndex:
-    """ClassifAI-backed dense search index for in-memory query-time retrieval."""
+    """Wrap a ClassifAI vector store for query-time dense retrieval."""
 
     _vector_store: VectorStore
     _num_vectors: int
@@ -50,7 +50,16 @@ class DenseVectorIndex:
         corpus: CleanCorpus,
         vectoriser: VectoriserBase,
     ) -> "DenseVectorIndex":
-        """Build a dense index using ClassifAI's native VectorStore pipeline."""
+        """Build a dense index from a cleaned corpus.
+
+        Args:
+            corpus: Cleaned corpus whose normalised search text should be
+                indexed.
+            vectoriser: Vectoriser used to embed corpus rows and future queries.
+
+        Returns:
+            A ``DenseVectorIndex`` backed by ClassifAI's ``VectorStore``.
+        """
         with tempfile.TemporaryDirectory(prefix="sayt_") as tmp_dir:
             csv_path = os.path.join(tmp_dir, "corpus.csv")
 
@@ -80,7 +89,16 @@ class DenseVectorIndex:
         )
 
     def query(self, q_norm: str, num_suggestions: int) -> list[tuple[str, float]]:
-        """Return the top dense-vector matches as row ids with scores."""
+        """Query the dense index with a normalised string.
+
+        Args:
+            q_norm: Normalised query text.
+            num_suggestions: Maximum number of scored row ids to return before
+                tie expansion.
+
+        Returns:
+            Ranked ``(row_id, score)`` pairs from the dense vector store.
+        """
         if self._num_vectors < 1 or num_suggestions < 1:
             return []
 
@@ -140,7 +158,16 @@ def build_ngram_index(
     n: int,
     max_df: float,
 ) -> DenseVectorIndex:
-    """Build a dense index backed by character n-gram vectors."""
+    """Build a dense index backed by character n-gram vectors.
+
+    Args:
+        corpus: Cleaned corpus to index.
+        n: Character n-gram size.
+        max_df: Maximum document frequency passed to ``CountVectorizer``.
+
+    Returns:
+        A dense index using character n-gram embeddings.
+    """
     return DenseVectorIndex.from_corpus(
         corpus=corpus,
         vectoriser=_CharNgramVectoriser(
@@ -156,7 +183,15 @@ def build_semantic_index(
     *,
     model: str,
 ) -> DenseVectorIndex:
-    """Build a dense index backed by sentence-transformer embeddings."""
+    """Build a dense index backed by sentence-transformer embeddings.
+
+    Args:
+        corpus: Cleaned corpus to index.
+        model: Sentence-transformer model name without the repository prefix.
+
+    Returns:
+        A dense index using semantic embeddings.
+    """
     base_vectoriser: VectoriserBase = HuggingFaceVectoriser(
         f"sentence-transformers/{model}"
     )

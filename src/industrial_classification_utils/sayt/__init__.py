@@ -1,4 +1,4 @@
-"""Utilities for SAYT and related tasks."""
+"""Public SAYT interfaces and built-in retriever components."""
 
 from .sayt import SAYTSuggester
 from .sayt_retriever_specs import (

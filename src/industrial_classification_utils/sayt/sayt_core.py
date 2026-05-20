@@ -1,4 +1,4 @@
-"""Core data structures and validation for SAYT."""
+"""Core SAYT data models, corpus cleaning, and ranking helpers."""
 
 # ruff: noqa: PLR2004
 
@@ -30,7 +30,11 @@ def _row_uid(index: int, search_text: str, display_text: str) -> str:
 
 
 class CleanCorpus(BaseModel):
-    """Validated cleaned corpus and derived lookup tables for SAYT."""
+    """Store cleaned SAYT rows and their derived lookup tables.
+
+    Instances are created from raw strings or ``(search_text, display_text)``
+    pairs and retain stable row identifiers for downstream score aggregation.
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     corpus: object
@@ -97,7 +101,11 @@ class CleanCorpus(BaseModel):
 
 
 class SaytConfig(BaseModel):
-    """Validated configuration for a SAYT suggester instance."""
+    """Validated configuration for a SAYT suggester instance.
+
+    This model contains only suggester-wide settings. Retriever-specific
+    configuration lives on individual ``RetrieverSpec`` objects.
+    """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
@@ -116,7 +124,12 @@ class SaytConfig(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class Suggestion:
-    """Internal suggestion record with score and row metadata."""
+    """Represent a SAYT match with score and row metadata.
+
+    The meaning of ``score`` depends on the producer. Concrete retrievers emit
+    strategy-local scores, while ``SAYTSuggester.suggest_with_scores`` returns
+    the combined weighted score.
+    """
 
     display_text: str
     score: float
@@ -128,7 +141,16 @@ def take_with_ties(
     items: list[tuple[str, float]],
     limit: int,
 ) -> list[tuple[str, float]]:
-    """Return the first ``limit`` items and any later items tied on score."""
+    """Return the first ``limit`` items and any later items tied on score.
+
+    Args:
+        items: Scored ``(key, score)`` pairs to rank.
+        limit: Maximum number of leading items before tie extension is applied.
+
+    Returns:
+        The highest-scoring items up to ``limit``, plus any later items that are
+        tied with the cutoff score.
+    """
     if limit < 1 or not items:
         return []
 
