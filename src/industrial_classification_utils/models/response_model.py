@@ -29,6 +29,26 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from industrial_classification_utils.utils.constants import MAX_ALT_CANDIDATES
 
 
+class SearchIndexItem(BaseModel):
+    """Model representing an item in the vector store search index.
+
+    Attributes:
+        distance (float): vector search distance.
+        title (str): sic title description.
+        code (str): sic code.
+    """
+
+    distance: float
+    title: str
+    code: str
+
+
+class SearchIndexResponse(BaseModel):
+    """Model representing the vector store search index (multi) response."""
+
+    results: list[SearchIndexItem]
+
+
 class SicCandidate(BaseModel):
     """Represents a candidate SIC code with associated information.
 

@@ -1,6 +1,6 @@
 [project]
 name = "sic-classification-utils"
-version = "0.1.12"
+version = "0.1.13"
 description = "Utility functions used for SIC classification"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -114,6 +114,8 @@ convention = "google"
 "tests/*" = [
     # Allow use of assert statements in tests
     "S101",
+    # Allow magic values used in comparison in tests
+    "PLR2004",
 ]
 
 [tool.ruff.format]

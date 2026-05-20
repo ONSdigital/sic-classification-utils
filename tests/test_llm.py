@@ -232,7 +232,7 @@ def prompt_candidate_sic():
         if node.sic_code.n_digits > 1:
             lookup[node.sic_code.alpha_code[1:].replace("x", "")] = node
 
-        if node.sic_code.n_digits == 4 and not node.children:  # noqa: PLR2004
+        if node.sic_code.n_digits == 4 and not node.children:
             key = node.sic_code.alpha_code[1:5] + "0"
             lookup[key] = node
     sic = SIC(nodes=nodes, code_lookup=lookup)
@@ -392,7 +392,7 @@ def test_llm_response_mocked_prompt_candidate_list_filtered_character_limit(
     result = classification_llm_with_sic._prompt_candidate_list_filtered(
         short_list=short_list, chars_limit=80, filtered_list=["11111", "11112"]
     )
-    assert len(result) < 80  # noqa: PLR2004
+    assert len(result) < 80
 
 
 @pytest.mark.llm

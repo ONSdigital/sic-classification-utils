@@ -87,4 +87,37 @@ def download_vector_store_from_gcs(gcs_uri: str) -> DownloadedVectorStore:
     metadata_blob.download_to_filename(os.path.join(local_dir, "metadata.json"))
     vectors_blob.download_to_filename(os.path.join(local_dir, "vectors.parquet"))
 
+    logger.info(
+        "Downloaded vector store from %s to local directory %s.",
+        gcs_uri,
+        local_dir,
+    )
+
     return DownloadedVectorStore(path=local_dir, temp_dir=temp_dir)
+
+
+def download_one_file_from_gcs(gcs_uri: str) -> DownloadedVectorStore:
+    """Download a single file from GCS into a temp directory.
+
+    The returned object must be kept alive for as long as the downloaded file is needed.
+    """
+    bucket_name, blob_name = parse_gcs_uri(gcs_uri)
+
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+
+    if not blob.exists():
+        raise FileNotFoundError(f"File not found in GCS: {gcs_uri}")
+
+    temp_dir = tempfile.TemporaryDirectory()  # pylint: disable=consider-using-with
+    local_path = os.path.join(temp_dir.name, os.path.basename(blob_name))
+    blob.download_to_filename(local_path)
+
+    logger.info(
+        "Downloaded file from %s to local path %s.",
+        gcs_uri,
+        local_path,
+    )
+
+    return DownloadedVectorStore(path=local_path, temp_dir=temp_dir)
