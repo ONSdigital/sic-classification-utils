@@ -5,87 +5,89 @@ survey responses for organisation/industry description questions.
 """
 
 import os
-from collections.abc import Iterable
-from typing import cast
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 
 import pandas as pd
 from survey_assist_utils.logging import get_logger
 
-from .sayt_common import CleanCorpus, _normalise
-from .sayt_config import SaytConfig
-from .sayt_retrievers import (
-    NgramRetriever,
-    PrefixRetriever,
-    SemanticRetriever,
+from .sayt_core import (
+    CleanCorpus,
+    SaytConfig,
+    _normalise,
     _Suggestion,
     _take_with_ties,
 )
+from .sayt_retriever_specs import (
+    Retriever,
+    RetrieverSpec,
+    default_retriever_specs,
+)
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class _ConfiguredRetriever:
+    """Runtime retriever binding with its configured contribution weight."""
+
+    name: str
+    weight: float
+    retriever: Retriever
 
 
 class SAYTSuggester:
     """Suggests industry/organisation description text as the user types.
 
     Matching strategies:
-    - Prefix: exact prefix, token-prefix, and fuzzy prefix (typo tolerant)
-    - N-gram: char n-gram cosine similarity via classifai vectorisers/indexing
-    - Semantic: embedding cosine similarity via classifai vectorisers/indexing
-
-    Configuration options allow enabling/disabling strategies, setting their relative
-    weights, and tuning their parameters (e.g. n-gram size, fuzzy matching ratio).
+    - The suggester orchestrates whichever retrievers are supplied at construction time.
+    - By default it uses prefix, n-gram, and semantic retriever specs.
+    - Each retriever carries its own configuration and relative weight.
 
     Example parameters:
     - min_chars: minimum query length to trigger suggestions (default: 4)
     - max_suggestions: maximum number of suggestions to return (default: 10)
-    - prefix_enable: whether to use prefix matching (default: True)
-    - prefix_weight: weight of prefix matching in combined scoring (default: 1.0)
-    - ngram_enable: whether to use n-gram matching (default: True)
-    - ngram_weight: weight of n-gram matching in combined scoring (default: 1.0)
-    - ngram_n: n-gram size (default: 3)
-    - ngram_max_df: max document frequency for n-grams (default: 0.2)
-    - semantic_enable: whether to use semantic matching (default: True)
-    - semantic_weight: weight of semantic matching in combined scoring (default: 1.0)
-    - semantic_model: sentence transformer model for semantic matching (default: "all-MiniLM-L6-v2")
+    - retrievers: optional explicit retriever specs; defaults to the standard set
     """
 
     def __init__(
         self,
         corpus: Iterable[tuple[str, str]] | Iterable[str],
+        *,
+        retrievers: Sequence[RetrieverSpec] | None = None,
         **kwargs: object,
     ) -> None:
         self._corpus = CleanCorpus.model_validate(corpus)
-        self._config = SaytConfig.model_validate(
-            {**kwargs, "corpus_size": self._corpus.size}
-        )
+        self._config = SaytConfig.model_validate(kwargs)
         self._max_duplication = max(self._corpus.display_text_count.values(), default=0)
 
-        self._prefix_retriever = (
-            PrefixRetriever(self._corpus, min_chars=self._config.min_chars)
-            if self._config.prefix_enable
-            else None
+        self._retriever_specs = tuple(
+            default_retriever_specs() if retrievers is None else retrievers
         )
-        self._ngram_retriever = (
-            NgramRetriever(
-                self._corpus,
-                # using cast to make mypy happy (conditional validation done in SaytConfig)
-                n=cast(int, self._config.ngram_n),
-                max_df=cast(float, self._config.ngram_max_df),
-                min_chars=self._config.min_chars,
-            )
-            if self._config.ngram_enable
-            else None
-        )
-        self._semantic_retriever = (
-            SemanticRetriever(
-                self._corpus,
-                model=cast(str, self._config.semantic_model),
-                min_chars=self._config.min_chars,
-            )
-            if self._config.semantic_enable
-            else None
-        )
+        self._retrievers = self._build_retrievers(self._retriever_specs)
         logger.info(f"SAYT suggester initialized with config: {self.get_config()}")
+
+    def _build_retrievers(
+        self, retriever_specs: Sequence[RetrieverSpec]
+    ) -> list[_ConfiguredRetriever]:
+        if not retriever_specs:
+            raise ValueError("At least one retriever must be configured")
+
+        total_weight = sum(float(spec.weight) for spec in retriever_specs)
+        if total_weight <= 0:
+            raise ValueError("At least one retriever must have a positive weight")
+
+        return [
+            _ConfiguredRetriever(
+                name=spec.name,
+                weight=float(spec.weight) / total_weight,
+                retriever=spec.build(
+                    self._corpus,
+                    min_chars=self._config.min_chars,
+                ),
+            )
+            for spec in retriever_specs
+        ]
 
     @classmethod
     def from_csv(
@@ -94,7 +96,8 @@ class SAYTSuggester:
         *,
         search_text_col: str = "title",
         display_text_col: str | None = None,
-        **kwargs,
+        retrievers: Sequence[RetrieverSpec] | None = None,
+        **kwargs: object,
     ) -> "SAYTSuggester":
         """Alternative constructor to build a SAYTSuggester from a CSV file."""
         df = pd.read_csv(file_path)
@@ -105,7 +108,9 @@ class SAYTSuggester:
         if display_text_col not in df.columns:
             raise ValueError(f"Column '{display_text_col}' not found in CSV")
         return cls(
-            list(zip(df[search_text_col], df[display_text_col], strict=False)), **kwargs
+            list(zip(df[search_text_col], df[display_text_col], strict=False)),
+            retrievers=retrievers,
+            **kwargs,
         )
 
     def _dedup_suggestions(
@@ -132,15 +137,8 @@ class SAYTSuggester:
 
     def _combine_suggestions(
         self,
-        *,
-        prefix_results: list[_Suggestion],
-        ngram_results: list[_Suggestion],
-        semantic_results: list[_Suggestion],
+        result_groups: Iterable[tuple[float, list[_Suggestion]]],
     ) -> list[tuple[str, float]]:
-        w_prefix = self._config.prefix_weight if self._config.prefix_enable else 0.0
-        w_ngram = self._config.ngram_weight if self._config.ngram_enable else 0.0
-        w_sem = self._config.semantic_weight if self._config.semantic_enable else 0.0
-
         def normalise_scores(
             items: list[_Suggestion], weight: float
         ) -> dict[str, float]:
@@ -158,16 +156,27 @@ class SAYTSuggester:
                 )
             return out
 
-        prefix_norm = normalise_scores(prefix_results, w_prefix)
-        ngram_norm = normalise_scores(ngram_results, w_ngram)
-        sem_norm = normalise_scores(semantic_results, w_sem)
-
         combined_scores: dict[str, float] = {}
-        for d in (prefix_norm, ngram_norm, sem_norm):
+        for weight, suggestions in result_groups:
+            d = normalise_scores(suggestions, weight)
             for k, v in d.items():
                 combined_scores[k] = combined_scores.get(k, 0.0) + v
 
         return [(row_id, float(score)) for row_id, score in combined_scores.items()]
+
+    def _collect_retriever_results(
+        self, q_norm: str, num_suggestions: int
+    ) -> list[tuple[float, list[_Suggestion]]]:
+        return [
+            (
+                configured_retriever.weight,
+                configured_retriever.retriever.suggest_with_scores(
+                    q_norm,
+                    num_suggestions=num_suggestions,
+                ),
+            )
+            for configured_retriever in self._retrievers
+        ]
 
     def suggest_with_scores(
         self, query: str | None, num_suggestions: int | None = None
@@ -180,29 +189,12 @@ class SAYTSuggester:
             return []
 
         # Ask for more suggestions, as some may be filtered out after deduplication
-        prefix_results = []
-        if self._prefix_retriever is not None:
-            prefix_results = self._prefix_retriever.suggest_with_scores(
-                q_norm, num_suggestions=10 * num_suggestions
-            )
-
-        ngram_results = []
-        if self._ngram_retriever is not None:
-            ngram_results = self._ngram_retriever.suggest_with_scores(
-                q_norm, num_suggestions=10 * num_suggestions
-            )
-
-        semantic_results = []
-        if self._semantic_retriever is not None:
-            semantic_results = self._semantic_retriever.suggest_with_scores(
-                q_norm, num_suggestions=10 * num_suggestions
-            )
-
-        combined_result = self._combine_suggestions(
-            prefix_results=prefix_results,
-            ngram_results=ngram_results,
-            semantic_results=semantic_results,
+        results_by_kind = self._collect_retriever_results(
+            q_norm,
+            num_suggestions=10 * num_suggestions,
         )
+
+        combined_result = self._combine_suggestions(results_by_kind)
         ranked_results = _take_with_ties(combined_result, num_suggestions)
         out = [
             _Suggestion(

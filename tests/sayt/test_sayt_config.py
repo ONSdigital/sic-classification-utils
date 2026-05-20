@@ -3,7 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
-from industrial_classification_utils.sayt.sayt_config import SaytConfig
+from industrial_classification_utils.sayt import (
+    NgramRetrieverSpec,
+    PrefixRetrieverSpec,
+    SemanticRetrieverSpec,
+    default_retriever_specs,
+)
+from industrial_classification_utils.sayt.sayt_core import CleanCorpus, SaytConfig
 
 
 @pytest.mark.parametrize(
@@ -13,11 +19,7 @@ from industrial_classification_utils.sayt.sayt_config import SaytConfig
         ({"min_chars": True}, ValidationError),
         ({"max_suggestions": 0}, ValidationError),
         ({"max_suggestions": 101}, ValidationError),
-        ({"ngram_enable": True, "ngram_n": 1}, ValidationError),
-        ({"ngram_enable": True, "ngram_n": 6}, ValidationError),
-        ({"ngram_enable": True, "ngram_max_df": 0.0}, ValidationError),
-        ({"ngram_enable": True, "ngram_max_df": 1.1}, ValidationError),
-        ({"ngram_enable": True, "ngram_weight": 0.0}, ValueError),
+        ({"ngram_enable": True}, ValidationError),
     ],
 )
 def test_config_validation(kwargs, exc_type):
@@ -26,110 +28,50 @@ def test_config_validation(kwargs, exc_type):
         SaytConfig.model_validate(kwargs)
 
 
-def test_disabled_modules_clear_module_specific_values():
-    """Disabled modules should store None for their module-specific config."""
-    config = SaytConfig.model_validate(
-        {
-            "ngram_enable": False,
-            "semantic_enable": False,
-        }
-    )
+def test_default_retriever_specs_returns_standard_set():
+    """Provide the standard prefix, n-gram, and semantic specs."""
+    specs = default_retriever_specs()
 
-    assert config.prefix_weight == pytest.approx(1.0)
-    assert config.ngram_weight == pytest.approx(0.0)
-    assert config.ngram_n is None
-    assert config.ngram_max_df is None
-    assert config.semantic_weight == pytest.approx(0.0)
-    assert config.semantic_model is None
-
-
-def test_disabled_modules_allow_none_inputs_for_non_weight_values():
-    """Explicit None values are valid for disabled module-specific non-weight values."""
-    config = SaytConfig.model_validate(
-        {
-            "ngram_enable": False,
-            "ngram_n": None,
-            "ngram_max_df": None,
-            "semantic_enable": False,
-            "semantic_model": None,
-        }
-    )
-
-    assert config.prefix_weight == pytest.approx(1.0)
-    assert config.ngram_weight == pytest.approx(0.0)
-    assert config.ngram_n is None
-    assert config.ngram_max_df is None
-    assert config.semantic_weight == pytest.approx(0.0)
-    assert config.semantic_model is None
+    assert [type(spec).__name__ for spec in specs] == [
+        "PrefixRetrieverSpec",
+        "NgramRetrieverSpec",
+        "SemanticRetrieverSpec",
+    ]
 
 
 @pytest.mark.parametrize(
-    "kwargs, match",
+    "factory, kwargs, match",
     [
-        ({"ngram_enable": True, "ngram_n": None}, "ngram_n must be set"),
-        ({"ngram_enable": True, "ngram_max_df": None}, "ngram_max_df must be set"),
-        (
-            {"ngram_enable": True, "ngram_max_df": 0.2, "corpus_size": 4},
-            "ngram_max_df is too low",
-        ),
-        (
-            {
-                "ngram_enable": True,
-                "ngram_weight": 0.0,
-                "ngram_max_df": 1.0,
-                "corpus_size": 1,
-            },
-            "ngram_weight must be > 0",
-        ),
-        (
-            {
-                "ngram_enable": False,
-                "semantic_enable": True,
-                "semantic_weight": 0.0,
-            },
-            "semantic_weight must be > 0",
-        ),
-        (
-            {
-                "prefix_enable": False,
-                "ngram_enable": False,
-                "semantic_enable": False,
-            },
-            "At least one of prefix, ngram, or semantic must be enabled",
-        ),
+        (PrefixRetrieverSpec, {"weight": 0.0}, "retriever weight must be > 0"),
+        (NgramRetrieverSpec, {"weight": 0.0}, "retriever weight must be > 0"),
+        (NgramRetrieverSpec, {"n": 1}, "ngram n must be between 2 and 5"),
+        (NgramRetrieverSpec, {"n": 6}, "ngram n must be between 2 and 5"),
+        (NgramRetrieverSpec, {"max_df": 0.0}, "ngram max_df must be in"),
+        (NgramRetrieverSpec, {"max_df": 1.1}, "ngram max_df must be in"),
+        (SemanticRetrieverSpec, {"weight": 0.0}, "retriever weight must be > 0"),
+        (SemanticRetrieverSpec, {"model": "   "}, "semantic model must be"),
     ],
 )
-def test_config_additional_validation_errors(kwargs, match):
-    """Reject unsupported edge cases for optional modules and weights."""
+def test_retriever_spec_validation(factory, kwargs, match):
+    """Reject invalid retriever-spec settings."""
     with pytest.raises(ValueError, match=match):
-        SaytConfig.model_validate(kwargs)
+        factory(**kwargs)
 
 
-def test_disabled_prefix_and_ngram_zero_their_weights():
-    """Disabled modules should always normalise to zero weight."""
-    config = SaytConfig.model_validate(
-        {
-            "prefix_enable": False,
-            "prefix_weight": 99.0,
-            "ngram_enable": False,
-            "ngram_weight": 99.0,
-            "semantic_enable": True,
-            "semantic_weight": 2.0,
-        }
-    )
+def test_ngram_retriever_spec_validates_against_corpus_size():
+    """Reject n-gram configs that would filter every feature from a corpus."""
+    corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
 
-    assert config.prefix_weight == pytest.approx(0.0)
-    assert config.ngram_weight == pytest.approx(0.0)
-    assert config.semantic_weight == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="ngram max_df is too low"):
+        NgramRetrieverSpec(max_df=0.2).build(corpus, min_chars=3)
 
 
-def test_prefix_weight_must_be_positive_when_prefix_enabled():
-    """Reject non-positive prefix weight while prefix retrieval is enabled."""
-    with pytest.raises(ValueError, match="prefix_weight must be > 0"):
-        SaytConfig.model_validate(
-            {
-                "prefix_enable": True,
-                "prefix_weight": 0.0,
-                "ngram_enable": False,
-            }
-        )
+def test_retriever_specs_keep_their_config():
+    """Expose per-retriever settings on the spec object rather than SaytConfig."""
+    n = 4
+    max_df = 0.8
+    spec = NgramRetrieverSpec(weight=2.0, n=n, max_df=max_df)
+
+    assert spec.weight == pytest.approx(2.0)
+    assert spec.n == n
+    assert spec.max_df == pytest.approx(max_df)
