@@ -260,7 +260,7 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
         _StubHFVectoriser,
     )
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes._DenseVectorIndex.from_corpus",
+        "industrial_classification_utils.sayt.sayt_indexes.DenseVectorIndex.from_corpus",
         _fake_build_dense_vector_index,
     )
 

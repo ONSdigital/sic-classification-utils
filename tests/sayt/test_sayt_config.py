@@ -1,5 +1,7 @@
 """Tests for SAYT configuration validation."""
 
+# pylint: disable=too-few-public-methods, R0801
+
 import pytest
 from pydantic import ValidationError
 
@@ -75,3 +77,31 @@ def test_retriever_specs_keep_their_config():
     assert spec.weight == pytest.approx(2.0)
     assert spec.n == n
     assert spec.max_df == pytest.approx(max_df)
+
+
+def test_semantic_retriever_spec_builds_semantic_retriever(monkeypatch):
+    """Delegate semantic retriever construction with the configured settings."""
+    corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
+    captured = {}
+
+    class _StubSemanticRetriever:
+        def __init__(self, corpus_arg, *, model, min_chars):
+            captured["corpus"] = corpus_arg
+            captured["model"] = model
+            captured["min_chars"] = min_chars
+
+    monkeypatch.setattr(
+        "industrial_classification_utils.sayt.sayt_retriever_specs.SemanticRetriever",
+        _StubSemanticRetriever,
+    )
+
+    spec = SemanticRetrieverSpec(model="custom-model", weight=2.0)
+
+    retriever = spec.build(corpus, min_chars=4)
+
+    assert isinstance(retriever, _StubSemanticRetriever)
+    assert captured == {
+        "corpus": corpus,
+        "model": "custom-model",
+        "min_chars": 4,
+    }

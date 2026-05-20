@@ -370,3 +370,29 @@ def test_constructor_rejects_empty_retriever_list(small_corpus):
     """Reject suggester construction without any retriever specs."""
     with pytest.raises(ValueError, match="At least one retriever"):
         SAYTSuggester(small_corpus, retrievers=[])
+
+
+def test_constructor_rejects_non_positive_total_retriever_weight(small_corpus):
+    """Reject configured retrievers whose combined weight is not positive."""
+    build_calls = []
+
+    class _StubRetriever:
+        def suggest_with_scores(self, q_norm, num_suggestions):
+            return []
+
+    @dataclass(frozen=True, slots=True)
+    class _StubRetrieverSpec:
+        name: str = "stub"
+        weight: float = 0.0
+
+        def build(self, corpus, *, min_chars):
+            build_calls.append((corpus, min_chars))
+            return _StubRetriever()
+
+    with pytest.raises(
+        ValueError,
+        match="At least one retriever must have a positive weight",
+    ):
+        SAYTSuggester(small_corpus, retrievers=[_StubRetrieverSpec()])
+
+    assert not build_calls
