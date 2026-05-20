@@ -1,25 +1,27 @@
+# pylint: disable=too-few-public-methods
+
 """Retriever composition surface for SAYT."""
 
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from .sayt_core import CleanCorpus, _Suggestion
+from .sayt_core import CleanCorpus, Suggestion
 from .sayt_retrievers import NgramRetriever, PrefixRetriever, SemanticRetriever
 
 _MIN_NGRAM_SIZE = 2
 _MAX_NGRAM_SIZE = 5
 
 
-class Retriever(Protocol):  # pylint: disable=too-few-public-methods
+class Retriever(Protocol):
     """Query contract used by the SAYT orchestrator."""
 
     def suggest_with_scores(
         self, q_norm: str, num_suggestions: int
-    ) -> list[_Suggestion]:
+    ) -> list[Suggestion]:
         """Return scored suggestions for a normalised query string."""
 
 
-class RetrieverSpec(Protocol):  # pylint: disable=too-few-public-methods
+class RetrieverSpec(Protocol):
     """Configuration plus builder for a corpus-bound retriever instance."""
 
     @property

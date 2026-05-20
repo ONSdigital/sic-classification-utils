@@ -11,8 +11,8 @@ from industrial_classification_utils.sayt import NgramRetrieverSpec, PrefixRetri
 from industrial_classification_utils.sayt.sayt import SAYTSuggester
 from industrial_classification_utils.sayt.sayt_core import CleanCorpus
 from industrial_classification_utils.sayt.sayt_indexes import (
+    DenseVectorIndex,
     _CharNgramVectoriser,
-    _DenseVectorIndex,
     _L2NormalisingVectoriser,
 )
 from industrial_classification_utils.sayt.sayt_retrievers import (
@@ -176,7 +176,7 @@ def test_ngram_retriever_returns_empty_for_empty_query_vector(
     retriever = NgramRetriever.__new__(NgramRetriever)
     retriever._corpus = corpus
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore([]),
         _num_vectors=1,
         _corpus=corpus,
@@ -198,7 +198,7 @@ def test_ngram_retriever_returns_empty_for_empty_similarity_matrix():
     retriever = NgramRetriever.__new__(NgramRetriever)
     retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore([]),
         _num_vectors=0,
         _corpus=retriever._corpus,
@@ -213,7 +213,7 @@ def test_dense_retriever_keeps_ties_at_cutoff(small_corpus):
     retriever = NgramRetriever.__new__(NgramRetriever)
     retriever._corpus = corpus
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore(
             [
                 {"doc_label": corpus.rows[0][0], "score": 0.9},
@@ -249,7 +249,7 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
 
     def _fake_build_dense_vector_index(*, corpus, vectoriser):
         captured["vectoriser_type"] = type(vectoriser).__name__
-        return _DenseVectorIndex(
+        return DenseVectorIndex(
             _vector_store=_StubVectorStore([]),
             _num_vectors=1,
             _corpus=corpus,
@@ -287,7 +287,7 @@ def test_semantic_retriever_returns_empty_for_empty_query_vector(small_corpus):
     retriever = SemanticRetriever.__new__(SemanticRetriever)
     retriever._corpus = corpus
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore([]),
         _num_vectors=1,
         _corpus=corpus,
@@ -301,7 +301,7 @@ def test_semantic_retriever_returns_empty_for_empty_similarity_matrix():
     retriever = SemanticRetriever.__new__(SemanticRetriever)
     retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore([]),
         _num_vectors=0,
         _corpus=retriever._corpus,

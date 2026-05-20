@@ -13,7 +13,7 @@ from industrial_classification_utils.sayt import (
     PrefixRetrieverSpec,
 )
 from industrial_classification_utils.sayt.sayt import SAYTSuggester
-from industrial_classification_utils.sayt.sayt_core import CleanCorpus, _Suggestion
+from industrial_classification_utils.sayt.sayt_core import CleanCorpus, Suggestion
 
 
 def test_constructor_rejects_unknown_kwargs(small_corpus):
@@ -222,7 +222,7 @@ def test_suggest_with_scores_uses_only_supplied_retrievers(small_corpus):
         def suggest_with_scores(self, q_norm, num_suggestions):
             semantic_calls.append((q_norm, num_suggestions))
             return [
-                _Suggestion(
+                Suggestion(
                     display_text=self._row[2],
                     score=3.0,
                     search_text=self._row[1],
@@ -264,7 +264,7 @@ def test_combine_suggestions_ignores_non_positive_score_groups(small_corpus):
             (
                 1.0,
                 [
-                    _Suggestion(
+                    Suggestion(
                         display_text=first_display,
                         score=0.0,
                         search_text=first_search,
@@ -296,13 +296,13 @@ def test_combine_suggestions_ignores_invalid_scores(small_corpus):
             (
                 1.0,
                 [
-                    _Suggestion(
+                    Suggestion(
                         display_text=first_display,
                         score=0.0,
                         search_text=first_search,
                         row_id=first_row_id,
                     ),
-                    _Suggestion(
+                    Suggestion(
                         display_text="ignored",
                         score=5.0,
                         search_text="ignored",
@@ -313,13 +313,13 @@ def test_combine_suggestions_ignores_invalid_scores(small_corpus):
             (
                 1.0,
                 [
-                    _Suggestion(
+                    Suggestion(
                         display_text=first_display,
                         score=2.0,
                         search_text=first_search,
                         row_id=first_row_id,
                     ),
-                    _Suggestion(
+                    Suggestion(
                         display_text=first_display,
                         score=1.0,
                         search_text=second_search,

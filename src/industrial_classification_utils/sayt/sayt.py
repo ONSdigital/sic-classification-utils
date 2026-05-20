@@ -14,9 +14,9 @@ from survey_assist_utils.logging import get_logger
 from .sayt_core import (
     CleanCorpus,
     SaytConfig,
+    Suggestion,
     _normalise,
-    _Suggestion,
-    _take_with_ties,
+    take_with_ties,
 )
 from .sayt_retriever_specs import (
     Retriever,
@@ -114,7 +114,7 @@ class SAYTSuggester:
         )
 
     def _dedup_suggestions(
-        self, suggestions: list[_Suggestion]
+        self, suggestions: list[Suggestion]
     ) -> list[tuple[str, float]]:
         # sort by score and deduplicate by display text, keeping the highest-scoring variant.
         sorted_suggestions = sorted(
@@ -137,10 +137,10 @@ class SAYTSuggester:
 
     def _combine_suggestions(
         self,
-        result_groups: Iterable[tuple[float, list[_Suggestion]]],
+        result_groups: Iterable[tuple[float, list[Suggestion]]],
     ) -> list[tuple[str, float]]:
         def normalise_scores(
-            items: list[_Suggestion], weight: float
+            items: list[Suggestion], weight: float
         ) -> dict[str, float]:
             if not items:
                 return {}
@@ -166,7 +166,7 @@ class SAYTSuggester:
 
     def _collect_retriever_results(
         self, q_norm: str, num_suggestions: int
-    ) -> list[tuple[float, list[_Suggestion]]]:
+    ) -> list[tuple[float, list[Suggestion]]]:
         return [
             (
                 configured_retriever.weight,
@@ -180,7 +180,7 @@ class SAYTSuggester:
 
     def suggest_with_scores(
         self, query: str | None, num_suggestions: int | None = None
-    ) -> list[_Suggestion]:
+    ) -> list[Suggestion]:
         """Return suggestions for the given query, with relevance scores."""
         if num_suggestions is None:
             num_suggestions = self._config.max_suggestions
@@ -195,9 +195,9 @@ class SAYTSuggester:
         )
 
         combined_result = self._combine_suggestions(results_by_kind)
-        ranked_results = _take_with_ties(combined_result, num_suggestions)
+        ranked_results = take_with_ties(combined_result, num_suggestions)
         out = [
-            _Suggestion(
+            Suggestion(
                 row_id=row_id,
                 display_text=self._corpus.id_to_display.get(row_id, ""),
                 score=score,
@@ -218,7 +218,7 @@ class SAYTSuggester:
             query, num_suggestions=num_suggestions * self._max_duplication
         )
         dedup_results = self._dedup_suggestions(results)
-        ranked_results = _take_with_ties(dedup_results, num_suggestions)
+        ranked_results = take_with_ties(dedup_results, num_suggestions)
         return [result[0] for result in ranked_results]
 
     def get_config(self) -> SaytConfig:

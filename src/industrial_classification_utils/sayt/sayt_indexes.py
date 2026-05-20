@@ -1,3 +1,5 @@
+# pylint: disable=too-few-public-methods
+
 """Dense index and vectoriser helpers for SAYT retrieval."""
 
 import csv
@@ -14,7 +16,7 @@ from classifai.vectorisers import HuggingFaceVectoriser, VectoriserBase
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import CountVectorizer
 
-from .sayt_core import CleanCorpus, _take_with_ties
+from .sayt_core import CleanCorpus, take_with_ties
 
 
 def _silent_tqdm(iterable, **_kwargs):
@@ -34,7 +36,7 @@ def _silence_classifai_tqdm():
 
 
 @dataclass(frozen=True, slots=True)
-class _DenseVectorIndex:
+class DenseVectorIndex:
     """ClassifAI-backed dense search index for in-memory query-time retrieval."""
 
     _vector_store: VectorStore
@@ -47,7 +49,7 @@ class _DenseVectorIndex:
         *,
         corpus: CleanCorpus,
         vectoriser: VectoriserBase,
-    ) -> "_DenseVectorIndex":
+    ) -> "DenseVectorIndex":
         """Build a dense index using ClassifAI's native VectorStore pipeline."""
         with tempfile.TemporaryDirectory(prefix="sayt_") as tmp_dir:
             csv_path = os.path.join(tmp_dir, "corpus.csv")
@@ -90,12 +92,10 @@ class _DenseVectorIndex:
             (row["doc_label"], float(row["score"]))
             for row in results.to_dict(orient="records")
         ]
-        return _take_with_ties(out, limit=num_suggestions)
+        return take_with_ties(out, limit=num_suggestions)
 
 
-class _L2NormalisingVectoriser(
-    VectoriserBase
-):  # pylint: disable=too-few-public-methods
+class _L2NormalisingVectoriser(VectoriserBase):
     """Wraps a classifai vectoriser and L2-normalises its outputs."""
 
     def __init__(self, base: VectoriserBase) -> None:
@@ -112,7 +112,7 @@ class _L2NormalisingVectoriser(
         return vectors / np.clip(norms, 1e-12, None)
 
 
-class _CharNgramVectoriser(VectoriserBase):  # pylint: disable=too-few-public-methods
+class _CharNgramVectoriser(VectoriserBase):
     """CountVectorizer char_wb n-gram vectoriser with unit-length outputs."""
 
     def __init__(self, corpus: list[str], *, n: int, max_df: float) -> None:
@@ -139,9 +139,9 @@ def build_ngram_index(
     *,
     n: int,
     max_df: float,
-) -> _DenseVectorIndex:
+) -> DenseVectorIndex:
     """Build a dense index backed by character n-gram vectors."""
-    return _DenseVectorIndex.from_corpus(
+    return DenseVectorIndex.from_corpus(
         corpus=corpus,
         vectoriser=_CharNgramVectoriser(
             [search for _, search, _ in corpus.rows],
@@ -155,13 +155,13 @@ def build_semantic_index(
     corpus: CleanCorpus,
     *,
     model: str,
-) -> _DenseVectorIndex:
+) -> DenseVectorIndex:
     """Build a dense index backed by sentence-transformer embeddings."""
     base_vectoriser: VectoriserBase = HuggingFaceVectoriser(
         f"sentence-transformers/{model}"
     )
     semantic_vectoriser: VectoriserBase = _L2NormalisingVectoriser(base_vectoriser)
-    return _DenseVectorIndex.from_corpus(
+    return DenseVectorIndex.from_corpus(
         corpus=corpus,
         vectoriser=semantic_vectoriser,
     )

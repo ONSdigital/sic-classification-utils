@@ -115,7 +115,7 @@ class SaytConfig(BaseModel):
 
 
 @dataclass(frozen=True, slots=True)
-class _Suggestion:
+class Suggestion:
     """Internal suggestion record with score and row metadata."""
 
     display_text: str
@@ -124,7 +124,7 @@ class _Suggestion:
     row_id: str = ""
 
 
-def _take_with_ties(
+def take_with_ties(
     items: list[tuple[str, float]],
     limit: int,
 ) -> list[tuple[str, float]]:

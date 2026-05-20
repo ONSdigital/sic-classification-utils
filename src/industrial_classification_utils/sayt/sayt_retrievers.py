@@ -6,8 +6,8 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-from .sayt_core import CleanCorpus, _Suggestion, _take_with_ties
-from .sayt_indexes import _DenseVectorIndex, build_ngram_index, build_semantic_index
+from .sayt_core import CleanCorpus, Suggestion, take_with_ties
+from .sayt_indexes import DenseVectorIndex, build_ngram_index, build_semantic_index
 
 _FUZZY_PREFIX_MIN_RATIO = 0.75
 
@@ -53,7 +53,7 @@ class PrefixRetriever:
 
     def suggest_with_scores(
         self, q_norm: str, num_suggestions: int
-    ) -> list[_Suggestion]:
+    ) -> list[Suggestion]:
         """Return ranked prefix-based suggestions for a normalised query."""
         if len(q_norm) < self._min_chars:
             return []
@@ -76,9 +76,9 @@ class PrefixRetriever:
             if ratio >= _FUZZY_PREFIX_MIN_RATIO:
                 scores[row_id] = scores.get(row_id, 0.0) + (2.4 * ratio)
 
-        ranked = _take_with_ties(list(scores.items()), limit=num_suggestions)
+        ranked = take_with_ties(list(scores.items()), limit=num_suggestions)
         return [
-            _Suggestion(
+            Suggestion(
                 display_text=self._corpus.id_to_display.get(row_id, ""),
                 score=float(score),
                 search_text=self._corpus.id_to_search.get(row_id, ""),
@@ -93,16 +93,16 @@ class _DenseRetriever:
 
     _corpus: CleanCorpus
     _min_chars: int
-    _index: _DenseVectorIndex
+    _index: DenseVectorIndex
 
     def suggest_with_scores(
         self, q_norm: str, num_suggestions: int
-    ) -> list[_Suggestion]:
+    ) -> list[Suggestion]:
         """Return dense-vector matches after applying retriever-level gating."""
         if len(q_norm) < self._min_chars:
             return []
         return [
-            _Suggestion(
+            Suggestion(
                 display_text=self._corpus.id_to_display.get(row_id, ""),
                 score=score,
                 search_text=self._corpus.id_to_search.get(row_id, ""),
