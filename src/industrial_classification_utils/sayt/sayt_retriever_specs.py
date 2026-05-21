@@ -2,6 +2,7 @@
 
 """Public retriever protocols and configuration objects for SAYT."""
 
+import math
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -38,7 +39,7 @@ class RetrieverSpec(Protocol):
 
     @property
     def weight(self) -> float:
-        """Return the contribution weight applied during score combination."""
+        """Return the finite positive weight applied during score combination."""
 
     def build(self, corpus: CleanCorpus, *, min_chars: int) -> Retriever:
         """Build a corpus-bound retriever instance from this configuration.
@@ -53,8 +54,8 @@ class RetrieverSpec(Protocol):
 
 
 def _validate_retriever_weight(weight: float) -> None:
-    if weight <= 0:
-        raise ValueError("retriever weight must be > 0")
+    if not math.isfinite(weight) or weight <= 0:
+        raise ValueError("retriever weight must be a finite value > 0")
 
 
 @dataclass(frozen=True, slots=True)

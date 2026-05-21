@@ -372,8 +372,8 @@ def test_constructor_rejects_empty_retriever_list(small_corpus):
         SAYTSuggester(small_corpus, retrievers=[])
 
 
-def test_constructor_rejects_non_positive_total_retriever_weight(small_corpus):
-    """Reject configured retrievers whose combined weight is not positive."""
+def test_constructor_rejects_invalid_custom_retriever_weight(small_corpus):
+    """Reject custom retriever specs whose own weight is invalid."""
     build_calls = []
 
     class _StubRetriever:
@@ -383,7 +383,25 @@ def test_constructor_rejects_non_positive_total_retriever_weight(small_corpus):
     @dataclass(frozen=True, slots=True)
     class _StubRetrieverSpec:
         name: str = "stub"
-        weight: float = 0.0
+        weight: float = 1.0
+
+        def build(self, corpus, *, min_chars):
+            build_calls.append((corpus, min_chars))
+            return _StubRetriever()
+
+    @dataclass(frozen=True, slots=True)
+    class _NegativeStubRetrieverSpec:
+        name: str = "negative"
+        weight: float = -0.5
+
+        def build(self, corpus, *, min_chars):
+            build_calls.append((corpus, min_chars))
+            return _StubRetriever()
+
+    @dataclass(frozen=True, slots=True)
+    class _NanStubRetrieverSpec:
+        name: str = "nan"
+        weight: float = float("nan")
 
         def build(self, corpus, *, min_chars):
             build_calls.append((corpus, min_chars))
@@ -391,8 +409,20 @@ def test_constructor_rejects_non_positive_total_retriever_weight(small_corpus):
 
     with pytest.raises(
         ValueError,
-        match="At least one retriever must have a positive weight",
+        match="Retriever 'negative' weight must be a finite value > 0",
     ):
-        SAYTSuggester(small_corpus, retrievers=[_StubRetrieverSpec()])
+        SAYTSuggester(
+            small_corpus,
+            retrievers=[_StubRetrieverSpec(), _NegativeStubRetrieverSpec()],
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="Retriever 'nan' weight must be a finite value > 0",
+    ):
+        SAYTSuggester(
+            small_corpus,
+            retrievers=[_StubRetrieverSpec(), _NanStubRetrieverSpec()],
+        )
 
     assert not build_calls

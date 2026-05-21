@@ -4,6 +4,7 @@ This module provides the public suggester API that coordinates configured
 retrievers and combines their scores into ranked suggestions.
 """
 
+import math
 import os
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -120,20 +121,27 @@ class SAYTSuggester:
         if not retriever_specs:
             raise ValueError("At least one retriever must be configured")
 
-        total_weight = sum(float(spec.weight) for spec in retriever_specs)
-        if total_weight <= 0:
-            raise ValueError("At least one retriever must have a positive weight")
+        validated_specs: list[tuple[RetrieverSpec, float]] = []
+        for spec in retriever_specs:
+            weight = float(spec.weight)
+            if not math.isfinite(weight) or weight <= 0:
+                raise ValueError(
+                    f"Retriever '{spec.name}' weight must be a finite value > 0"
+                )
+            validated_specs.append((spec, weight))
+
+        total_weight = sum(weight for _, weight in validated_specs)
 
         return [
             _ConfiguredRetriever(
                 name=spec.name,
-                weight=float(spec.weight) / total_weight,
+                weight=weight / total_weight,
                 retriever=spec.build(
                     self._corpus,
                     min_chars=self._config.min_chars,
                 ),
             )
-            for spec in retriever_specs
+            for spec, weight in validated_specs
         ]
 
     @classmethod

@@ -44,13 +44,30 @@ def test_default_retriever_specs_returns_standard_set():
 @pytest.mark.parametrize(
     "factory, kwargs, match",
     [
-        (PrefixRetrieverSpec, {"weight": 0.0}, "retriever weight must be > 0"),
-        (NgramRetrieverSpec, {"weight": 0.0}, "retriever weight must be > 0"),
+        (
+            PrefixRetrieverSpec,
+            {"weight": 0.0},
+            "retriever weight must be a finite value > 0",
+        ),
+        (
+            PrefixRetrieverSpec,
+            {"weight": float("nan")},
+            "retriever weight must be a finite value > 0",
+        ),
+        (
+            NgramRetrieverSpec,
+            {"weight": 0.0},
+            "retriever weight must be a finite value > 0",
+        ),
         (NgramRetrieverSpec, {"n": 1}, "ngram n must be between 2 and 5"),
         (NgramRetrieverSpec, {"n": 6}, "ngram n must be between 2 and 5"),
         (NgramRetrieverSpec, {"max_df": 0.0}, "ngram max_df must be in"),
         (NgramRetrieverSpec, {"max_df": 1.1}, "ngram max_df must be in"),
-        (SemanticRetrieverSpec, {"weight": 0.0}, "retriever weight must be > 0"),
+        (
+            SemanticRetrieverSpec,
+            {"weight": float("inf")},
+            "retriever weight must be a finite value > 0",
+        ),
         (SemanticRetrieverSpec, {"model": "   "}, "semantic model must be"),
     ],
 )
