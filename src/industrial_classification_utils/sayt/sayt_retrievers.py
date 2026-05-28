@@ -109,6 +109,21 @@ class _DenseRetriever:
     _min_chars: int
     _index: DenseVectorIndex
 
+    @classmethod
+    def from_index(
+        cls,
+        corpus: CleanCorpus,
+        *,
+        min_chars: int,
+        index: DenseVectorIndex,
+    ) -> "_DenseRetriever":
+        """Restore a dense retriever from an already-built dense index."""
+        retriever = cls.__new__(cls)
+        retriever._corpus = corpus
+        retriever._min_chars = min_chars
+        retriever._index = index
+        return retriever
+
     def suggest_with_scores(
         self, q_norm: str, num_suggestions: int
     ) -> list[Suggestion]:

@@ -16,7 +16,7 @@ _WS_RE = re.compile(r"\s+")
 _NON_ALNUM_SPACE_RE = re.compile(r"[^a-z ]+")
 
 
-def _normalise(text: str | None) -> str:
+def _normalise(text: object) -> str:
     if not isinstance(text, str):
         return ""
     text = text.strip().lower()
@@ -27,6 +27,15 @@ def _normalise(text: str | None) -> str:
 
 def _row_uid(index: int, search_text: str, display_text: str) -> str:
     return str(uuid5(NAMESPACE_URL, f"{index}\0{search_text}\0{display_text}"))
+
+
+@dataclass(frozen=True, slots=True)
+class PersistedCorpusRow:
+    """Represent a persisted SAYT corpus row restored from artifact storage."""
+
+    row_id: str
+    search_text: str
+    display_text: str
 
 
 class CleanCorpus(BaseModel):
@@ -54,8 +63,12 @@ class CleanCorpus(BaseModel):
     @model_validator(mode="after")
     def _build_indexes(self) -> "CleanCorpus":
         self.rows = self._clean_corpus(
-            cast(Iterable[str] | Iterable[tuple[str, str]], self.corpus)
+            cast(Iterable[str] | Iterable[tuple[object, object]], self.corpus)
         )
+        return self._populate_indexes()
+
+    def _populate_indexes(self) -> "CleanCorpus":
+        """Rebuild lookup tables from the current cleaned rows."""
         self.id_to_search = {rid: search for rid, search, _ in self.rows}
         self.id_to_display = {rid: display for rid, _, display in self.rows}
         self.display_text_count = {}
@@ -66,9 +79,54 @@ class CleanCorpus(BaseModel):
         self.size = len(self.rows)
         return self
 
+    @classmethod
+    def from_persisted_rows(
+        cls,
+        rows: Iterable[PersistedCorpusRow | tuple[str, str, str]],
+    ) -> "CleanCorpus":
+        """Restore a cleaned corpus from persisted row identifiers and text.
+
+        Args:
+            rows: Persisted ``(row_id, search_text, display_text)`` triples or
+                ``PersistedCorpusRow`` objects.
+
+        Returns:
+            A ``CleanCorpus`` whose row identifiers and lookup maps match the
+            persisted artifact data exactly.
+
+        Raises:
+            ValueError: If no persisted rows are supplied.
+        """
+        restored_rows = [cls._coerce_persisted_row(row) for row in rows]
+        if not restored_rows:
+            raise ValueError("corpus is empty after filtering")
+
+        corpus = cls.model_construct(
+            corpus=[
+                (search_text, display_text)
+                for _, search_text, display_text in restored_rows
+            ],
+            rows=restored_rows,
+            id_to_search={},
+            id_to_display={},
+            display_text_count={},
+            size=0,
+        )
+        return corpus._populate_indexes()
+
+    @staticmethod
+    def _coerce_persisted_row(
+        row: PersistedCorpusRow | tuple[str, str, str],
+    ) -> tuple[str, str, str]:
+        """Convert persisted row data into the internal tuple format."""
+        if isinstance(row, PersistedCorpusRow):
+            return (row.row_id, row.search_text, row.display_text)
+        row_id, search_text, display_text = row
+        return (str(row_id), str(search_text), str(display_text))
+
     @staticmethod
     def _clean_corpus(
-        corpus: Iterable[str] | Iterable[tuple[str, str]],
+        corpus: Iterable[str] | Iterable[tuple[object, object]],
     ) -> list[tuple[str, str, str]]:
         if not isinstance(corpus, Iterable):
             raise TypeError(

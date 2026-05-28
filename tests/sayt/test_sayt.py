@@ -11,9 +11,14 @@ from pydantic import ValidationError
 
 from industrial_classification_utils.sayt import (
     PrefixRetrieverSpec,
+    SAYTBuilder,
 )
 from industrial_classification_utils.sayt.sayt import SAYTSuggester
-from industrial_classification_utils.sayt.sayt_core import CleanCorpus, Suggestion
+from industrial_classification_utils.sayt.sayt_core import (
+    CleanCorpus,
+    PersistedCorpusRow,
+    Suggestion,
+)
 
 
 def test_constructor_rejects_unknown_kwargs(small_corpus):
@@ -48,6 +53,20 @@ def test_clean_corpus_accepts_existing_instance_and_dict_input(small_corpus):
 
     assert same_corpus.rows == corpus.rows
     assert dict_corpus.rows == corpus.rows
+
+
+def test_clean_corpus_restores_persisted_rows(small_corpus):
+    """Restore cleaned corpus rows without regenerating row identifiers."""
+    corpus = CleanCorpus.model_validate(small_corpus)
+
+    restored = CleanCorpus.from_persisted_rows(
+        [PersistedCorpusRow(*row) for row in corpus.rows]
+    )
+
+    assert restored.rows == corpus.rows
+    assert restored.id_to_search == corpus.id_to_search
+    assert restored.id_to_display == corpus.id_to_display
+    assert restored.display_text_count == corpus.display_text_count
 
 
 def test_clean_corpus_rejects_non_iterable_input():
@@ -130,6 +149,27 @@ def test_from_csv_rejects_missing_display_column(tmp_path, small_corpus):
             search_text_col="search",
             display_text_col="display",
         )
+
+
+def test_from_artifact_restores_prefix_suggester(tmp_path, small_corpus):
+    """Round-trip a prefix-only artifact into a working suggester."""
+    artifact_dir = SAYTBuilder(
+        small_corpus,
+        retrievers=[PrefixRetrieverSpec()],
+        min_chars=3,
+        max_suggestions=5,
+    ).build_artifact(tmp_path / "artifact")
+
+    restored = SAYTSuggester.from_artifact(artifact_dir)
+    expected = SAYTSuggester(
+        small_corpus,
+        retrievers=[PrefixRetrieverSpec()],
+        min_chars=3,
+        max_suggestions=5,
+    )
+
+    assert restored.suggest("car") == expected.suggest("car")
+    assert restored.get_config().model_dump() == expected.get_config().model_dump()
 
 
 def test_suggest_returns_empty_for_short_or_non_string_query(small_corpus):

@@ -8,8 +8,8 @@ import math
 import os
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
-import pandas as pd
 from survey_assist_utils.logging import get_logger
 
 from .sayt_core import (
@@ -23,6 +23,13 @@ from .sayt_retriever_specs import (
     Retriever,
     RetrieverSpec,
     default_retriever_specs,
+)
+from .sayt_storage import (
+    StoredRetrieverSpec,
+    load_corpus_from_csv,
+    load_retriever_from_artifact,
+    read_artifact_corpus,
+    read_artifact_manifest,
 )
 
 logger = get_logger(__name__)
@@ -87,9 +94,28 @@ class SAYTSuggester:
             ```
     """
 
+    @classmethod
+    def _from_state(
+        cls,
+        *,
+        corpus: CleanCorpus,
+        config: SaytConfig,
+        retriever_specs: Sequence[RetrieverSpec],
+        retrievers: list[_ConfiguredRetriever],
+    ) -> "SAYTSuggester":
+        """Construct a suggester from already-validated runtime state."""
+        suggester = cls.__new__(cls)
+        suggester._corpus = corpus
+        suggester._config = config
+        suggester._max_duplication = max(corpus.display_text_count.values(), default=0)
+        suggester._retriever_specs = tuple(retriever_specs)
+        suggester._retrievers = retrievers
+        logger.info(f"SAYT suggester initialized with config: {suggester.get_config()}")
+        return suggester
+
     def __init__(
         self,
-        corpus: Iterable[tuple[str, str]] | Iterable[str],
+        corpus: Iterable[tuple[object, object]] | Iterable[str],
         *,
         retrievers: Sequence[RetrieverSpec] | None = None,
         **kwargs: object,
@@ -107,17 +133,19 @@ class SAYTSuggester:
         """
         self._corpus = CleanCorpus.model_validate(corpus)
         self._config = SaytConfig.model_validate(kwargs)
-        self._max_duplication = max(self._corpus.display_text_count.values(), default=0)
 
         self._retriever_specs = tuple(
             default_retriever_specs() if retrievers is None else retrievers
         )
         self._retrievers = self._build_retrievers(self._retriever_specs)
+        self._max_duplication = max(self._corpus.display_text_count.values(), default=0)
         logger.info(f"SAYT suggester initialized with config: {self.get_config()}")
 
-    def _build_retrievers(
-        self, retriever_specs: Sequence[RetrieverSpec]
-    ) -> list[_ConfiguredRetriever]:
+    @staticmethod
+    def _normalised_retriever_specs(
+        retriever_specs: Sequence[RetrieverSpec],
+    ) -> list[tuple[RetrieverSpec, float]]:
+        """Validate and normalise configured retriever weights."""
         if not retriever_specs:
             raise ValueError("At least one retriever must be configured")
 
@@ -131,17 +159,21 @@ class SAYTSuggester:
             validated_specs.append((spec, weight))
 
         total_weight = sum(weight for _, weight in validated_specs)
+        return [(spec, weight / total_weight) for spec, weight in validated_specs]
 
+    def _build_retrievers(
+        self, retriever_specs: Sequence[RetrieverSpec]
+    ) -> list[_ConfiguredRetriever]:
         return [
             _ConfiguredRetriever(
                 name=spec.name,
-                weight=weight / total_weight,
+                weight=weight,
                 retriever=spec.build(
                     self._corpus,
                     min_chars=self._config.min_chars,
                 ),
             )
-            for spec, weight in validated_specs
+            for spec, weight in self._normalised_retriever_specs(retriever_specs)
         ]
 
     @classmethod
@@ -171,17 +203,90 @@ class SAYTSuggester:
         Raises:
             ValueError: If the requested search or display column is missing.
         """
-        df = pd.read_csv(file_path)
-        if search_text_col not in df.columns:
-            raise ValueError(f"Column '{search_text_col}' not found in CSV")
-        if display_text_col is None:
-            display_text_col = search_text_col
-        if display_text_col not in df.columns:
-            raise ValueError(f"Column '{display_text_col}' not found in CSV")
+        corpus_rows = load_corpus_from_csv(
+            file_path,
+            search_text_col=search_text_col,
+            display_text_col=display_text_col,
+        )
         return cls(
-            list(zip(df[search_text_col], df[display_text_col], strict=False)),
+            corpus_rows,
             retrievers=retrievers,
             **kwargs,
+        )
+
+    @classmethod
+    def from_artifact(cls, artifact_dir: str | os.PathLike) -> "SAYTSuggester":
+        """Load a suggester from a persisted SAYT artifact directory."""
+        artifact_path = Path(artifact_dir)
+        manifest = read_artifact_manifest(artifact_dir=artifact_path)
+        persisted_rows = read_artifact_corpus(
+            artifact_dir=artifact_path,
+            corpus_file=manifest.corpus_file,
+        )
+        corpus = CleanCorpus.from_persisted_rows(persisted_rows)
+        if corpus.size != manifest.corpus_size:
+            raise ValueError("Artifact corpus size does not match manifest")
+
+        retrievers = cls._load_retrievers_from_artifact(
+            corpus=corpus,
+            config=manifest.config,
+            stored_retrievers=manifest.retrievers,
+            artifact_dir=artifact_path,
+        )
+        return cls._from_state(
+            corpus=corpus,
+            config=manifest.config,
+            retriever_specs=[
+                stored_retriever.spec for stored_retriever in manifest.retrievers
+            ],
+            retrievers=retrievers,
+        )
+
+    @classmethod
+    def _load_retrievers_from_artifact(
+        cls,
+        *,
+        corpus: CleanCorpus,
+        config: SaytConfig,
+        stored_retrievers: Sequence[StoredRetrieverSpec],
+        artifact_dir: Path,
+    ) -> list[_ConfiguredRetriever]:
+        """Restore runtime retrievers from a persisted SAYT artifact."""
+        normalised_specs = cls._normalised_retriever_specs(
+            [stored_retriever.spec for stored_retriever in stored_retrievers]
+        )
+        return [
+            _ConfiguredRetriever(
+                name=stored_retriever.spec.name,
+                weight=weight,
+                retriever=cls._load_retriever_from_artifact(
+                    corpus=corpus,
+                    config=config,
+                    stored_retriever=stored_retriever,
+                    artifact_dir=artifact_dir,
+                ),
+            )
+            for (_, weight), stored_retriever in zip(
+                normalised_specs,
+                stored_retrievers,
+                strict=True,
+            )
+        ]
+
+    @staticmethod
+    def _load_retriever_from_artifact(
+        *,
+        corpus: CleanCorpus,
+        config: SaytConfig,
+        stored_retriever: StoredRetrieverSpec,
+        artifact_dir: Path,
+    ) -> Retriever:
+        """Restore a runtime retriever from persisted artifact state."""
+        return load_retriever_from_artifact(
+            corpus=corpus,
+            config=config,
+            stored_retriever=stored_retriever,
+            artifact_dir=artifact_dir,
         )
 
     def _dedup_suggestions(
