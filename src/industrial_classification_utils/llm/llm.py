@@ -21,7 +21,9 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
-from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
+from industrial_classification.data_access.sic_data_access import (
+    load_sic_hierarchy,
+)
 from industrial_classification.meta import sic_meta
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_google_vertexai import ChatVertexAI
@@ -53,10 +55,6 @@ from industrial_classification_utils.models.response_model import (
 from industrial_classification_utils.utils.constants import (
     get_default_config,
     truncate_identifier,
-)
-from industrial_classification_utils.utils.sic_data_access import (
-    load_sic_index,
-    load_sic_structure,
 )
 
 logger = get_logger(__name__)
@@ -199,9 +197,10 @@ class ClassificationLLM:
             str: A formatted string containing the code, title, and example activities.
         """
         if self.sic is None:
-            sic_index_df = load_sic_index(config["lookups"]["sic_index"])
-            sic_df = load_sic_structure(config["lookups"]["sic_structure"])
-            self.sic = load_hierarchy(sic_df, sic_index_df)
+            self.sic = load_sic_hierarchy(
+                config["lookups"]["sic_index"],
+                config["lookups"]["sic_structure"],
+            )
 
         item = self.sic[code]  # type: ignore # MyPy false positive
         txt = "{" + f"Code: {item.numeric_string_padded()}, Title: {item.description}"
