@@ -24,6 +24,7 @@ import numpy as np
 from industrial_classification.data_access.sic_data_access import (
     load_sic_hierarchy,
 )
+from industrial_classification.hierarchy.sic_hierarchy import SIC
 from industrial_classification.meta import sic_meta
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_google_vertexai import ChatVertexAI
@@ -128,7 +129,7 @@ class ClassificationLLM:
         self.sic_prompt_openfollowup = SIC_PROMPT_OPENFOLLOWUP
         self.sic_prompt_closedfollowup = SIC_PROMPT_CLOSEDFOLLOWUP
         self.sic_prompt_final = SIC_PROMPT_FINAL_ASSIGNMENT
-        self.sic = None
+        self.sic: SIC | None = None
         self.verbose = verbose
 
     @lru_cache  # noqa: B019
@@ -202,7 +203,7 @@ class ClassificationLLM:
                 config["lookups"]["sic_structure"],
             )
 
-        item = self.sic[code]  # type: ignore # MyPy false positive
+        item = self.sic[code]
         txt = "{" + f"Code: {item.numeric_string_padded()}, Title: {item.description}"
         txt += f", Example activities: {', '.join(activities)}"
         if include_all:
