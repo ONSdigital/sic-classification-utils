@@ -1,3 +1,3 @@
 # Embeddings Module
 
-::: industrial_classification_utils.utils.sic_data_access
+::: industrial_classification.data_access.sic_data_access
