@@ -547,7 +547,9 @@ def test_load_embedding_handler_from_sic_index_files_builds(tmp_path: Path):
         )
 
     assert result is built_handler
-    mock_load_sic_hierarchy.assert_called_once_with("sic-index.csv", "sic-structure.csv")
+    mock_load_sic_hierarchy.assert_called_once_with(
+        "sic-index.csv", "sic-structure.csv"
+    )
     assert mock_handler_cls.called
     call_kwargs = mock_handler_cls.call_args.kwargs
     assert call_kwargs["db_dir"] == str(tmp_path / "vector_store")
