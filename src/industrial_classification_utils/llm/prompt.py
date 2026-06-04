@@ -28,6 +28,7 @@ Attributes:
 
 # pylint: disable=invalid-name # Need to clean up the code to remove this
 
+from industrial_classification.data_access.sic_data_access import load_sic_index
 from langchain.prompts.prompt import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 
@@ -40,7 +41,6 @@ from industrial_classification_utils.models.response_model import (
     UnambiguousResponse,
 )
 from industrial_classification_utils.utils.constants import get_default_config
-from industrial_classification.data_access.sic_data_access import load_sic_index
 
 config = get_default_config()
 
