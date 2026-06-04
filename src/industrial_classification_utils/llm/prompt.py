@@ -40,9 +40,7 @@ from industrial_classification_utils.models.response_model import (
     UnambiguousResponse,
 )
 from industrial_classification_utils.utils.constants import get_default_config
-from industrial_classification_utils.utils.sic_data_access import (
-    load_sic_index,
-)
+from industrial_classification.data_access.sic_data_access import load_sic_index
 
 config = get_default_config()
 
