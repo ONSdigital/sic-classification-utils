@@ -6,7 +6,7 @@ import re
 import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 from uuid import NAMESPACE_URL, uuid5
 
 import pandas as pd
@@ -181,6 +181,72 @@ def validate_max_suggestions(value: object) -> int:
     if not 1 <= max_suggestions <= 100:
         raise ValueError("max_suggestions must be between 1 and 100")
     return max_suggestions
+
+
+class SaytGlobalSettings(BaseModel):
+    """Describe suggester-wide runtime settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_chars: int
+    max_suggestions: int
+
+
+class SaytCorpusSummary(BaseModel):
+    """Summarise the cleaned corpus bound to a suggester."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    size: int
+    unique_display_texts: int
+    max_duplication: int
+
+
+class SaytRetrieverArtifactProvenance(BaseModel):
+    """Capture persisted artifact details for one retriever entry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    artifact_type: str
+    path: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class SaytArtifactProvenance(BaseModel):
+    """Describe the artifact source of a suggester restored from disk."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    artifact_dir: str
+    artifact_type: str
+    artifact_version: int
+    corpus_file: str
+    corpus_size: int
+
+
+class SaytRetrieverSummary(BaseModel):
+    """Summarise one configured retriever within a suggester."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    spec_type: str
+    retriever_type: str
+    configured_weight: float
+    normalised_weight: float
+    config: dict[str, Any] = Field(default_factory=dict)
+    artifact_provenance: SaytRetrieverArtifactProvenance | None = None
+
+
+class SaytConfiguration(BaseModel):
+    """Return a rich runtime summary of a configured suggester."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    settings: SaytGlobalSettings
+    corpus: SaytCorpusSummary
+    retrievers: list[SaytRetrieverSummary] = Field(default_factory=list)
+    artifact_provenance: SaytArtifactProvenance | None = None
 
 
 @dataclass(frozen=True, slots=True)

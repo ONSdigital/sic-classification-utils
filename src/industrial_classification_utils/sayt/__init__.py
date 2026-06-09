@@ -2,6 +2,7 @@
 
 from .sayt import SAYTSuggester
 from .sayt_builder import SAYTBuilder
+from .sayt_core import SaytConfiguration
 from .sayt_retriever_specs import (
     NgramRetrieverSpec,
     PrefixRetrieverSpec,
@@ -27,6 +28,7 @@ __all__ = [
     "RetrieverSpec",
     "SAYTBuilder",
     "SAYTSuggester",
+    "SaytConfiguration",
     "SemanticRetriever",
     "SemanticRetrieverSpec",
     "default_retriever_specs",

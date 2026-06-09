@@ -8,14 +8,21 @@ retrievers and combines their scores into ranked suggestions.
 
 import math
 import os
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
+from typing import Any
 
 from survey_assist_utils.logging import get_logger
 
 from .sayt_core import (
     CleanCorpus,
+    SaytArtifactProvenance,
+    SaytConfiguration,
+    SaytCorpusSummary,
+    SaytGlobalSettings,
+    SaytRetrieverArtifactProvenance,
+    SaytRetrieverSummary,
     Suggestion,
     _normalise,
     take_with_ties,
@@ -28,6 +35,8 @@ from .sayt_retriever_specs import (
     default_retriever_specs,
 )
 from .sayt_storage import (
+    SAYT_ARTIFACT_TYPE,
+    SAYT_ARTIFACT_VERSION,
     StoredRetrieverSpec,
     load_corpus_from_csv,
     load_retriever_from_artifact,
@@ -47,7 +56,7 @@ class _ConfiguredRetriever:
     retriever: Retriever
 
 
-class SAYTSuggester:
+class SAYTSuggester:  # pylint: disable=too-many-instance-attributes
     """Suggest free-text responses as a user types.
 
     The suggester:
@@ -97,27 +106,6 @@ class SAYTSuggester:
             ```
     """
 
-    @classmethod
-    def _from_state(  # pylint: disable=too-many-arguments
-        cls,
-        *,
-        corpus: CleanCorpus,
-        min_chars: int,
-        max_suggestions: int,
-        retriever_specs: Sequence[RetrieverSpec],
-        retrievers: list[_ConfiguredRetriever],
-    ) -> "SAYTSuggester":
-        """Construct a suggester from already-validated runtime state."""
-        suggester = cls.__new__(cls)
-        suggester._corpus = corpus
-        suggester._min_chars = min_chars
-        suggester._max_suggestions = max_suggestions
-        suggester._max_duplication = max(corpus.display_text_count.values(), default=0)
-        suggester._retriever_specs = tuple(retriever_specs)
-        suggester._retrievers = retrievers
-        logger.info(f"SAYT suggester initialized with config: {suggester.get_config()}")
-        return suggester
-
     def __init__(
         self,
         corpus: Iterable[tuple[object, object]] | Iterable[str],
@@ -146,42 +134,42 @@ class SAYTSuggester:
         )
         self._retrievers = self._build_retrievers(self._retriever_specs)
         self._max_duplication = max(self._corpus.display_text_count.values(), default=0)
-        logger.info(f"SAYT suggester initialized with config: {self.get_config()}")
+        self._stored_retrievers: tuple[StoredRetrieverSpec, ...] | None = None
+        self._artifact_provenance: SaytArtifactProvenance | None = None
+        logger.info(
+            "SAYT suggester initialized",
+            config=self.get_config().model_dump(mode="json"),
+        )
 
-    @staticmethod
-    def _normalised_retriever_specs(
+    @classmethod
+    def _from_state(  # pylint: disable=too-many-arguments  # noqa: PLR0913
+        cls,
+        *,
+        corpus: CleanCorpus,
+        min_chars: int,
+        max_suggestions: int,
         retriever_specs: Sequence[RetrieverSpec],
-    ) -> list[tuple[RetrieverSpec, float]]:
-        """Validate and normalise configured retriever weights."""
-        if not retriever_specs:
-            raise ValueError("At least one retriever must be configured")
-
-        validated_specs: list[tuple[RetrieverSpec, float]] = []
-        for spec in retriever_specs:
-            weight = float(spec.weight)
-            if not math.isfinite(weight) or weight <= 0:
-                raise ValueError(
-                    f"Retriever '{spec.name}' weight must be a finite value > 0"
-                )
-            validated_specs.append((spec, weight))
-
-        total_weight = sum(weight for _, weight in validated_specs)
-        return [(spec, weight / total_weight) for spec, weight in validated_specs]
-
-    def _build_retrievers(
-        self, retriever_specs: Sequence[RetrieverSpec]
-    ) -> list[_ConfiguredRetriever]:
-        return [
-            _ConfiguredRetriever(
-                name=spec.name,
-                weight=weight,
-                retriever=spec.build(
-                    self._corpus,
-                    min_chars=self._min_chars,
-                ),
-            )
-            for spec, weight in self._normalised_retriever_specs(retriever_specs)
-        ]
+        retrievers: list[_ConfiguredRetriever],
+        stored_retrievers: Sequence[StoredRetrieverSpec] | None = None,
+        artifact_provenance: SaytArtifactProvenance | None = None,
+    ) -> "SAYTSuggester":
+        """Construct a suggester from already-validated runtime state."""
+        suggester = cls.__new__(cls)
+        suggester._corpus = corpus
+        suggester._min_chars = min_chars
+        suggester._max_suggestions = max_suggestions
+        suggester._max_duplication = max(corpus.display_text_count.values(), default=0)
+        suggester._retriever_specs = tuple(retriever_specs)
+        suggester._retrievers = retrievers
+        suggester._stored_retrievers = (
+            tuple(stored_retrievers) if stored_retrievers is not None else None
+        )
+        suggester._artifact_provenance = artifact_provenance
+        logger.info(
+            "SAYT suggester initialized",
+            config=suggester.get_config().model_dump(mode="json"),
+        )
+        return suggester
 
     @classmethod
     def from_csv(  # pylint: disable=too-many-arguments  # noqa: PLR0913
@@ -238,11 +226,18 @@ class SAYTSuggester:
         if corpus.size != manifest.corpus_size:
             raise ValueError("Artifact corpus size does not match manifest")
 
-        retrievers = cls._load_retrievers_from_artifact(
+        retrievers = _load_retrievers_from_artifact(
             corpus=corpus,
             min_chars=manifest.min_chars,
             stored_retrievers=manifest.retrievers,
             artifact_dir=artifact_path,
+        )
+        artifact_provenance = SaytArtifactProvenance(
+            artifact_dir=str(artifact_path),
+            artifact_type=SAYT_ARTIFACT_TYPE,
+            artifact_version=SAYT_ARTIFACT_VERSION,
+            corpus_file=manifest.corpus_file,
+            corpus_size=manifest.corpus_size,
         )
         return cls._from_state(
             corpus=corpus,
@@ -252,54 +247,24 @@ class SAYTSuggester:
                 stored_retriever.spec for stored_retriever in manifest.retrievers
             ],
             retrievers=retrievers,
+            stored_retrievers=manifest.retrievers,
+            artifact_provenance=artifact_provenance,
         )
 
-    @classmethod
-    def _load_retrievers_from_artifact(
-        cls,
-        *,
-        corpus: CleanCorpus,
-        min_chars: int,
-        stored_retrievers: Sequence[StoredRetrieverSpec],
-        artifact_dir: Path,
+    def _build_retrievers(
+        self, retriever_specs: Sequence[RetrieverSpec]
     ) -> list[_ConfiguredRetriever]:
-        """Restore runtime retrievers from a persisted SAYT artifact."""
-        normalised_specs = cls._normalised_retriever_specs(
-            [stored_retriever.spec for stored_retriever in stored_retrievers]
-        )
         return [
             _ConfiguredRetriever(
-                name=stored_retriever.spec.name,
+                name=spec.name,
                 weight=weight,
-                retriever=cls._load_retriever_from_artifact(
-                    corpus=corpus,
-                    min_chars=min_chars,
-                    stored_retriever=stored_retriever,
-                    artifact_dir=artifact_dir,
+                retriever=spec.build(
+                    self._corpus,
+                    min_chars=self._min_chars,
                 ),
             )
-            for (_, weight), stored_retriever in zip(
-                normalised_specs,
-                stored_retrievers,
-                strict=True,
-            )
+            for spec, weight in _normalised_retriever_specs(retriever_specs)
         ]
-
-    @staticmethod
-    def _load_retriever_from_artifact(
-        *,
-        corpus: CleanCorpus,
-        min_chars: int,
-        stored_retriever: StoredRetrieverSpec,
-        artifact_dir: Path,
-    ) -> Retriever:
-        """Restore a runtime retriever from persisted artifact state."""
-        return load_retriever_from_artifact(
-            corpus=corpus,
-            min_chars=min_chars,
-            stored_retriever=stored_retriever,
-            artifact_dir=artifact_dir,
-        )
 
     def _dedup_suggestions(
         self, suggestions: list[Suggestion]
@@ -430,14 +395,175 @@ class SAYTSuggester:
         ranked_results = take_with_ties(dedup_results, num_suggestions)
         return [result[0] for result in ranked_results]
 
-    def get_config(self) -> dict[str, int]:
-        """Return the validated global suggester settings.
+    def get_config(self) -> SaytConfiguration:
+        """Return a rich runtime summary of this suggester.
 
         Returns:
-            A copy of the current global ``min_chars`` and ``max_suggestions``
-            settings.
+            A summary of global settings, corpus details, retriever
+            configuration, and any artifact provenance available for this
+            suggester.
         """
+        stored_retrievers: Sequence[StoredRetrieverSpec | None]
+        if self._stored_retrievers is None:
+            stored_retrievers = [None] * len(self._retriever_specs)
+        else:
+            stored_retrievers = list(self._stored_retrievers)
+
+        retrievers = [
+            _build_retriever_summary(
+                spec=spec,
+                configured_retriever=configured_retriever,
+                stored_retriever=stored_retriever,
+            )
+            for spec, configured_retriever, stored_retriever in zip(
+                self._retriever_specs,
+                self._retrievers,
+                stored_retrievers,
+                strict=True,
+            )
+        ]
+
+        return SaytConfiguration(
+            settings=SaytGlobalSettings(
+                min_chars=self._min_chars,
+                max_suggestions=self._max_suggestions,
+            ),
+            corpus=SaytCorpusSummary(
+                size=self._corpus.size,
+                unique_display_texts=len(self._corpus.display_text_count),
+                max_duplication=self._max_duplication,
+            ),
+            retrievers=retrievers,
+            artifact_provenance=(
+                self._artifact_provenance.model_copy(deep=True)
+                if self._artifact_provenance is not None
+                else None
+            ),
+        )
+
+
+def _normalised_retriever_specs(
+    retriever_specs: Sequence[RetrieverSpec],
+) -> list[tuple[RetrieverSpec, float]]:
+    """Validate and normalise configured retriever weights."""
+    if not retriever_specs:
+        raise ValueError("At least one retriever must be configured")
+
+    validated_specs: list[tuple[RetrieverSpec, float]] = []
+    for spec in retriever_specs:
+        weight = float(spec.weight)
+        if not math.isfinite(weight) or weight <= 0:
+            raise ValueError(
+                f"Retriever '{spec.name}' weight must be a finite value > 0"
+            )
+        validated_specs.append((spec, weight))
+
+    total_weight = sum(weight for _, weight in validated_specs)
+    return [(spec, weight / total_weight) for spec, weight in validated_specs]
+
+
+def _restore_retriever_from_artifact(
+    *,
+    corpus: CleanCorpus,
+    min_chars: int,
+    stored_retriever: StoredRetrieverSpec,
+    artifact_dir: Path,
+) -> Retriever:
+    """Restore a runtime retriever from persisted artifact state."""
+    return load_retriever_from_artifact(
+        corpus=corpus,
+        min_chars=min_chars,
+        stored_retriever=stored_retriever,
+        artifact_dir=artifact_dir,
+    )
+
+
+def _load_retrievers_from_artifact(
+    *,
+    corpus: CleanCorpus,
+    min_chars: int,
+    stored_retrievers: Sequence[StoredRetrieverSpec],
+    artifact_dir: Path,
+) -> list[_ConfiguredRetriever]:
+    """Restore runtime retrievers from a persisted SAYT artifact."""
+    normalised_specs = _normalised_retriever_specs(
+        [stored_retriever.spec for stored_retriever in stored_retrievers]
+    )
+    return [
+        _ConfiguredRetriever(
+            name=stored_retriever.spec.name,
+            weight=weight,
+            retriever=_restore_retriever_from_artifact(
+                corpus=corpus,
+                min_chars=min_chars,
+                stored_retriever=stored_retriever,
+                artifact_dir=artifact_dir,
+            ),
+        )
+        for (_, weight), stored_retriever in zip(
+            normalised_specs,
+            stored_retrievers,
+            strict=True,
+        )
+    ]
+
+
+def _jsonable_value(value: Any) -> Any:
+    if isinstance(value, str | int | float | bool) or value is None:
+        return value
+    if isinstance(value, os.PathLike):
+        return os.fspath(value)
+    if isinstance(value, Mapping):
+        return {str(key): _jsonable_value(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_jsonable_value(item) for item in value]
+    return str(value)
+
+
+def _summarise_retriever_config(spec: RetrieverSpec) -> dict[str, Any]:
+    if is_dataclass(spec):
+        items = (
+            (field.name, getattr(spec, field.name))
+            for field in fields(spec)
+            if field.name not in {"name", "weight"}
+        )
+        return {key: _jsonable_value(value) for key, value in items}
+
+    raw_config = getattr(spec, "__dict__", None)
+    if isinstance(raw_config, dict):
         return {
-            "min_chars": self._min_chars,
-            "max_suggestions": self._max_suggestions,
+            str(key): _jsonable_value(value)
+            for key, value in raw_config.items()
+            if key not in {"name", "weight"}
         }
+    return {}
+
+
+def _build_retriever_summary(
+    *,
+    spec: RetrieverSpec,
+    configured_retriever: _ConfiguredRetriever,
+    stored_retriever: StoredRetrieverSpec | None,
+) -> SaytRetrieverSummary:
+    artifact_provenance = None
+    config = _summarise_retriever_config(spec)
+    if stored_retriever is not None:
+        artifact_config = {
+            str(key): _jsonable_value(value)
+            for key, value in stored_retriever.config.items()
+        }
+        artifact_provenance = SaytRetrieverArtifactProvenance(
+            artifact_type=stored_retriever.artifact_type,
+            path=stored_retriever.path,
+            config=artifact_config,
+        )
+
+    return SaytRetrieverSummary(
+        name=spec.name,
+        spec_type=type(spec).__name__,
+        retriever_type=type(configured_retriever.retriever).__name__,
+        configured_weight=float(spec.weight),
+        normalised_weight=configured_retriever.weight,
+        config=config,
+        artifact_provenance=artifact_provenance,
+    )

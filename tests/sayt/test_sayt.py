@@ -9,8 +9,10 @@ import pandas as pd
 import pytest
 
 from industrial_classification_utils.sayt import (
+    NgramRetrieverSpec,
     PrefixRetrieverSpec,
     SAYTBuilder,
+    SaytConfiguration,
 )
 from industrial_classification_utils.sayt.sayt import SAYTSuggester
 from industrial_classification_utils.sayt.sayt_core import (
@@ -166,9 +168,85 @@ def test_from_artifact_restores_prefix_suggester(tmp_path, small_corpus):
         min_chars=3,
         max_suggestions=5,
     )
+    restored_config = restored.get_config()
+    expected_config = expected.get_config()
 
     assert restored.suggest("car") == expected.suggest("car")
-    assert restored.get_config() == expected.get_config()
+    assert restored_config.settings == expected_config.settings
+    assert restored_config.corpus == expected_config.corpus
+    assert [
+        retriever.model_dump(exclude={"artifact_provenance"})
+        for retriever in restored_config.retrievers
+    ] == [
+        retriever.model_dump(exclude={"artifact_provenance"})
+        for retriever in expected_config.retrievers
+    ]
+    assert restored_config.artifact_provenance is not None
+    assert restored_config.artifact_provenance.artifact_dir == str(artifact_dir)
+    assert restored_config.retrievers[0].artifact_provenance is not None
+    assert expected_config.artifact_provenance is None
+
+
+def test_get_config_returns_rich_runtime_summary(small_corpus):
+    """Expose runtime settings, corpus stats, and retriever summaries."""
+    suggester = SAYTSuggester(
+        small_corpus,
+        min_chars=3,
+        max_suggestions=5,
+        retrievers=[
+            PrefixRetrieverSpec(weight=2.0),
+            NgramRetrieverSpec(weight=1.0, n=4, max_df=1.0),
+        ],
+    )
+
+    config = suggester.get_config()
+
+    assert isinstance(config, SaytConfiguration)
+    assert config.settings.model_dump() == {
+        "min_chars": 3,
+        "max_suggestions": 5,
+    }
+    assert config.corpus.model_dump() == {
+        "size": suggester._corpus.size,
+        "unique_display_texts": len(suggester._corpus.display_text_count),
+        "max_duplication": suggester._max_duplication,
+    }
+    assert [retriever.name for retriever in config.retrievers] == ["prefix", "ngram"]
+    assert config.retrievers[0].config == {}
+    assert config.retrievers[1].config == {"n": 4, "max_df": 1.0}
+    assert config.retrievers[0].configured_weight == pytest.approx(2.0)
+    assert config.retrievers[0].normalised_weight == pytest.approx(2.0 / 3.0)
+    assert config.retrievers[1].normalised_weight == pytest.approx(1.0 / 3.0)
+    assert config.retrievers[1].retriever_type == "NgramRetriever"
+    assert config.artifact_provenance is None
+
+
+def test_get_config_supports_custom_specs_without_artifact_handlers(small_corpus):
+    """Summarise custom runtime-only specs without requiring persistence hooks."""
+
+    class _StubRetriever:
+        def suggest_with_scores(self, q_norm, num_suggestions):
+            _ = (q_norm, num_suggestions)
+            return []
+
+    class _CustomSpec:
+        def __init__(self, *, trigger: str, weight: float = 1.0):
+            self.trigger = trigger
+            self.weight = weight
+            self.name = "custom"
+
+        def build(self, corpus, *, min_chars):
+            _ = (corpus, min_chars)
+            return _StubRetriever()
+
+    config = SAYTSuggester(
+        small_corpus,
+        min_chars=3,
+        retrievers=[_CustomSpec(trigger="groom")],
+    ).get_config()
+
+    assert config.retrievers[0].config == {"trigger": "groom"}
+    assert config.retrievers[0].artifact_provenance is None
 
 
 def test_suggest_returns_empty_for_short_or_non_string_query(small_corpus):
