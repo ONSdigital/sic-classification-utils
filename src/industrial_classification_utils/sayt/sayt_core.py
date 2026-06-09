@@ -158,26 +158,29 @@ class CleanCorpus(BaseModel):
         ]
 
 
-class SaytConfig(BaseModel):
-    """Validated configuration for a SAYT suggester instance.
+def _coerce_sayt_int_setting(value: object, *, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int | str):
+        raise TypeError(f"{field_name} must be an integer")
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise TypeError(f"{field_name} must be an integer") from exc
 
-    This model contains only suggester-wide settings. Retriever-specific
-    configuration lives on individual ``RetrieverSpec`` objects.
-    """
 
-    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+def validate_min_chars(value: object) -> int:
+    """Validate the global SAYT minimum query length setting."""
+    min_chars = _coerce_sayt_int_setting(value, field_name="min_chars")
+    if min_chars < 3:
+        raise ValueError("min_chars must be >= 3")
+    return min_chars
 
-    min_chars: int = 4
-    max_suggestions: int = 10
 
-    @model_validator(mode="after")
-    def _validate_ranges(self) -> "SaytConfig":
-        """Enforce the supported numeric ranges for SAYT settings."""
-        if self.min_chars < 3:
-            raise ValueError("min_chars must be >= 3")
-        if not 1 <= self.max_suggestions <= 100:
-            raise ValueError("max_suggestions must be between 1 and 100")
-        return self
+def validate_max_suggestions(value: object) -> int:
+    """Validate the global SAYT maximum suggestion count setting."""
+    max_suggestions = _coerce_sayt_int_setting(value, field_name="max_suggestions")
+    if not 1 <= max_suggestions <= 100:
+        raise ValueError("max_suggestions must be between 1 and 100")
+    return max_suggestions
 
 
 @dataclass(frozen=True, slots=True)

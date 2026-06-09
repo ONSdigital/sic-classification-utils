@@ -7,7 +7,6 @@ from uuid import UUID
 
 import pandas as pd
 import pytest
-from pydantic import ValidationError
 
 from industrial_classification_utils.sayt import (
     PrefixRetrieverSpec,
@@ -23,8 +22,8 @@ from industrial_classification_utils.sayt.sayt_core import (
 
 def test_constructor_rejects_unknown_kwargs(small_corpus):
     """Reject unknown constructor kwargs during config validation."""
-    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        SAYTSuggester(small_corpus, does_not_exist=True)
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        SAYTSuggester(small_corpus, does_not_exist=True)  # pylint: disable=E1123
 
 
 def test_empty_corpus_after_filtering_raises():
@@ -169,7 +168,7 @@ def test_from_artifact_restores_prefix_suggester(tmp_path, small_corpus):
     )
 
     assert restored.suggest("car") == expected.suggest("car")
-    assert restored.get_config().model_dump() == expected.get_config().model_dump()
+    assert restored.get_config() == expected.get_config()
 
 
 def test_suggest_returns_empty_for_short_or_non_string_query(small_corpus):

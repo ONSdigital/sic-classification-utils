@@ -11,7 +11,12 @@ from typing import TypeVar
 
 import pandas as pd
 
-from .sayt_core import CleanCorpus, PersistedCorpusRow, SaytConfig
+from .sayt_core import (
+    CleanCorpus,
+    PersistedCorpusRow,
+    validate_max_suggestions,
+    validate_min_chars,
+)
 from .sayt_indexes import (
     build_ngram_index,
     build_semantic_index,
@@ -29,7 +34,7 @@ from .sayt_retriever_specs import (
 from .sayt_retrievers import NgramRetriever, SemanticRetriever
 
 SAYT_ARTIFACT_TYPE = "sayt"
-SAYT_ARTIFACT_VERSION = 1
+SAYT_ARTIFACT_VERSION = 2
 MANIFEST_FILE_NAME = "manifest.json"
 CORPUS_FILE_NAME = "corpus.csv"
 _ARTIFACT_CORPUS_FIELDS = ["row_id", "search_text", "display_text"]
@@ -53,7 +58,8 @@ class StoredRetrieverSpec:
 class SaytArtifactManifest:
     """Structured manifest data for a persisted SAYT artifact."""
 
-    config: SaytConfig
+    min_chars: int
+    max_suggestions: int
     corpus_file: str
     corpus_size: int
     retrievers: tuple[StoredRetrieverSpec, ...]
@@ -149,12 +155,14 @@ def read_artifact_corpus(
 def build_artifact_manifest(
     *,
     corpus: CleanCorpus,
-    config: SaytConfig,
+    min_chars: int,
+    max_suggestions: int,
     retriever_specs: tuple[RetrieverSpec, ...],
 ) -> SaytArtifactManifest:
     """Build the structured manifest payload for a SAYT artifact."""
     return SaytArtifactManifest(
-        config=config.model_copy(deep=True),
+        min_chars=min_chars,
+        max_suggestions=max_suggestions,
         corpus_file=CORPUS_FILE_NAME,
         corpus_size=corpus.size,
         retrievers=tuple(
@@ -192,7 +200,8 @@ def read_artifact_manifest(*, artifact_dir: str | Path) -> SaytArtifactManifest:
 
     try:
         return SaytArtifactManifest(
-            config=SaytConfig.model_validate(payload["config"]),
+            min_chars=validate_min_chars(payload["min_chars"]),
+            max_suggestions=validate_max_suggestions(payload["max_suggestions"]),
             corpus_file=str(payload["corpus_file"]),
             corpus_size=int(payload["corpus_size"]),
             retrievers=tuple(
@@ -257,7 +266,7 @@ def build_retriever_artifact(
 def load_retriever_from_artifact(
     *,
     corpus: CleanCorpus,
-    config: SaytConfig,
+    min_chars: int,
     stored_retriever: StoredRetrieverSpec,
     artifact_dir: str | Path,
 ) -> Retriever:
@@ -271,7 +280,7 @@ def load_retriever_from_artifact(
     return handler.load_retriever(
         spec=stored_retriever.spec,
         corpus=corpus,
-        config=config,
+        min_chars=min_chars,
         path=path,
     )
 
@@ -293,7 +302,8 @@ def _serialise_manifest(manifest: SaytArtifactManifest) -> dict[str, object]:
     return {
         "artifact_type": SAYT_ARTIFACT_TYPE,
         "artifact_version": SAYT_ARTIFACT_VERSION,
-        "config": manifest.config.model_dump(mode="json"),
+        "min_chars": manifest.min_chars,
+        "max_suggestions": manifest.max_suggestions,
         "corpus_file": manifest.corpus_file,
         "corpus_size": manifest.corpus_size,
         "retrievers": [
@@ -390,11 +400,11 @@ class _PrefixRetrieverArtifactHandler:  # pylint: disable=missing-function-docst
         *,
         spec: RetrieverSpec,
         corpus: CleanCorpus,
-        config: SaytConfig,
+        min_chars: int,
         path: Path | None,
     ) -> Retriever:
         _ = path
-        return spec.build(corpus, min_chars=config.min_chars)
+        return spec.build(corpus, min_chars=min_chars)
 
 
 class _NgramRetrieverArtifactHandler:  # pylint: disable=missing-function-docstring
@@ -445,7 +455,7 @@ class _NgramRetrieverArtifactHandler:  # pylint: disable=missing-function-docstr
         *,
         spec: RetrieverSpec,
         corpus: CleanCorpus,
-        config: SaytConfig,
+        min_chars: int,
         path: Path | None,
     ) -> Retriever:
         typed_spec = _require_spec_type(spec, NgramRetrieverSpec)
@@ -457,7 +467,7 @@ class _NgramRetrieverArtifactHandler:  # pylint: disable=missing-function-docstr
         )
         return NgramRetriever.from_index(
             corpus,
-            min_chars=config.min_chars,
+            min_chars=min_chars,
             index=index,
         )
 
@@ -508,7 +518,7 @@ class _SemanticRetrieverArtifactHandler:  # pylint: disable=missing-function-doc
         *,
         spec: RetrieverSpec,
         corpus: CleanCorpus,
-        config: SaytConfig,
+        min_chars: int,
         path: Path | None,
     ) -> Retriever:
         typed_spec = _require_spec_type(spec, SemanticRetrieverSpec)
@@ -519,7 +529,7 @@ class _SemanticRetrieverArtifactHandler:  # pylint: disable=missing-function-doc
         )
         return SemanticRetriever.from_index(
             corpus,
-            min_chars=config.min_chars,
+            min_chars=min_chars,
             index=index,
         )
 

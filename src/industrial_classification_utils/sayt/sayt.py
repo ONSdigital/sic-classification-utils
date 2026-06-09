@@ -4,6 +4,8 @@ This module provides the public suggester API that coordinates configured
 retrievers and combines their scores into ranked suggestions.
 """
 
+# pylint: disable=duplicate-code
+
 import math
 import os
 from collections.abc import Iterable, Sequence
@@ -14,10 +16,11 @@ from survey_assist_utils.logging import get_logger
 
 from .sayt_core import (
     CleanCorpus,
-    SaytConfig,
     Suggestion,
     _normalise,
     take_with_ties,
+    validate_max_suggestions,
+    validate_min_chars,
 )
 from .sayt_retriever_specs import (
     Retriever,
@@ -55,8 +58,8 @@ class SAYTSuggester:
     By default it uses the standard prefix, n-gram, and semantic retriever
     specifications. Use ``retrievers=`` to override that mix.
 
-    Suggester-wide settings are currently passed as keyword arguments and
-    validated by ``SaytConfig``. At present these include:
+    Suggester-wide settings are configured directly on the suggester. At
+    present these include:
     - ``min_chars``: minimum query length before retrieval runs
     - ``max_suggestions``: default maximum number of ranked suggestions to return
 
@@ -95,18 +98,20 @@ class SAYTSuggester:
     """
 
     @classmethod
-    def _from_state(
+    def _from_state(  # pylint: disable=too-many-arguments
         cls,
         *,
         corpus: CleanCorpus,
-        config: SaytConfig,
+        min_chars: int,
+        max_suggestions: int,
         retriever_specs: Sequence[RetrieverSpec],
         retrievers: list[_ConfiguredRetriever],
     ) -> "SAYTSuggester":
         """Construct a suggester from already-validated runtime state."""
         suggester = cls.__new__(cls)
         suggester._corpus = corpus
-        suggester._config = config
+        suggester._min_chars = min_chars
+        suggester._max_suggestions = max_suggestions
         suggester._max_duplication = max(corpus.display_text_count.values(), default=0)
         suggester._retriever_specs = tuple(retriever_specs)
         suggester._retrievers = retrievers
@@ -118,7 +123,8 @@ class SAYTSuggester:
         corpus: Iterable[tuple[object, object]] | Iterable[str],
         *,
         retrievers: Sequence[RetrieverSpec] | None = None,
-        **kwargs: object,
+        min_chars: int = 4,
+        max_suggestions: int = 10,
     ) -> None:
         """Initialise a suggester for a cleaned response corpus.
 
@@ -127,12 +133,13 @@ class SAYTSuggester:
                 pairs.
             retrievers: Optional retriever specifications. When omitted, the
                 standard prefix, n-gram, and semantic spec set is used.
-            **kwargs: Suggester-wide keyword arguments validated by
-                ``SaytConfig``, currently including ``min_chars`` and
-                ``max_suggestions``.
+            min_chars: Minimum query length before retrieval runs.
+            max_suggestions: Default maximum number of ranked suggestions to
+                return.
         """
         self._corpus = CleanCorpus.model_validate(corpus)
-        self._config = SaytConfig.model_validate(kwargs)
+        self._min_chars = validate_min_chars(min_chars)
+        self._max_suggestions = validate_max_suggestions(max_suggestions)
 
         self._retriever_specs = tuple(
             default_retriever_specs() if retrievers is None else retrievers
@@ -170,21 +177,22 @@ class SAYTSuggester:
                 weight=weight,
                 retriever=spec.build(
                     self._corpus,
-                    min_chars=self._config.min_chars,
+                    min_chars=self._min_chars,
                 ),
             )
             for spec, weight in self._normalised_retriever_specs(retriever_specs)
         ]
 
     @classmethod
-    def from_csv(
+    def from_csv(  # pylint: disable=too-many-arguments  # noqa: PLR0913
         cls,
         file_path: str | os.PathLike,
         *,
         search_text_col: str = "title",
         display_text_col: str | None = None,
         retrievers: Sequence[RetrieverSpec] | None = None,
-        **kwargs: object,
+        min_chars: int = 4,
+        max_suggestions: int = 10,
     ) -> "SAYTSuggester":
         """Build a suggester from CSV input.
 
@@ -195,7 +203,9 @@ class SAYTSuggester:
                 omitted, the search column is reused for display values.
             retrievers: Optional retriever specifications. When omitted, the
                 standard retriever set is used.
-            **kwargs: Keyword arguments validated by ``SaytConfig``.
+            min_chars: Minimum query length before retrieval runs.
+            max_suggestions: Default maximum number of ranked suggestions to
+                return.
 
         Returns:
             A configured ``SAYTSuggester`` instance.
@@ -211,7 +221,8 @@ class SAYTSuggester:
         return cls(
             corpus_rows,
             retrievers=retrievers,
-            **kwargs,
+            min_chars=min_chars,
+            max_suggestions=max_suggestions,
         )
 
     @classmethod
@@ -229,13 +240,14 @@ class SAYTSuggester:
 
         retrievers = cls._load_retrievers_from_artifact(
             corpus=corpus,
-            config=manifest.config,
+            min_chars=manifest.min_chars,
             stored_retrievers=manifest.retrievers,
             artifact_dir=artifact_path,
         )
         return cls._from_state(
             corpus=corpus,
-            config=manifest.config,
+            min_chars=manifest.min_chars,
+            max_suggestions=manifest.max_suggestions,
             retriever_specs=[
                 stored_retriever.spec for stored_retriever in manifest.retrievers
             ],
@@ -247,7 +259,7 @@ class SAYTSuggester:
         cls,
         *,
         corpus: CleanCorpus,
-        config: SaytConfig,
+        min_chars: int,
         stored_retrievers: Sequence[StoredRetrieverSpec],
         artifact_dir: Path,
     ) -> list[_ConfiguredRetriever]:
@@ -261,7 +273,7 @@ class SAYTSuggester:
                 weight=weight,
                 retriever=cls._load_retriever_from_artifact(
                     corpus=corpus,
-                    config=config,
+                    min_chars=min_chars,
                     stored_retriever=stored_retriever,
                     artifact_dir=artifact_dir,
                 ),
@@ -277,14 +289,14 @@ class SAYTSuggester:
     def _load_retriever_from_artifact(
         *,
         corpus: CleanCorpus,
-        config: SaytConfig,
+        min_chars: int,
         stored_retriever: StoredRetrieverSpec,
         artifact_dir: Path,
     ) -> Retriever:
         """Restore a runtime retriever from persisted artifact state."""
         return load_retriever_from_artifact(
             corpus=corpus,
-            config=config,
+            min_chars=min_chars,
             stored_retriever=stored_retriever,
             artifact_dir=artifact_dir,
         )
@@ -367,12 +379,12 @@ class SAYTSuggester:
         Returns:
             A list of combined suggestions ordered by descending score. Returns
             an empty list when the normalised query is shorter than
-            ``SaytConfig.min_chars``.
+            ``min_chars``.
         """
         if num_suggestions is None:
-            num_suggestions = self._config.max_suggestions
+            num_suggestions = self._max_suggestions
         q_norm = _normalise(query)
-        if len(q_norm) < self._config.min_chars:
+        if len(q_norm) < self._min_chars:
             return []
 
         # Ask for more suggestions, as some may be filtered out after deduplication
@@ -410,7 +422,7 @@ class SAYTSuggester:
             score, while preserving ties at the cutoff.
         """
         if num_suggestions is None:
-            num_suggestions = self._config.max_suggestions
+            num_suggestions = self._max_suggestions
         results = self.suggest_with_scores(
             query, num_suggestions=num_suggestions * self._max_duplication
         )
@@ -418,10 +430,14 @@ class SAYTSuggester:
         ranked_results = take_with_ties(dedup_results, num_suggestions)
         return [result[0] for result in ranked_results]
 
-    def get_config(self) -> SaytConfig:
-        """Return a copy of the validated suggester configuration.
+    def get_config(self) -> dict[str, int]:
+        """Return the validated global suggester settings.
 
         Returns:
-            A deep copy of the ``SaytConfig`` used by this suggester.
+            A copy of the current global ``min_chars`` and ``max_suggestions``
+            settings.
         """
-        return self._config.model_copy(deep=True)
+        return {
+            "min_chars": self._min_chars,
+            "max_suggestions": self._max_suggestions,
+        }

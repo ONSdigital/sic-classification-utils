@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from .sayt_core import CleanCorpus, SaytConfig, Suggestion
+from .sayt_core import CleanCorpus, Suggestion
 from .sayt_retrievers import NgramRetriever, PrefixRetriever, SemanticRetriever
 
 _MIN_NGRAM_SIZE = 2
@@ -98,7 +98,7 @@ class RetrieverArtifactHandler(Protocol):
         *,
         spec: RetrieverSpec,
         corpus: CleanCorpus,
-        config: SaytConfig,
+        min_chars: int,
         path: Path | None,
     ) -> Retriever:
         """Restore a runtime retriever from persisted artifact state."""

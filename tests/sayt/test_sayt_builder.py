@@ -68,9 +68,9 @@ class _CustomRetrieverArtifactHandlerImpl:
     def build_artifact(self, *, spec, corpus, path):
         _ = (spec, corpus, path)
 
-    def load_retriever(self, *, spec, corpus, config, path):
-        _ = (config, path)
-        return spec.build(corpus, min_chars=3)
+    def load_retriever(self, *, spec, corpus, min_chars, path):
+        _ = path
+        return spec.build(corpus, min_chars=min_chars)
 
 
 def test_builder_writes_manifest_and_corpus(tmp_path, small_corpus):
@@ -91,8 +91,9 @@ def test_builder_writes_manifest_and_corpus(tmp_path, small_corpus):
     assert result == artifact_dir
     assert manifest == {
         "artifact_type": "sayt",
-        "artifact_version": 1,
-        "config": {"min_chars": 3, "max_suggestions": 5},
+        "artifact_version": 2,
+        "min_chars": 3,
+        "max_suggestions": 5,
         "corpus_file": "corpus.csv",
         "corpus_size": len(small_corpus),
         "retrievers": [
