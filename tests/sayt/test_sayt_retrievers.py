@@ -7,24 +7,25 @@ import numpy as np
 import pytest
 from classifai.vectorisers import VectoriserBase
 
+from industrial_classification_utils.sayt import NgramRetrieverSpec, PrefixRetrieverSpec
 from industrial_classification_utils.sayt.sayt import SAYTSuggester
-from industrial_classification_utils.sayt.sayt_common import CleanCorpus
+from industrial_classification_utils.sayt.sayt_core import CleanCorpus
+from industrial_classification_utils.sayt.sayt_indexes import (
+    DenseVectorIndex,
+    _CharNgramVectoriser,
+    _L2NormalisingVectoriser,
+)
 from industrial_classification_utils.sayt.sayt_retrievers import (
     NgramRetriever,
     PrefixRetriever,
     SemanticRetriever,
-    _CharNgramVectoriser,
-    _DenseVectorIndex,
-    _L2NormalisingVectoriser,
     _PrefixIndex,
 )
 
 
 def test_prefix_full_string_match_ranks_expected_terms(small_corpus):
     """Return relevant prefix matches and exclude unrelated terms."""
-    s = SAYTSuggester(
-        small_corpus, min_chars=3, ngram_enable=False, semantic_enable=False
-    )
+    s = SAYTSuggester(small_corpus, min_chars=3, retrievers=[PrefixRetrieverSpec()])
     results = s.suggest("car")
 
     assert "Car Wash" in results
@@ -34,18 +35,14 @@ def test_prefix_full_string_match_ranks_expected_terms(small_corpus):
 
 def test_duplicate_terms_increase_rank_via_counts(small_corpus):
     """Prefer duplicated underlying search terms when scores tie."""
-    s = SAYTSuggester(
-        small_corpus, min_chars=3, ngram_enable=False, semantic_enable=False
-    )
+    s = SAYTSuggester(small_corpus, min_chars=3, retrievers=[PrefixRetrieverSpec()])
     results = s.suggest("car w")
     assert results[0] == "Car Waxing"
 
 
 def test_duplicate_display_variants_are_returned_shorter_first(small_corpus):
     """Rank duplicate display variants using the configured tie-breakers."""
-    s = SAYTSuggester(
-        small_corpus, min_chars=3, ngram_enable=False, semantic_enable=False
-    )
+    s = SAYTSuggester(small_corpus, min_chars=3, retrievers=[PrefixRetrieverSpec()])
     results = s.suggest("car wa")
     ind1 = results.index("Car Wash")
     ind2 = results.index("CAR WASH (duplicate)")
@@ -54,9 +51,7 @@ def test_duplicate_display_variants_are_returned_shorter_first(small_corpus):
 
 def test_fuzzy_prefix_can_recover_from_simple_typo(small_corpus):
     """Recover expected results when the query has a small typo."""
-    s = SAYTSuggester(
-        small_corpus, min_chars=3, ngram_enable=False, semantic_enable=False
-    )
+    s = SAYTSuggester(small_corpus, min_chars=3, retrievers=[PrefixRetrieverSpec()])
     results = s.suggest("carpentey")
     assert "Carpentry services" in results
 
@@ -66,11 +61,8 @@ def test_ngram_recovers_from_typo_when_prefix_does_not_match(small_corpus):
     s = SAYTSuggester(
         small_corpus,
         min_chars=3,
-        ngram_enable=True,
-        ngram_n=3,
-        ngram_max_df=1.0,
+        retrievers=[PrefixRetrieverSpec(), NgramRetrieverSpec(n=3, max_df=1.0)],
         max_suggestions=5,
-        semantic_enable=False,
     )
     results = s.suggest("groming")
     assert results[0] == "Dog grooming"
@@ -184,7 +176,7 @@ def test_ngram_retriever_returns_empty_for_empty_query_vector(
     retriever = NgramRetriever.__new__(NgramRetriever)
     retriever._corpus = corpus
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore([]),
         _num_vectors=1,
         _corpus=corpus,
@@ -206,7 +198,7 @@ def test_ngram_retriever_returns_empty_for_empty_similarity_matrix():
     retriever = NgramRetriever.__new__(NgramRetriever)
     retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore([]),
         _num_vectors=0,
         _corpus=retriever._corpus,
@@ -221,7 +213,7 @@ def test_dense_retriever_keeps_ties_at_cutoff(small_corpus):
     retriever = NgramRetriever.__new__(NgramRetriever)
     retriever._corpus = corpus
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore(
             [
                 {"doc_label": corpus.rows[0][0], "score": 0.9},
@@ -257,18 +249,18 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
 
     def _fake_build_dense_vector_index(*, corpus, vectoriser):
         captured["vectoriser_type"] = type(vectoriser).__name__
-        return _DenseVectorIndex(
+        return DenseVectorIndex(
             _vector_store=_StubVectorStore([]),
             _num_vectors=1,
             _corpus=corpus,
         )
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_retrievers.HuggingFaceVectoriser",
+        "industrial_classification_utils.sayt.sayt_indexes.HuggingFaceVectoriser",
         _StubHFVectoriser,
     )
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_retrievers._DenseVectorIndex.from_corpus",
+        "industrial_classification_utils.sayt.sayt_indexes.DenseVectorIndex.from_corpus",
         _fake_build_dense_vector_index,
     )
 
@@ -295,7 +287,7 @@ def test_semantic_retriever_returns_empty_for_empty_query_vector(small_corpus):
     retriever = SemanticRetriever.__new__(SemanticRetriever)
     retriever._corpus = corpus
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore([]),
         _num_vectors=1,
         _corpus=corpus,
@@ -309,7 +301,7 @@ def test_semantic_retriever_returns_empty_for_empty_similarity_matrix():
     retriever = SemanticRetriever.__new__(SemanticRetriever)
     retriever._corpus = CleanCorpus.model_validate([("car wash", "Car Wash")])
     retriever._min_chars = 3
-    retriever._index = _DenseVectorIndex(
+    retriever._index = DenseVectorIndex(
         _vector_store=_StubVectorStore([]),
         _num_vectors=0,
         _corpus=retriever._corpus,

@@ -2,15 +2,18 @@
 
 # pylint: disable=protected-access,redefined-outer-name,too-few-public-methods,C0116,W0613
 
+from dataclasses import dataclass
 from uuid import UUID
 
 import pandas as pd
 import pytest
 from pydantic import ValidationError
 
+from industrial_classification_utils.sayt import (
+    PrefixRetrieverSpec,
+)
 from industrial_classification_utils.sayt.sayt import SAYTSuggester
-from industrial_classification_utils.sayt.sayt_common import CleanCorpus
-from industrial_classification_utils.sayt.sayt_retrievers import _Suggestion
+from industrial_classification_utils.sayt.sayt_core import CleanCorpus, Suggestion
 
 
 def test_constructor_rejects_unknown_kwargs(small_corpus):
@@ -76,8 +79,7 @@ def test_from_csv_builds_and_suggests(tmp_path, small_corpus):
         str(csv_path),
         search_text_col="search",
         display_text_col="display",
-        semantic_enable=False,
-        ngram_enable=False,
+        retrievers=[PrefixRetrieverSpec()],
         min_chars=3,
         max_suggestions=10,
     )
@@ -93,8 +95,7 @@ def test_from_csv_uses_search_column_as_default_display(tmp_path, small_corpus):
     suggester = SAYTSuggester.from_csv(
         str(csv_path),
         search_text_col="search",
-        semantic_enable=False,
-        ngram_enable=False,
+        retrievers=[PrefixRetrieverSpec()],
         min_chars=3,
     )
 
@@ -133,9 +134,7 @@ def test_from_csv_rejects_missing_display_column(tmp_path, small_corpus):
 
 def test_suggest_returns_empty_for_short_or_non_string_query(small_corpus):
     """Return no suggestions for short or non-string queries."""
-    s = SAYTSuggester(
-        small_corpus, min_chars=4, ngram_enable=False, semantic_enable=False
-    )
+    s = SAYTSuggester(small_corpus, min_chars=4, retrievers=[PrefixRetrieverSpec()])
     assert not s.suggest("car")
     assert not s.suggest(None)
 
@@ -146,8 +145,7 @@ def test_suggest_with_scores_defaults_to_config_max_suggestions(small_corpus):
         small_corpus,
         min_chars=3,
         max_suggestions=2,
-        ngram_enable=False,
-        semantic_enable=False,
+        retrievers=[PrefixRetrieverSpec()],
     )
 
     results = suggester.suggest_with_scores("car")
@@ -166,8 +164,7 @@ def test_suggest_respects_explicit_num_suggestions(small_corpus):
         small_corpus,
         min_chars=3,
         max_suggestions=5,
-        ngram_enable=False,
-        semantic_enable=False,
+        retrievers=[PrefixRetrieverSpec()],
     )
 
     assert suggester.suggest("car", num_suggestions=1) == [
@@ -183,8 +180,7 @@ def test_suggest_with_scores_keeps_ties_at_cutoff(small_corpus):
     suggester = SAYTSuggester(
         small_corpus,
         min_chars=3,
-        ngram_enable=False,
-        semantic_enable=False,
+        retrievers=[PrefixRetrieverSpec()],
     )
 
     results = suggester.suggest_with_scores("car", num_suggestions=1)
@@ -202,8 +198,7 @@ def test_suggest_keeps_ties_at_cutoff(small_corpus):
     suggester = SAYTSuggester(
         small_corpus,
         min_chars=3,
-        ngram_enable=False,
-        semantic_enable=False,
+        retrievers=[PrefixRetrieverSpec()],
     )
 
     results = suggester.suggest("car", num_suggestions=1)
@@ -216,18 +211,18 @@ def test_suggest_keeps_ties_at_cutoff(small_corpus):
     ]
 
 
-def test_suggest_with_scores_skips_disabled_retrievers(monkeypatch, small_corpus):
-    """Use only enabled retrievers when combining scores."""
+def test_suggest_with_scores_uses_only_supplied_retrievers(small_corpus):
+    """Delegate only to the configured retriever specs."""
     semantic_calls = []
 
-    class _StubSemanticRetriever:
-        def __init__(self, corpus, *, model, min_chars):
-            self._row = corpus.rows[0]
+    class _StubRetriever:
+        def __init__(self, row):
+            self._row = row
 
         def suggest_with_scores(self, q_norm, num_suggestions):
             semantic_calls.append((q_norm, num_suggestions))
             return [
-                _Suggestion(
+                Suggestion(
                     display_text=self._row[2],
                     score=3.0,
                     search_text=self._row[1],
@@ -235,18 +230,18 @@ def test_suggest_with_scores_skips_disabled_retrievers(monkeypatch, small_corpus
                 )
             ]
 
-    monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt.SemanticRetriever",
-        _StubSemanticRetriever,
-    )
+    @dataclass(frozen=True, slots=True)
+    class _StubRetrieverSpec:
+        weight: float = 1.0
+        name: str = "stub"
+
+        def build(self, corpus, *, min_chars):
+            return _StubRetriever(corpus.rows[0])
 
     suggester = SAYTSuggester(
         small_corpus,
         min_chars=3,
-        prefix_enable=False,
-        ngram_enable=False,
-        semantic_enable=True,
-        semantic_model="stub-model",
+        retrievers=[_StubRetrieverSpec()],
     )
 
     results = suggester.suggest_with_scores("car")
@@ -260,22 +255,26 @@ def test_combine_suggestions_ignores_non_positive_score_groups(small_corpus):
     suggester = SAYTSuggester(
         small_corpus,
         min_chars=3,
-        ngram_enable=False,
-        semantic_enable=False,
+        retrievers=[PrefixRetrieverSpec()],
     )
     first_row_id, first_search, first_display = suggester._corpus.rows[0]
 
     combined = suggester._combine_suggestions(
-        prefix_results=[
-            _Suggestion(
-                display_text=first_display,
-                score=0.0,
-                search_text=first_search,
-                row_id=first_row_id,
-            )
-        ],
-        ngram_results=[],
-        semantic_results=[],
+        [
+            (
+                1.0,
+                [
+                    Suggestion(
+                        display_text=first_display,
+                        score=0.0,
+                        search_text=first_search,
+                        row_id=first_row_id,
+                    )
+                ],
+            ),
+            (1.0, []),
+            (1.0, []),
+        ]
     )
 
     assert combined == []
@@ -286,40 +285,144 @@ def test_combine_suggestions_ignores_invalid_scores(small_corpus):
     suggester = SAYTSuggester(
         small_corpus,
         min_chars=3,
-        ngram_enable=False,
-        semantic_enable=False,
+        retrievers=[PrefixRetrieverSpec()],
     )
     target_rows = [row for row in suggester._corpus.rows if row[2] == "Car Waxing"]
     first_row_id, first_search, first_display = target_rows[0]
     second_row_id, second_search, _ = target_rows[1]
 
     combined = suggester._combine_suggestions(
-        prefix_results=[
-            _Suggestion(
-                display_text=first_display,
-                score=0.0,
-                search_text=first_search,
-                row_id=first_row_id,
+        [
+            (
+                1.0,
+                [
+                    Suggestion(
+                        display_text=first_display,
+                        score=0.0,
+                        search_text=first_search,
+                        row_id=first_row_id,
+                    ),
+                    Suggestion(
+                        display_text="ignored",
+                        score=5.0,
+                        search_text="ignored",
+                        row_id="",
+                    ),
+                ],
             ),
-            _Suggestion(
-                display_text="ignored", score=5.0, search_text="ignored", row_id=""
+            (
+                1.0,
+                [
+                    Suggestion(
+                        display_text=first_display,
+                        score=2.0,
+                        search_text=first_search,
+                        row_id=first_row_id,
+                    ),
+                    Suggestion(
+                        display_text=first_display,
+                        score=1.0,
+                        search_text=second_search,
+                        row_id=second_row_id,
+                    ),
+                ],
             ),
-        ],
-        ngram_results=[
-            _Suggestion(
-                display_text=first_display,
-                score=2.0,
-                search_text=first_search,
-                row_id=first_row_id,
-            ),
-            _Suggestion(
-                display_text=first_display,
-                score=1.0,
-                search_text=second_search,
-                row_id=second_row_id,
-            ),
-        ],
-        semantic_results=[],
+        ]
     )
 
-    assert combined == [(first_row_id, 0.0), (second_row_id, 0.0)]
+    assert combined == [(first_row_id, 1.0), (second_row_id, 0.5)]
+
+
+def test_suggester_defaults_to_standard_retriever_specs(monkeypatch, small_corpus):
+    """Use the standard prefix, n-gram, and semantic specs when none are supplied."""
+
+    class _StubRetriever:
+        def suggest_with_scores(self, q_norm, num_suggestions):
+            return []
+
+    @dataclass(frozen=True, slots=True)
+    class _StubRetrieverSpec:
+        name: str
+        weight: float = 1.0
+
+        def build(self, corpus, *, min_chars):
+            return _StubRetriever()
+
+    monkeypatch.setattr(
+        "industrial_classification_utils.sayt.sayt.default_retriever_specs",
+        lambda: [
+            _StubRetrieverSpec(name="prefix"),
+            _StubRetrieverSpec(name="ngram"),
+            _StubRetrieverSpec(name="semantic"),
+        ],
+    )
+
+    suggester = SAYTSuggester(small_corpus, min_chars=3)
+
+    assert [configured.name for configured in suggester._retrievers] == [
+        "prefix",
+        "ngram",
+        "semantic",
+    ]
+
+
+def test_constructor_rejects_empty_retriever_list(small_corpus):
+    """Reject suggester construction without any retriever specs."""
+    with pytest.raises(ValueError, match="At least one retriever"):
+        SAYTSuggester(small_corpus, retrievers=[])
+
+
+def test_constructor_rejects_invalid_custom_retriever_weight(small_corpus):
+    """Reject custom retriever specs whose own weight is invalid."""
+    build_calls = []
+
+    class _StubRetriever:
+        def suggest_with_scores(self, q_norm, num_suggestions):
+            return []
+
+    @dataclass(frozen=True, slots=True)
+    class _StubRetrieverSpec:
+        name: str = "stub"
+        weight: float = 1.0
+
+        def build(self, corpus, *, min_chars):
+            build_calls.append((corpus, min_chars))
+            return _StubRetriever()
+
+    @dataclass(frozen=True, slots=True)
+    class _NegativeStubRetrieverSpec:
+        name: str = "negative"
+        weight: float = -0.5
+
+        def build(self, corpus, *, min_chars):
+            build_calls.append((corpus, min_chars))
+            return _StubRetriever()
+
+    @dataclass(frozen=True, slots=True)
+    class _NanStubRetrieverSpec:
+        name: str = "nan"
+        weight: float = float("nan")
+
+        def build(self, corpus, *, min_chars):
+            build_calls.append((corpus, min_chars))
+            return _StubRetriever()
+
+    with pytest.raises(
+        ValueError,
+        match="Retriever 'negative' weight must be a finite value > 0",
+    ):
+        SAYTSuggester(
+            small_corpus,
+            retrievers=[_StubRetrieverSpec(), _NegativeStubRetrieverSpec()],
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="Retriever 'nan' weight must be a finite value > 0",
+    ):
+        SAYTSuggester(
+            small_corpus,
+            retrievers=[_StubRetrieverSpec(), _NanStubRetrieverSpec()],
+        )
+
+    assert not build_calls

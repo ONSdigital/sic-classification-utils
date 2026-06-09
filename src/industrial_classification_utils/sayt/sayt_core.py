@@ -1,22 +1,16 @@
-"""Search-as-you-type (SAYT) utilities.
+"""Core SAYT data models, corpus cleaning, and ranking helpers."""
 
-This module provides a lightweight SAYT implementation for suggesting free-text
-survey responses for organisation/industry description questions.
-"""
+# ruff: noqa: PLR2004
 
 import re
 import warnings
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
 import pandas as pd
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    model_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 _WS_RE = re.compile(r"\s+")
 _NON_ALNUM_SPACE_RE = re.compile(r"[^a-z ]+")
@@ -36,7 +30,11 @@ def _row_uid(index: int, search_text: str, display_text: str) -> str:
 
 
 class CleanCorpus(BaseModel):
-    """Validated cleaned corpus and derived lookup tables for SAYT."""
+    """Store cleaned SAYT rows and their derived lookup tables.
+
+    Instances are created from raw strings or ``(search_text, display_text)``
+    pairs and retain stable row identifiers for downstream score aggregation.
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     corpus: object
@@ -100,3 +98,72 @@ class CleanCorpus(BaseModel):
             (_row_uid(i, norm, display), norm, display)
             for i, (norm, display) in enumerate(cleaned)
         ]
+
+
+class SaytConfig(BaseModel):
+    """Validated configuration for a SAYT suggester instance.
+
+    This model contains only suggester-wide settings. Retriever-specific
+    configuration lives on individual ``RetrieverSpec`` objects.
+    """
+
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    min_chars: int = 4
+    max_suggestions: int = 10
+
+    @model_validator(mode="after")
+    def _validate_ranges(self) -> "SaytConfig":
+        """Enforce the supported numeric ranges for SAYT settings."""
+        if self.min_chars < 3:
+            raise ValueError("min_chars must be >= 3")
+        if not 1 <= self.max_suggestions <= 100:
+            raise ValueError("max_suggestions must be between 1 and 100")
+        return self
+
+
+@dataclass(frozen=True, slots=True)
+class Suggestion:
+    """Represent a SAYT match with score and row metadata.
+
+    The meaning of ``score`` depends on the producer. Concrete retrievers emit
+    strategy-local scores, while ``SAYTSuggester.suggest_with_scores`` returns
+    the combined weighted score.
+    """
+
+    display_text: str
+    score: float
+    search_text: str = ""
+    row_id: str = ""
+
+
+def take_with_ties(
+    items: list[tuple[str, float]],
+    limit: int,
+) -> list[tuple[str, float]]:
+    """Return the first ``limit`` items and any later items tied on score.
+
+    Args:
+        items: Scored ``(key, score)`` pairs to rank.
+        limit: Maximum number of leading items before tie extension is applied.
+
+    Returns:
+        The highest-scoring items up to ``limit``, plus any later items that are
+        tied with the cutoff score.
+    """
+    if limit < 1 or not items:
+        return []
+
+    items = sorted(
+        items,
+        key=lambda kv: (-kv[1],),
+    )
+
+    if limit >= len(items):
+        return items
+
+    cutoff_score = float(items[limit - 1][1])
+    end = limit
+    while end < len(items) and float(items[end][1]) == cutoff_score:
+        end += 1
+    return items[:end]
