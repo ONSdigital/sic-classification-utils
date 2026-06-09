@@ -1,6 +1,5 @@
 """Tests for SAYT retrieval and ranking behavior."""
 
-# ruff: noqa: PLR2004
 # pylint: disable=protected-access,redefined-outer-name,too-few-public-methods,C0116,W0613
 
 import csv
