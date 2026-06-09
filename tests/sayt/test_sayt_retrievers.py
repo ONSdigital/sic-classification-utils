@@ -17,6 +17,7 @@ from industrial_classification_utils.sayt.sayt_indexes import (
     DenseVectorIndex,
     _CharNgramVectoriser,
     _L2NormalisingVectoriser,
+    load_semantic_index,
 )
 from industrial_classification_utils.sayt.sayt_retrievers import (
     NgramRetriever,
@@ -386,6 +387,56 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
         "overwrite": True,
     }
     assert retriever._min_chars == 3
+
+
+def test_load_semantic_index_loads_existing_filespace_with_wrapped_vectoriser(
+    monkeypatch, tmp_path, small_corpus
+):
+    """Wrap the embedding vectoriser before loading a persisted semantic index."""
+    captured = {}
+    corpus = CleanCorpus.model_validate(small_corpus)
+    folder_path = tmp_path / "existing-semantic"
+
+    class _StubHFVectoriser:
+        def __init__(self, model_name):
+            captured["model_name"] = model_name
+
+        def transform(self, texts):
+            _ = texts
+            return np.array([[1.0, 0.0]])
+
+    def _fake_load_dense_vector_index(*, corpus, folder_path, vectoriser):
+        captured["corpus"] = corpus
+        captured["folder_path"] = folder_path
+        captured["vectoriser_type"] = type(vectoriser).__name__
+        return DenseVectorIndex(
+            _vector_store=_StubVectorStore([]),
+            _num_vectors=2,
+            _corpus=corpus,
+        )
+
+    monkeypatch.setattr(
+        "industrial_classification_utils.sayt.sayt_indexes.HuggingFaceVectoriser",
+        _StubHFVectoriser,
+    )
+    monkeypatch.setattr(
+        "industrial_classification_utils.sayt.sayt_indexes.DenseVectorIndex.from_filespace",
+        _fake_load_dense_vector_index,
+    )
+
+    index = load_semantic_index(
+        corpus,
+        model="all-MiniLM-L6-v2",
+        folder_path=folder_path,
+    )
+
+    assert index._num_vectors == 2
+    assert captured == {
+        "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+        "corpus": corpus,
+        "folder_path": folder_path,
+        "vectoriser_type": "_L2NormalisingVectoriser",
+    }
 
 
 def test_semantic_retriever_returns_empty_for_short_queries():

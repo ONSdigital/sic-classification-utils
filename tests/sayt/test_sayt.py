@@ -2,7 +2,9 @@
 
 # pylint: disable=protected-access,redefined-outer-name,too-few-public-methods,C0116,W0613
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import UUID
 
 import pandas as pd
@@ -187,6 +189,25 @@ def test_from_artifact_restores_prefix_suggester(tmp_path, small_corpus):
     assert expected_config.artifact_provenance is None
 
 
+def test_from_artifact_rejects_manifest_corpus_size_mismatch(tmp_path, small_corpus):
+    """Reject artifacts whose manifest corpus size disagrees with stored rows."""
+    artifact_dir = SAYTBuilder(
+        small_corpus,
+        retrievers=[PrefixRetrieverSpec()],
+        min_chars=3,
+        max_suggestions=5,
+    ).build_artifact(tmp_path / "artifact")
+    manifest_path = artifact_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["corpus_size"] += 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError, match="Artifact corpus size does not match manifest"
+    ):
+        SAYTSuggester.from_artifact(artifact_dir)
+
+
 def test_get_config_returns_rich_runtime_summary(small_corpus):
     """Expose runtime settings, corpus stats, and retriever summaries."""
     suggester = SAYTSuggester(
@@ -247,6 +268,78 @@ def test_get_config_supports_custom_specs_without_artifact_handlers(small_corpus
 
     assert config.retrievers[0].config == {"trigger": "groom"}
     assert config.retrievers[0].artifact_provenance is None
+
+
+def test_get_config_serialises_nested_custom_spec_values(small_corpus):
+    """Convert non-JSON-native custom spec config values into JSON-safe forms."""
+
+    class _StubRetriever:
+        def suggest_with_scores(self, q_norm, num_suggestions):
+            _ = (q_norm, num_suggestions)
+            return []
+
+    class _Marker:
+        def __str__(self):
+            return "marker-object"
+
+    class _CustomSpec:
+        def __init__(self):
+            self.name = "custom"
+            self.weight = 1.0
+            self.folder = Path("artifacts/model")
+            self.options = {
+                "labels": ["car", Path("cache/index"), _Marker()],
+                "metadata": {"marker": _Marker()},
+            }
+            self.values = (Path("weights.bin"), _Marker())
+
+        def build(self, corpus, *, min_chars):
+            _ = (corpus, min_chars)
+            return _StubRetriever()
+
+    config = SAYTSuggester(
+        small_corpus,
+        min_chars=3,
+        retrievers=[_CustomSpec()],
+    ).get_config()
+
+    assert config.retrievers[0].config == {
+        "folder": "artifacts/model",
+        "options": {
+            "labels": ["car", "cache/index", "marker-object"],
+            "metadata": {"marker": "marker-object"},
+        },
+        "values": ["weights.bin", "marker-object"],
+    }
+
+
+def test_get_config_returns_empty_config_for_slots_only_custom_spec(small_corpus):
+    """Return an empty config summary when a custom spec exposes no __dict__."""
+
+    class _StubRetriever:
+        def suggest_with_scores(self, q_norm, num_suggestions):
+            _ = (q_norm, num_suggestions)
+            return []
+
+    class _SlotsOnlySpec:
+        __slots__ = ("name", "trigger", "weight")
+
+        def __init__(self, *, trigger: str, weight: float = 1.0):
+            self.name = "slots-only"
+            self.weight = weight
+            self.trigger = trigger
+
+        def build(self, corpus, *, min_chars):
+            _ = (corpus, min_chars)
+            return _StubRetriever()
+
+    config = SAYTSuggester(
+        small_corpus,
+        min_chars=3,
+        retrievers=[_SlotsOnlySpec(trigger="groom")],
+    ).get_config()
+
+    assert config.retrievers[0].config == {}
 
 
 def test_suggest_returns_empty_for_short_or_non_string_query(small_corpus):
@@ -543,3 +636,16 @@ def test_constructor_rejects_invalid_custom_retriever_weight(small_corpus):
         )
 
     assert not build_calls
+
+
+def test_clean_corpus_rejects_empty_persisted_rows():
+    """Reject empty persisted row collections during artifact restore."""
+    with pytest.raises(ValueError, match="corpus is empty after filtering"):
+        CleanCorpus.from_persisted_rows([])
+
+
+def test_clean_corpus_coerces_persisted_tuple_values_to_strings():
+    """Coerce tuple-based persisted rows to strings before rebuilding indexes."""
+    restored = CleanCorpus.from_persisted_rows([(123, 456, 789)])
+
+    assert restored.rows == [("123", "456", "789")]

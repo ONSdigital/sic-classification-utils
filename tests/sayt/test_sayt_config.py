@@ -37,6 +37,12 @@ from industrial_classification_utils.sayt.sayt_core import CleanCorpus
             ValueError,
             "max_suggestions must be between 1 and 100",
         ),
+        (
+            SAYTSuggester,
+            {"min_chars": "abc"},
+            TypeError,
+            "min_chars must be an integer",
+        ),
         (SAYTBuilder, {"min_chars": 2}, ValueError, "min_chars must be >= 3"),
         (
             SAYTBuilder,
@@ -55,6 +61,12 @@ from industrial_classification_utils.sayt.sayt_core import CleanCorpus
             {"max_suggestions": 101},
             ValueError,
             "max_suggestions must be between 1 and 100",
+        ),
+        (
+            SAYTBuilder,
+            {"max_suggestions": "abc"},
+            TypeError,
+            "max_suggestions must be an integer",
         ),
     ],
 )

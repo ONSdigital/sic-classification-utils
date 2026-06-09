@@ -6,6 +6,8 @@ import csv
 import json
 from pathlib import Path
 
+import pandas as pd
+
 from industrial_classification_utils.sayt import (
     NgramRetrieverSpec,
     PrefixRetrieverSpec,
@@ -71,6 +73,32 @@ class _CustomRetrieverArtifactHandlerImpl:
     def load_retriever(self, *, spec, corpus, min_chars, path):
         _ = path
         return spec.build(corpus, min_chars=min_chars)
+
+
+def test_builder_from_csv_loads_columns_and_persists_artifact(tmp_path, small_corpus):
+    """Build an artifact from CSV input using the configured search/display columns."""
+    csv_path = tmp_path / "responses.csv"
+    pd.DataFrame(
+        {
+            "search": [row[0] for row in small_corpus],
+            "display": [row[1] for row in small_corpus],
+        }
+    ).to_csv(csv_path, index=False)
+
+    artifact_dir = SAYTBuilder.from_csv(
+        csv_path,
+        search_text_col="search",
+        display_text_col="display",
+        retrievers=[PrefixRetrieverSpec()],
+        min_chars=3,
+        max_suggestions=5,
+    ).build_artifact(tmp_path / "artifact")
+
+    manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
+
+    assert manifest["min_chars"] == 3
+    assert manifest["max_suggestions"] == 5
+    assert manifest["corpus_size"] == len(small_corpus)
 
 
 def test_builder_writes_manifest_and_corpus(tmp_path, small_corpus):
