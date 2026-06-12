@@ -7,37 +7,15 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from industrial_classification_utils.sayt import (
     NgramRetrieverSpec,
     PrefixRetrieverSpec,
-    RetrieverArtifactHandler,
     SAYTBuilder,
-    register_retriever_artifact_handler,
-    unregister_retriever_artifact_handler,
 )
-from industrial_classification_utils.sayt.core import CleanCorpus, Suggestion
+from industrial_classification_utils.sayt.core import CleanCorpus
 from industrial_classification_utils.sayt.suggester import SAYTSuggester
-
-
-class _CustomRetriever:
-    def __init__(self, row, *, trigger: str, min_chars: int):
-        self._row = row
-        self._trigger = trigger
-        self._min_chars = min_chars
-
-    def suggest_with_scores(self, q_norm, num_suggestions):
-        _ = num_suggestions
-        if len(q_norm) < self._min_chars or self._trigger not in q_norm:
-            return []
-        return [
-            Suggestion(
-                display_text=self._row[2],
-                score=1.0,
-                search_text=self._row[1],
-                row_id=self._row[0],
-            )
-        ]
 
 
 class _CustomRetrieverSpec:
@@ -47,32 +25,7 @@ class _CustomRetrieverSpec:
         self.name = "custom-trigger"
 
     def build(self, corpus, *, min_chars):
-        return _CustomRetriever(
-            corpus.rows[-1], trigger=self.trigger, min_chars=min_chars
-        )
-
-
-class _CustomRetrieverArtifactHandlerImpl:
-    artifact_type = "custom-trigger"
-
-    def can_handle(self, spec):
-        return isinstance(spec, _CustomRetrieverSpec)
-
-    def serialise_spec(self, spec):
-        return {"trigger": spec.trigger}
-
-    def deserialise_spec(self, *, weight, config):
-        return _CustomRetrieverSpec(trigger=str(config["trigger"]), weight=weight)
-
-    def default_path(self, *, index, spec):
-        _ = (index, spec)
-
-    def build_artifact(self, *, spec, corpus, path):
-        _ = (spec, corpus, path)
-
-    def load_retriever(self, *, spec, corpus, min_chars, path):
-        _ = path
-        return spec.build(corpus, min_chars=min_chars)
+        _ = (corpus, min_chars)
 
 
 def test_builder_from_csv_loads_columns_and_persists_artifact(tmp_path, small_corpus):
@@ -258,35 +211,17 @@ def test_from_artifact_loads_persisted_ngram_filespace(
     }
 
 
-def test_custom_retriever_artifact_handler_round_trips(tmp_path, small_corpus):
-    """Allow custom retriever specs to participate in artifact build and load."""
-    artifact_dir = tmp_path / "artifact"
-    handler: RetrieverArtifactHandler = _CustomRetrieverArtifactHandlerImpl()
-    register_retriever_artifact_handler(handler)
-    try:
-        spec = _CustomRetrieverSpec(trigger="groom", weight=1.5)
-        builder = SAYTBuilder(
-            small_corpus,
-            retrievers=[spec],
-            min_chars=3,
-            max_suggestions=4,
-        )
+def test_builder_rejects_custom_runtime_only_retriever_specs(tmp_path, small_corpus):
+    """Persisted artifacts currently support only the built-in retriever specs."""
+    builder = SAYTBuilder(
+        small_corpus,
+        retrievers=[_CustomRetrieverSpec(trigger="groom", weight=1.5)],
+        min_chars=3,
+        max_suggestions=4,
+    )
 
-        builder.build_artifact(artifact_dir)
-
-        manifest = json.loads(
-            (artifact_dir / "manifest.json").read_text(encoding="utf-8")
-        )
-        suggester = SAYTSuggester.from_artifact(artifact_dir)
-
-        assert manifest["retrievers"] == [
-            {
-                "type": "custom-trigger",
-                "weight": 1.5,
-                "path": None,
-                "config": {"trigger": "groom"},
-            }
-        ]
-        assert suggester.suggest("groom") == ["Dog grooming"]
-    finally:
-        unregister_retriever_artifact_handler("custom-trigger")
+    with pytest.raises(
+        TypeError,
+        match="Only built-in retriever specs can be persisted; got _CustomRetrieverSpec",
+    ):
+        builder.build_artifact(tmp_path / "artifact")

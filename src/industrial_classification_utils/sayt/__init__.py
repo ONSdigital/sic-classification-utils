@@ -6,16 +6,11 @@ from .retriever_specs import (
     NgramRetrieverSpec,
     PrefixRetrieverSpec,
     Retriever,
-    RetrieverArtifactHandler,
     RetrieverSpec,
     SemanticRetrieverSpec,
     default_retriever_specs,
 )
 from .retrievers import NgramRetriever, PrefixRetriever, SemanticRetriever
-from .storage import (
-    register_retriever_artifact_handler,
-    unregister_retriever_artifact_handler,
-)
 from .suggester import SAYTSuggester
 
 __all__ = [
@@ -24,7 +19,6 @@ __all__ = [
     "PrefixRetriever",
     "PrefixRetrieverSpec",
     "Retriever",
-    "RetrieverArtifactHandler",
     "RetrieverSpec",
     "SAYTBuilder",
     "SAYTSuggester",
@@ -32,6 +26,4 @@ __all__ = [
     "SemanticRetriever",
     "SemanticRetrieverSpec",
     "default_retriever_specs",
-    "register_retriever_artifact_handler",
-    "unregister_retriever_artifact_handler",
 ]

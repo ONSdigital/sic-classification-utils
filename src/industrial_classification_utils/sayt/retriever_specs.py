@@ -3,9 +3,7 @@
 """Public retriever protocols and configuration objects for SAYT."""
 
 import math
-from collections.abc import Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Protocol
 
 from .core import CleanCorpus, Suggestion
@@ -53,55 +51,6 @@ class RetrieverSpec(Protocol):
         Returns:
             A configured retriever instance bound to ``corpus``.
         """
-
-
-class RetrieverArtifactHandler(Protocol):
-    """Persistence hooks for storing and restoring a retriever spec.
-
-    This optional protocol extends the runtime-only ``RetrieverSpec`` contract
-    for artifact build/load flows. Handlers are registered separately so custom
-    retriever specs remain lightweight unless they need persistence support.
-    """
-
-    @property
-    def artifact_type(self) -> str:
-        """Return the stable manifest identifier for this handler."""
-
-    def can_handle(self, spec: RetrieverSpec) -> bool:
-        """Return whether this handler can persist the supplied spec."""
-
-    def serialise_spec(self, spec: RetrieverSpec) -> dict[str, object]:
-        """Return spec-specific manifest configuration excluding weight/path."""
-
-    def deserialise_spec(
-        self,
-        *,
-        weight: float,
-        config: Mapping[str, object],
-    ) -> RetrieverSpec:
-        """Rebuild a retriever spec from persisted manifest data."""
-
-    def default_path(self, *, index: int, spec: RetrieverSpec) -> str | None:
-        """Return the default relative artifact path for persisted assets."""
-
-    def build_artifact(
-        self,
-        *,
-        spec: RetrieverSpec,
-        corpus: CleanCorpus,
-        path: Path | None,
-    ) -> None:
-        """Write any persisted retriever assets needed for later loading."""
-
-    def load_retriever(
-        self,
-        *,
-        spec: RetrieverSpec,
-        corpus: CleanCorpus,
-        min_chars: int,
-        path: Path | None,
-    ) -> Retriever:
-        """Restore a runtime retriever from persisted artifact state."""
 
 
 def _validate_retriever_weight(weight: float) -> None:

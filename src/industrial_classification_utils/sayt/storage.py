@@ -4,10 +4,8 @@ import csv
 import json
 import os
 import shutil
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeVar
 
 import pandas as pd
 
@@ -27,7 +25,6 @@ from .retriever_specs import (
     NgramRetrieverSpec,
     PrefixRetrieverSpec,
     Retriever,
-    RetrieverArtifactHandler,
     RetrieverSpec,
     SemanticRetrieverSpec,
 )
@@ -39,9 +36,6 @@ MANIFEST_FILE_NAME = "manifest.json"
 CORPUS_FILE_NAME = "corpus.csv"
 _ARTIFACT_CORPUS_FIELDS = ["row_id", "search_text", "display_text"]
 _RETRIEVERS_DIR_NAME = "retrievers"
-
-_RETRIEVER_ARTIFACT_HANDLERS: dict[str, RetrieverArtifactHandler] = {}
-SpecT = TypeVar("SpecT", bound=RetrieverSpec)
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,42 +218,38 @@ def retriever_filespace_path(
     return Path(artifact_dir) / stored_retriever.path
 
 
-def register_retriever_artifact_handler(
-    handler: RetrieverArtifactHandler,
-    *,
-    replace: bool = False,
-) -> None:
-    """Register a handler for artifact persistence of retriever specs."""
-    artifact_type = handler.artifact_type
-    if artifact_type in _RETRIEVER_ARTIFACT_HANDLERS and not replace:
-        raise ValueError(
-            f"Retriever artifact handler already registered for type: {artifact_type}"
-        )
-    _RETRIEVER_ARTIFACT_HANDLERS[artifact_type] = handler
-
-
-def unregister_retriever_artifact_handler(artifact_type: str) -> None:
-    """Remove a previously registered retriever artifact handler."""
-    _RETRIEVER_ARTIFACT_HANDLERS.pop(artifact_type, None)
-
-
 def build_retriever_artifact(
     *,
     corpus: CleanCorpus,
     stored_retriever: StoredRetrieverSpec,
     artifact_dir: str | Path,
 ) -> None:
-    """Persist retriever-specific artifact state using its registered handler."""
-    handler = _get_retriever_artifact_handler(stored_retriever.artifact_type)
-    path = (
-        retriever_filespace_path(artifact_dir, stored_retriever)
-        if stored_retriever.path is not None
-        else None
-    )
-    handler.build_artifact(
-        spec=stored_retriever.spec,
-        corpus=corpus,
-        path=path,
+    """Persist built-in retriever assets required by a SAYT artifact."""
+    spec = stored_retriever.spec
+    if isinstance(spec, PrefixRetrieverSpec):
+        return
+
+    if isinstance(spec, NgramRetrieverSpec):
+        build_ngram_index(
+            corpus,
+            n=spec.n,
+            max_df=spec.max_df,
+            output_dir=retriever_filespace_path(artifact_dir, stored_retriever),
+            overwrite=True,
+        )
+        return
+
+    if isinstance(spec, SemanticRetrieverSpec):
+        build_semantic_index(
+            corpus,
+            model=spec.model,
+            output_dir=retriever_filespace_path(artifact_dir, stored_retriever),
+            overwrite=True,
+        )
+        return
+
+    raise TypeError(
+        "Only built-in retriever specs can be persisted; " f"got {type(spec).__name__}"
     )
 
 
@@ -270,18 +260,39 @@ def load_retriever_from_artifact(
     stored_retriever: StoredRetrieverSpec,
     artifact_dir: str | Path,
 ) -> Retriever:
-    """Restore a runtime retriever using its registered artifact handler."""
-    handler = _get_retriever_artifact_handler(stored_retriever.artifact_type)
-    path = (
-        retriever_filespace_path(artifact_dir, stored_retriever)
-        if stored_retriever.path is not None
-        else None
-    )
-    return handler.load_retriever(
-        spec=stored_retriever.spec,
-        corpus=corpus,
-        min_chars=min_chars,
-        path=path,
+    """Restore a built-in runtime retriever from persisted artifact state."""
+    spec = stored_retriever.spec
+    if isinstance(spec, PrefixRetrieverSpec):
+        return spec.build(corpus, min_chars=min_chars)
+
+    if isinstance(spec, NgramRetrieverSpec):
+        index = load_ngram_index(
+            corpus,
+            n=spec.n,
+            max_df=spec.max_df,
+            folder_path=retriever_filespace_path(artifact_dir, stored_retriever),
+        )
+        return NgramRetriever.from_index(
+            corpus,
+            min_chars=min_chars,
+            index=index,
+        )
+
+    if isinstance(spec, SemanticRetrieverSpec):
+        index = load_semantic_index(
+            corpus,
+            model=spec.model,
+            folder_path=retriever_filespace_path(artifact_dir, stored_retriever),
+        )
+        return SemanticRetriever.from_index(
+            corpus,
+            min_chars=min_chars,
+            index=index,
+        )
+
+    raise TypeError(
+        "Only built-in retriever specs can be restored from artifacts; "
+        f"got {type(spec).__name__}"
     )
 
 
@@ -289,12 +300,32 @@ def _build_stored_retriever(
     index: int,
     spec: RetrieverSpec,
 ) -> StoredRetrieverSpec:
-    handler = _get_retriever_artifact_handler_for_spec(spec)
-    return StoredRetrieverSpec(
-        artifact_type=handler.artifact_type,
-        spec=spec,
-        config=handler.serialise_spec(spec),
-        path=handler.default_path(index=index, spec=spec),
+    if isinstance(spec, PrefixRetrieverSpec):
+        return StoredRetrieverSpec(
+            artifact_type="prefix",
+            spec=spec,
+            config={},
+            path=None,
+        )
+
+    if isinstance(spec, NgramRetrieverSpec):
+        return StoredRetrieverSpec(
+            artifact_type="ngram",
+            spec=spec,
+            config={"n": spec.n, "max_df": spec.max_df},
+            path=f"{_RETRIEVERS_DIR_NAME}/{index:02d}-{spec.name}",
+        )
+
+    if isinstance(spec, SemanticRetrieverSpec):
+        return StoredRetrieverSpec(
+            artifact_type="semantic",
+            spec=spec,
+            config={"model": spec.model},
+            path=f"{_RETRIEVERS_DIR_NAME}/{index:02d}-{spec.name}",
+        )
+
+    raise TypeError(
+        "Only built-in retriever specs can be persisted; " f"got {type(spec).__name__}"
     )
 
 
@@ -331,215 +362,29 @@ def _deserialise_stored_retriever(payload: dict[str, object]) -> StoredRetriever
     config = payload.get("config", {})
     if not isinstance(config, dict):
         raise ValueError(f"Malformed retriever config for type: {retriever_type}")
-    handler = _get_retriever_artifact_handler(retriever_type)
-    spec = handler.deserialise_spec(weight=weight, config=config)
+    spec: RetrieverSpec
+    if retriever_type == "prefix":
+        spec = PrefixRetrieverSpec(weight=weight)
+    elif retriever_type == "ngram":
+        spec = NgramRetrieverSpec(
+            weight=weight,
+            n=_coerce_int(config["n"], field_name="n"),
+            max_df=_coerce_float(config["max_df"], field_name="max_df"),
+        )
+    elif retriever_type == "semantic":
+        spec = SemanticRetrieverSpec(
+            weight=weight,
+            model=str(config["model"]),
+        )
+    else:
+        raise ValueError(f"Unsupported stored retriever type: {retriever_type}")
+
     return StoredRetrieverSpec(
         artifact_type=retriever_type,
         spec=spec,
         config=dict(config),
         path=str(path) if isinstance(path, str) else None,
     )
-
-
-def _get_retriever_artifact_handler(artifact_type: str) -> RetrieverArtifactHandler:
-    try:
-        return _RETRIEVER_ARTIFACT_HANDLERS[artifact_type]
-    except KeyError as exc:
-        raise ValueError(
-            f"No retriever artifact handler registered for type: {artifact_type}"
-        ) from exc
-
-
-def _get_retriever_artifact_handler_for_spec(
-    spec: RetrieverSpec,
-) -> RetrieverArtifactHandler:
-    for handler in reversed(tuple(_RETRIEVER_ARTIFACT_HANDLERS.values())):
-        if handler.can_handle(spec):
-            return handler
-    raise TypeError(
-        f"No retriever artifact handler registered for spec type: {type(spec).__name__}"
-    )
-
-
-class _PrefixRetrieverArtifactHandler:  # pylint: disable=missing-function-docstring,useless-return
-    """Artifact handler for the built-in prefix retriever spec."""
-
-    artifact_type = "prefix"
-
-    def can_handle(self, spec: RetrieverSpec) -> bool:
-        return isinstance(spec, PrefixRetrieverSpec)
-
-    def serialise_spec(self, spec: RetrieverSpec) -> dict[str, object]:
-        _ = spec
-        return {}
-
-    def deserialise_spec(
-        self,
-        *,
-        weight: float,
-        config: Mapping[str, object],
-    ) -> RetrieverSpec:
-        _ = config
-        return PrefixRetrieverSpec(weight=weight)
-
-    def default_path(self, *, index: int, spec: RetrieverSpec) -> str | None:
-        _ = (index, spec)
-        return None
-
-    def build_artifact(
-        self,
-        *,
-        spec: RetrieverSpec,
-        corpus: CleanCorpus,
-        path: Path | None,
-    ) -> None:
-        _ = (spec, corpus, path)
-
-    def load_retriever(
-        self,
-        *,
-        spec: RetrieverSpec,
-        corpus: CleanCorpus,
-        min_chars: int,
-        path: Path | None,
-    ) -> Retriever:
-        _ = path
-        return spec.build(corpus, min_chars=min_chars)
-
-
-class _NgramRetrieverArtifactHandler:  # pylint: disable=missing-function-docstring
-    """Artifact handler for the built-in n-gram retriever spec."""
-
-    artifact_type = "ngram"
-
-    def can_handle(self, spec: RetrieverSpec) -> bool:
-        return isinstance(spec, NgramRetrieverSpec)
-
-    def serialise_spec(self, spec: RetrieverSpec) -> dict[str, object]:
-        typed_spec = _require_spec_type(spec, NgramRetrieverSpec)
-        return {"n": typed_spec.n, "max_df": typed_spec.max_df}
-
-    def deserialise_spec(
-        self,
-        *,
-        weight: float,
-        config: Mapping[str, object],
-    ) -> RetrieverSpec:
-        return NgramRetrieverSpec(
-            weight=weight,
-            n=_coerce_int(config["n"], field_name="n"),
-            max_df=_coerce_float(config["max_df"], field_name="max_df"),
-        )
-
-    def default_path(self, *, index: int, spec: RetrieverSpec) -> str | None:
-        return f"{_RETRIEVERS_DIR_NAME}/{index:02d}-{spec.name}"
-
-    def build_artifact(
-        self,
-        *,
-        spec: RetrieverSpec,
-        corpus: CleanCorpus,
-        path: Path | None,
-    ) -> None:
-        typed_spec = _require_spec_type(spec, NgramRetrieverSpec)
-        build_ngram_index(
-            corpus,
-            n=typed_spec.n,
-            max_df=typed_spec.max_df,
-            output_dir=_require_path(path, typed_spec.name),
-            overwrite=True,
-        )
-
-    def load_retriever(
-        self,
-        *,
-        spec: RetrieverSpec,
-        corpus: CleanCorpus,
-        min_chars: int,
-        path: Path | None,
-    ) -> Retriever:
-        typed_spec = _require_spec_type(spec, NgramRetrieverSpec)
-        index = load_ngram_index(
-            corpus,
-            n=typed_spec.n,
-            max_df=typed_spec.max_df,
-            folder_path=_require_path(path, typed_spec.name),
-        )
-        return NgramRetriever.from_index(
-            corpus,
-            min_chars=min_chars,
-            index=index,
-        )
-
-
-class _SemanticRetrieverArtifactHandler:  # pylint: disable=missing-function-docstring
-    """Artifact handler for the built-in semantic retriever spec."""
-
-    artifact_type = "semantic"
-
-    def can_handle(self, spec: RetrieverSpec) -> bool:
-        return isinstance(spec, SemanticRetrieverSpec)
-
-    def serialise_spec(self, spec: RetrieverSpec) -> dict[str, object]:
-        typed_spec = _require_spec_type(spec, SemanticRetrieverSpec)
-        return {"model": typed_spec.model}
-
-    def deserialise_spec(
-        self,
-        *,
-        weight: float,
-        config: Mapping[str, object],
-    ) -> RetrieverSpec:
-        return SemanticRetrieverSpec(
-            weight=weight,
-            model=str(config["model"]),
-        )
-
-    def default_path(self, *, index: int, spec: RetrieverSpec) -> str | None:
-        return f"{_RETRIEVERS_DIR_NAME}/{index:02d}-{spec.name}"
-
-    def build_artifact(
-        self,
-        *,
-        spec: RetrieverSpec,
-        corpus: CleanCorpus,
-        path: Path | None,
-    ) -> None:
-        typed_spec = _require_spec_type(spec, SemanticRetrieverSpec)
-        build_semantic_index(
-            corpus,
-            model=typed_spec.model,
-            output_dir=_require_path(path, typed_spec.name),
-            overwrite=True,
-        )
-
-    def load_retriever(
-        self,
-        *,
-        spec: RetrieverSpec,
-        corpus: CleanCorpus,
-        min_chars: int,
-        path: Path | None,
-    ) -> Retriever:
-        typed_spec = _require_spec_type(spec, SemanticRetrieverSpec)
-        index = load_semantic_index(
-            corpus,
-            model=typed_spec.model,
-            folder_path=_require_path(path, typed_spec.name),
-        )
-        return SemanticRetriever.from_index(
-            corpus,
-            min_chars=min_chars,
-            index=index,
-        )
-
-
-def _require_path(path: Path | None, retriever_name: str) -> Path:
-    if path is None:
-        raise ValueError(
-            f"Retriever '{retriever_name}' requires a persisted filespace path"
-        )
-    return path
 
 
 def _coerce_int(value: object, *, field_name: str) -> int:
@@ -552,24 +397,3 @@ def _coerce_float(value: object, *, field_name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float | str):
         raise ValueError(f"Malformed float value for retriever field: {field_name}")
     return float(value)
-
-
-def _require_spec_type(spec: RetrieverSpec, spec_type: type[SpecT]) -> SpecT:
-    if not isinstance(spec, spec_type):
-        raise TypeError(
-            f"Expected spec of type {spec_type.__name__}, got {type(spec).__name__}"
-        )
-    return spec
-
-
-def _register_builtin_retriever_artifact_handlers() -> None:
-    """Seed the artifact handler registry with the built-in retriever types."""
-    for handler in (
-        _PrefixRetrieverArtifactHandler(),
-        _NgramRetrieverArtifactHandler(),
-        _SemanticRetrieverArtifactHandler(),
-    ):
-        register_retriever_artifact_handler(handler)
-
-
-_register_builtin_retriever_artifact_handlers()

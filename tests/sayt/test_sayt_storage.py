@@ -14,32 +14,6 @@ from industrial_classification_utils.sayt import (
 from industrial_classification_utils.sayt.core import CleanCorpus
 
 
-class _DuplicateHandler:
-    artifact_type = "test-duplicate"
-
-    def can_handle(self, spec):
-        _ = spec
-        return False
-
-    def serialise_spec(self, spec):
-        _ = spec
-        return {}
-
-    def deserialise_spec(self, *, weight, config):
-        _ = (weight, config)
-        return PrefixRetrieverSpec()
-
-    def default_path(self, *, index, spec):
-        _ = (index, spec)
-
-    def build_artifact(self, *, spec, corpus, path):
-        _ = (spec, corpus, path)
-
-    def load_retriever(self, *, spec, corpus, min_chars, path):
-        _ = path
-        return spec.build(corpus, min_chars=min_chars)
-
-
 def test_prepare_artifact_dir_handles_existing_paths(tmp_path):
     """Reject accidental reuse, then replace existing directories or files."""
     artifact_dir = tmp_path / "artifact"
@@ -108,7 +82,7 @@ def test_read_artifact_inputs_validate_missing_and_malformed_state(tmp_path):
 
 
 def test_storage_helper_validation_errors():
-    """Guard helper APIs against invalid types, paths, and missing handlers."""
+    """Guard helper APIs against invalid types, paths, and unsupported specs."""
     stored_retriever = storage.StoredRetrieverSpec(
         artifact_type="prefix",
         spec=PrefixRetrieverSpec(),
@@ -124,10 +98,10 @@ def test_storage_helper_validation_errors():
             {"type": "prefix", "weight": 1.0, "config": []}
         )
 
-    with pytest.raises(
-        ValueError, match="No retriever artifact handler registered for type: missing"
-    ):
-        storage._get_retriever_artifact_handler("missing")
+    with pytest.raises(ValueError, match="Unsupported stored retriever type: missing"):
+        storage._deserialise_stored_retriever(
+            {"type": "missing", "weight": 1.0, "config": {}}
+        )
 
     class _UnknownSpec:
         name = "unknown"
@@ -138,14 +112,9 @@ def test_storage_helper_validation_errors():
 
     with pytest.raises(
         TypeError,
-        match="No retriever artifact handler registered for spec type: _UnknownSpec",
+        match="Only built-in retriever specs can be persisted; got _UnknownSpec",
     ):
-        storage._get_retriever_artifact_handler_for_spec(_UnknownSpec())
-
-    with pytest.raises(
-        ValueError, match="Retriever 'semantic' requires a persisted filespace path"
-    ):
-        storage._require_path(None, "semantic")
+        storage._build_stored_retriever(0, _UnknownSpec())
 
     with pytest.raises(
         ValueError, match="Malformed integer value for retriever field: n"
@@ -157,36 +126,16 @@ def test_storage_helper_validation_errors():
     ):
         storage._coerce_float(True, field_name="weight")
 
-    with pytest.raises(
-        TypeError,
-        match="Expected spec of type SemanticRetrieverSpec, got PrefixRetrieverSpec",
-    ):
-        storage._require_spec_type(PrefixRetrieverSpec(), SemanticRetrieverSpec)
 
-
-def test_register_retriever_artifact_handler_rejects_duplicate_registration():
-    """Require replace=True before reusing an artifact type registration."""
-    handler = _DuplicateHandler()
-    storage.register_retriever_artifact_handler(handler)
-    try:
-        with pytest.raises(
-            ValueError,
-            match="Retriever artifact handler already registered for type: test-duplicate",
-        ):
-            storage.register_retriever_artifact_handler(handler)
-    finally:
-        storage.unregister_retriever_artifact_handler(handler.artifact_type)
-
-
-def test_semantic_artifact_handler_round_trips_and_loads(
+def test_semantic_retriever_artifact_round_trips_and_loads(
     monkeypatch, tmp_path, small_corpus
 ):
-    """Round-trip semantic spec state and delegate dense index load/build calls."""
+    """Round-trip semantic artifact state and delegate dense index load/build calls."""
     captured = {}
     corpus = CleanCorpus.model_validate(small_corpus)
-    handler = storage._SemanticRetrieverArtifactHandler()
     spec = SemanticRetrieverSpec(model="all-MiniLM-L6-v2", weight=2.5)
-    path = tmp_path / "retrievers" / "02-semantic"
+    stored_retriever = storage._build_stored_retriever(2, spec)
+    path = tmp_path / stored_retriever.path
 
     def _fake_build_semantic_index(corpus_arg, *, model, output_dir, overwrite):
         captured["build"] = {
@@ -218,20 +167,32 @@ def test_semantic_artifact_handler_round_trips_and_loads(
     monkeypatch.setattr(storage, "load_semantic_index", _fake_load_semantic_index)
     monkeypatch.setattr(storage, "SemanticRetriever", _StubSemanticRetriever)
 
-    rebuilt = handler.deserialise_spec(weight=2.5, config={"model": "all-MiniLM-L6-v2"})
+    rebuilt = storage._deserialise_stored_retriever(
+        {
+            "type": stored_retriever.artifact_type,
+            "weight": spec.weight,
+            "path": stored_retriever.path,
+            "config": stored_retriever.config,
+        }
+    )
 
-    assert handler.serialise_spec(spec) == {"model": "all-MiniLM-L6-v2"}
-    assert isinstance(rebuilt, SemanticRetrieverSpec)
-    assert rebuilt.weight == pytest.approx(2.5)
-    assert rebuilt.model == "all-MiniLM-L6-v2"
-    assert handler.default_path(index=2, spec=spec) == "retrievers/02-semantic"
+    assert stored_retriever.artifact_type == "semantic"
+    assert stored_retriever.config == {"model": "all-MiniLM-L6-v2"}
+    assert stored_retriever.path == "retrievers/02-semantic"
+    assert isinstance(rebuilt.spec, SemanticRetrieverSpec)
+    assert rebuilt.spec.weight == pytest.approx(2.5)
+    assert rebuilt.config == {"model": "all-MiniLM-L6-v2"}
 
-    handler.build_artifact(spec=spec, corpus=corpus, path=path)
-    retriever = handler.load_retriever(
-        spec=spec,
+    storage.build_retriever_artifact(
+        corpus=corpus,
+        stored_retriever=stored_retriever,
+        artifact_dir=tmp_path,
+    )
+    retriever = storage.load_retriever_from_artifact(
         corpus=corpus,
         min_chars=3,
-        path=path,
+        stored_retriever=stored_retriever,
+        artifact_dir=tmp_path,
     )
 
     assert retriever == {"index": "loaded-index", "min_chars": 3}
