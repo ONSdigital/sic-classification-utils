@@ -11,7 +11,7 @@ from industrial_classification_utils.sayt import (
     SAYTSuggester,
     SemanticRetrieverSpec,
 )
-from industrial_classification_utils.sayt.sayt_core import _normalise
+from industrial_classification_utils.sayt.core import _normalise
 
 logger = get_logger(__name__)
 # %%

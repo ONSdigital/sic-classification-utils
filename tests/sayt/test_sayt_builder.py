@@ -16,8 +16,8 @@ from industrial_classification_utils.sayt import (
     register_retriever_artifact_handler,
     unregister_retriever_artifact_handler,
 )
-from industrial_classification_utils.sayt.sayt import SAYTSuggester
-from industrial_classification_utils.sayt.sayt_core import CleanCorpus, Suggestion
+from industrial_classification_utils.sayt.core import CleanCorpus, Suggestion
+from industrial_classification_utils.sayt.suggester import SAYTSuggester
 
 
 class _CustomRetriever:
@@ -170,7 +170,7 @@ def test_builder_writes_ngram_filespace(monkeypatch, tmp_path, small_corpus):
             self.num_vectors = 1
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.VectorStore",
+        "industrial_classification_utils.sayt.indexes.VectorStore",
         _StubPersistentVectorStore,
     )
 
@@ -235,7 +235,7 @@ def test_from_artifact_loads_persisted_ngram_filespace(
             return _StubSearchResults()
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.VectorStore",
+        "industrial_classification_utils.sayt.indexes.VectorStore",
         _StubPersistentVectorStore,
     )
 

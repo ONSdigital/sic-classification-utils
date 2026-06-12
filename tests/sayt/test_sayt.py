@@ -16,12 +16,12 @@ from industrial_classification_utils.sayt import (
     SAYTBuilder,
     SaytConfiguration,
 )
-from industrial_classification_utils.sayt.sayt import SAYTSuggester
-from industrial_classification_utils.sayt.sayt_core import (
+from industrial_classification_utils.sayt.core import (
     CleanCorpus,
     PersistedCorpusRow,
     Suggestion,
 )
+from industrial_classification_utils.sayt.suggester import SAYTSuggester
 
 
 def test_constructor_rejects_unknown_kwargs(small_corpus):
@@ -559,7 +559,7 @@ def test_suggester_defaults_to_standard_retriever_specs(monkeypatch, small_corpu
             return _StubRetriever()
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt.default_retriever_specs",
+        "industrial_classification_utils.sayt.suggester.default_retriever_specs",
         lambda: [
             _StubRetrieverSpec(name="prefix"),
             _StubRetrieverSpec(name="ngram"),

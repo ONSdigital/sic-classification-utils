@@ -12,7 +12,7 @@ from industrial_classification_utils.sayt import (
     SemanticRetrieverSpec,
     default_retriever_specs,
 )
-from industrial_classification_utils.sayt.sayt_core import CleanCorpus
+from industrial_classification_utils.sayt.core import CleanCorpus
 
 
 @pytest.mark.parametrize(
@@ -154,7 +154,7 @@ def test_semantic_retriever_spec_builds_semantic_retriever(monkeypatch):
             captured["min_chars"] = min_chars
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_retriever_specs.SemanticRetriever",
+        "industrial_classification_utils.sayt.retriever_specs.SemanticRetriever",
         _StubSemanticRetriever,
     )
 

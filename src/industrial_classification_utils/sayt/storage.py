@@ -11,19 +11,19 @@ from typing import TypeVar
 
 import pandas as pd
 
-from .sayt_core import (
+from .core import (
     CleanCorpus,
     PersistedCorpusRow,
     validate_max_suggestions,
     validate_min_chars,
 )
-from .sayt_indexes import (
+from .indexes import (
     build_ngram_index,
     build_semantic_index,
     load_ngram_index,
     load_semantic_index,
 )
-from .sayt_retriever_specs import (
+from .retriever_specs import (
     NgramRetrieverSpec,
     PrefixRetrieverSpec,
     Retriever,
@@ -31,7 +31,7 @@ from .sayt_retriever_specs import (
     RetrieverSpec,
     SemanticRetrieverSpec,
 )
-from .sayt_retrievers import NgramRetriever, SemanticRetriever
+from .retrievers import NgramRetriever, SemanticRetriever
 
 SAYT_ARTIFACT_TYPE = "sayt"
 SAYT_ARTIFACT_VERSION = 2

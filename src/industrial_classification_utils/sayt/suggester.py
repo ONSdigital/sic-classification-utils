@@ -15,7 +15,7 @@ from typing import Any
 
 from survey_assist_utils.logging import get_logger
 
-from .sayt_core import (
+from .core import (
     CleanCorpus,
     SaytArtifactProvenance,
     SaytConfiguration,
@@ -29,12 +29,12 @@ from .sayt_core import (
     validate_max_suggestions,
     validate_min_chars,
 )
-from .sayt_retriever_specs import (
+from .retriever_specs import (
     Retriever,
     RetrieverSpec,
     default_retriever_specs,
 )
-from .sayt_storage import (
+from .storage import (
     SAYT_ARTIFACT_TYPE,
     SAYT_ARTIFACT_VERSION,
     StoredRetrieverSpec,

@@ -6,12 +6,12 @@ import os
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
-from .sayt_core import CleanCorpus, validate_max_suggestions, validate_min_chars
-from .sayt_retriever_specs import (
+from .core import CleanCorpus, validate_max_suggestions, validate_min_chars
+from .retriever_specs import (
     RetrieverSpec,
     default_retriever_specs,
 )
-from .sayt_storage import (
+from .storage import (
     build_artifact_manifest,
     build_retriever_artifact,
     load_corpus_from_csv,

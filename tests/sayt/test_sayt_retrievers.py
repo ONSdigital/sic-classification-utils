@@ -11,20 +11,20 @@ import pytest
 from classifai.vectorisers import VectoriserBase
 
 from industrial_classification_utils.sayt import NgramRetrieverSpec, PrefixRetrieverSpec
-from industrial_classification_utils.sayt.sayt import SAYTSuggester
-from industrial_classification_utils.sayt.sayt_core import CleanCorpus
-from industrial_classification_utils.sayt.sayt_indexes import (
+from industrial_classification_utils.sayt.core import CleanCorpus
+from industrial_classification_utils.sayt.indexes import (
     DenseVectorIndex,
     _CharNgramVectoriser,
     _L2NormalisingVectoriser,
     load_semantic_index,
 )
-from industrial_classification_utils.sayt.sayt_retrievers import (
+from industrial_classification_utils.sayt.retrievers import (
     NgramRetriever,
     PrefixRetriever,
     SemanticRetriever,
     _PrefixIndex,
 )
+from industrial_classification_utils.sayt.suggester import SAYTSuggester
 
 
 def test_prefix_full_string_match_ranks_expected_terms(small_corpus):
@@ -277,7 +277,7 @@ def test_dense_vector_index_builds_persistent_filespace(
             self.num_vectors = len(captured["rows"])
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.VectorStore",
+        "industrial_classification_utils.sayt.indexes.VectorStore",
         _StubPersistentVectorStore,
     )
 
@@ -320,7 +320,7 @@ def test_dense_vector_index_loads_existing_filespace(
         return _StubLoadedVectorStore()
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.VectorStore.from_filespace",
+        "industrial_classification_utils.sayt.indexes.VectorStore.from_filespace",
         _fake_from_filespace,
     )
 
@@ -370,11 +370,11 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
         )
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.HuggingFaceVectoriser",
+        "industrial_classification_utils.sayt.indexes.HuggingFaceVectoriser",
         _StubHFVectoriser,
     )
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.DenseVectorIndex.from_corpus",
+        "industrial_classification_utils.sayt.indexes.DenseVectorIndex.from_corpus",
         _fake_build_dense_vector_index,
     )
 
@@ -416,11 +416,11 @@ def test_load_semantic_index_loads_existing_filespace_with_wrapped_vectoriser(
         )
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.HuggingFaceVectoriser",
+        "industrial_classification_utils.sayt.indexes.HuggingFaceVectoriser",
         _StubHFVectoriser,
     )
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.DenseVectorIndex.from_filespace",
+        "industrial_classification_utils.sayt.indexes.DenseVectorIndex.from_filespace",
         _fake_load_dense_vector_index,
     )
 

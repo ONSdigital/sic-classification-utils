@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from .sayt_core import CleanCorpus, Suggestion
-from .sayt_retrievers import NgramRetriever, PrefixRetriever, SemanticRetriever
+from .core import CleanCorpus, Suggestion
+from .retrievers import NgramRetriever, PrefixRetriever, SemanticRetriever
 
 _MIN_NGRAM_SIZE = 2
 _MAX_NGRAM_SIZE = 5

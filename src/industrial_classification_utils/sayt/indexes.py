@@ -17,7 +17,7 @@ from classifai.vectorisers import HuggingFaceVectoriser, VectoriserBase
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import CountVectorizer
 
-from .sayt_core import CleanCorpus, take_with_ties
+from .core import CleanCorpus, take_with_ties
 
 
 def _silent_tqdm(iterable, **_kwargs):
