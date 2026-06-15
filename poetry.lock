@@ -6885,7 +6885,7 @@ optional = false
 python-versions = "^3.12"
 groups = ["main"]
 files = []
-develop = true
+develop = false
 
 [package.dependencies]
 openpyxl = "^3.1.5"
@@ -6893,8 +6893,10 @@ pandas = "^2.3.0"
 pydantic = "^2.11.7"
 
 [package.source]
-type = "directory"
-url = "../sic-classification-library"
+type = "git"
+url = "https://github.com/ONSdigital/sic-classification-library.git"
+reference = "v0.1.5"
+resolved_reference = "92fb9a7a50d6b46cea0ed06fc0fd3082c8677828"
 
 [[package]]
 name = "six"
@@ -8603,4 +8605,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "bbe84ac75fd65e726e937b4f5c9af9777fd4a5cbb9bed970053c3ef0f6104286"
+content-hash = "060c92f4d31f8c00a3cec0f6621d837c49e9923090365153cbbe139fb7e8a5ee"
