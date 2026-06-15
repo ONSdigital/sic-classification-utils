@@ -283,7 +283,7 @@ def take_with_ties(
 
     items = sorted(
         items,
-        key=lambda kv: (-kv[1],),
+        key=lambda kv: -kv[1],
     )
 
     if limit >= len(items):
