@@ -21,7 +21,10 @@ from functools import lru_cache
 from typing import Any
 
 import numpy as np
-from industrial_classification.hierarchy.sic_hierarchy import load_hierarchy
+from industrial_classification.data_access.sic_data_access import (
+    load_sic_hierarchy,
+)
+from industrial_classification.hierarchy.sic_hierarchy import SIC
 from industrial_classification.meta import sic_meta
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_google_vertexai import ChatVertexAI
@@ -53,10 +56,6 @@ from industrial_classification_utils.models.response_model import (
 from industrial_classification_utils.utils.constants import (
     get_default_config,
     truncate_identifier,
-)
-from industrial_classification_utils.utils.sic_data_access import (
-    load_sic_index,
-    load_sic_structure,
 )
 
 logger = get_logger(__name__)
@@ -130,7 +129,7 @@ class ClassificationLLM:
         self.sic_prompt_openfollowup = SIC_PROMPT_OPENFOLLOWUP
         self.sic_prompt_closedfollowup = SIC_PROMPT_CLOSEDFOLLOWUP
         self.sic_prompt_final = SIC_PROMPT_FINAL_ASSIGNMENT
-        self.sic = None
+        self.sic: SIC | None = None
         self.verbose = verbose
 
     @lru_cache  # noqa: B019
@@ -199,11 +198,12 @@ class ClassificationLLM:
             str: A formatted string containing the code, title, and example activities.
         """
         if self.sic is None:
-            sic_index_df = load_sic_index(config["lookups"]["sic_index"])
-            sic_df = load_sic_structure(config["lookups"]["sic_structure"])
-            self.sic = load_hierarchy(sic_df, sic_index_df)
+            self.sic = load_sic_hierarchy(
+                config["lookups"]["sic_index"],
+                config["lookups"]["sic_structure"],
+            )
 
-        item = self.sic[code]  # type: ignore # MyPy false positive
+        item = self.sic[code]
         txt = "{" + f"Code: {item.numeric_string_padded()}, Title: {item.description}"
         txt += f", Example activities: {', '.join(activities)}"
         if include_all:

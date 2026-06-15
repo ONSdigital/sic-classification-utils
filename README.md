@@ -110,7 +110,7 @@ make run-docs
 Pytest is used for testing alongside pytest-cov for coverage testing.  [/tests/conftest.py](/tests/conftest.py) defines config used by the tests.
 
 Unit testing for embedding functions is added to the [/tests/test_embedding.py](./tests/test_embedding.py)
-Unit testing for utility functions is added to the [/tests/test_sic_data_access.py](./tests/test_sic_data_access.py)
+SIC workbook data access lives in `sic-classification-library` (`industrial_classification.data_access.sic_data_access`); see library `tests/test_data_access.py`.
 
 ```bash
 make embed-tests

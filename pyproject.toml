@@ -1,6 +1,6 @@
 [project]
 name = "sic-classification-utils"
-version = "0.1.13"
+version = "0.1.14"
 description = "Utility functions used for SIC classification"
 readme = "README.md"
 requires-python = ">=3.12,<4.0"
@@ -35,7 +35,7 @@ pandas = "^2.3.0"
 pydantic = "^2.11.1"
 scikit-learn = "^1.3.0"
 scipy = "^1.15.0"
-sic-classification-library = {git = "https://github.com/ONSdigital/sic-classification-library.git", tag = "v0.1.4"}
+sic-classification-library = {git = "https://github.com/ONSdigital/sic-classification-library.git", tag = "v0.1.5"}
 survey-assist-utils = { git = "https://github.com/ONSdigital/survey-assist-utils.git", tag = "v0.0.8" }
 
 [tool.poetry.group.dev.dependencies]

@@ -532,17 +532,9 @@ def test_load_embedding_handler_from_sic_index_files_builds(tmp_path: Path):
 
     with (
         patch(
-            "industrial_classification_utils.embed.sic_specific_embed.load_sic_index",
-            return_value=MagicMock(),
-        ) as mock_load_index,
-        patch(
-            "industrial_classification_utils.embed.sic_specific_embed.load_sic_structure",
-            return_value=MagicMock(),
-        ) as mock_load_structure,
-        patch(
-            "industrial_classification_utils.embed.sic_specific_embed.load_hierarchy",
+            "industrial_classification_utils.embed.sic_specific_embed.load_sic_hierarchy",
             return_value=fake_sic,
-        ) as mock_load_hierarchy,
+        ) as mock_load_sic_hierarchy,
         patch(
             "industrial_classification_utils.embed.sic_specific_embed.EmbeddingHandler",
             return_value=built_handler,
@@ -555,9 +547,9 @@ def test_load_embedding_handler_from_sic_index_files_builds(tmp_path: Path):
         )
 
     assert result is built_handler
-    mock_load_index.assert_called_once_with("sic-index.csv")
-    mock_load_structure.assert_called_once_with("sic-structure.csv")
-    mock_load_hierarchy.assert_called_once()
+    mock_load_sic_hierarchy.assert_called_once_with(
+        "sic-index.csv", "sic-structure.csv"
+    )
     assert mock_handler_cls.called
     call_kwargs = mock_handler_cls.call_args.kwargs
     assert call_kwargs["db_dir"] == str(tmp_path / "vector_store")
@@ -800,15 +792,7 @@ def test_load_embedding_handler_from_sic_index_files_forwards_kwargs(tmp_path: P
 
     with (
         patch(
-            "industrial_classification_utils.embed.sic_specific_embed.load_sic_index",
-            return_value=MagicMock(),
-        ),
-        patch(
-            "industrial_classification_utils.embed.sic_specific_embed.load_sic_structure",
-            return_value=MagicMock(),
-        ),
-        patch(
-            "industrial_classification_utils.embed.sic_specific_embed.load_hierarchy",
+            "industrial_classification_utils.embed.sic_specific_embed.load_sic_hierarchy",
             return_value=fake_sic,
         ),
         patch(
