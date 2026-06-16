@@ -10,7 +10,7 @@ from typing import Any, cast
 from uuid import NAMESPACE_URL, uuid5
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 _WS_RE = re.compile(r"\s+")
 _NON_ALNUM_SPACE_RE = re.compile(r"[^a-z ]+")
@@ -47,10 +47,10 @@ class CleanCorpus(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     rows: list[tuple[str, str, str]] = Field(default_factory=list)
-    id_to_search: dict[str, str] = Field(default_factory=dict)
-    id_to_display: dict[str, str] = Field(default_factory=dict)
-    display_text_count: dict[str, int] = Field(default_factory=dict)
     size: int = 0
+    _id_to_search: dict[str, str] = PrivateAttr(default_factory=dict)
+    _id_to_display: dict[str, str] = PrivateAttr(default_factory=dict)
+    _display_text_count: dict[str, int] = PrivateAttr(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -69,18 +69,35 @@ class CleanCorpus(BaseModel):
             )
         }
 
-    @model_validator(mode="after")
-    def _build_indexes(self) -> "CleanCorpus":
-        return self._populate_indexes()
+    @property
+    def id_to_search(self) -> dict[str, str]:
+        """Return the row-id to normalised-search-text lookup."""
+        return self._id_to_search
+
+    @property
+    def id_to_display(self) -> dict[str, str]:
+        """Return the row-id to display-text lookup."""
+        return self._id_to_display
+
+    @property
+    def display_text_count(self) -> dict[str, int]:
+        """Return per-display-text occurrence counts for the cleaned corpus."""
+        return self._display_text_count
+
+    # Pylint does not understand Pydantic's model_post_init signature here.
+    def model_post_init(  # pylint: disable=arguments-differ
+        self, __context: Any
+    ) -> None:
+        self._populate_indexes()
 
     def _populate_indexes(self) -> "CleanCorpus":
         """Rebuild lookup tables from the current cleaned rows."""
-        self.id_to_search = {rid: search for rid, search, _ in self.rows}
-        self.id_to_display = {rid: display for rid, _, display in self.rows}
-        self.display_text_count = {}
+        self._id_to_search = {rid: search for rid, search, _ in self.rows}
+        self._id_to_display = {rid: display for rid, _, display in self.rows}
+        self._display_text_count = {}
         for _, _, display in self.rows:
-            self.display_text_count[display] = (
-                self.display_text_count.get(display, 0) + 1
+            self._display_text_count[display] = (
+                self._display_text_count.get(display, 0) + 1
             )
         self.size = len(self.rows)
         return self
@@ -107,14 +124,7 @@ class CleanCorpus(BaseModel):
         if not restored_rows:
             raise ValueError("corpus is empty after filtering")
 
-        corpus = cls.model_construct(
-            rows=restored_rows,
-            id_to_search={},
-            id_to_display={},
-            display_text_count={},
-            size=0,
-        )
-        return corpus._populate_indexes()
+        return cls.model_construct(rows=restored_rows)
 
     @staticmethod
     def _coerce_persisted_row(

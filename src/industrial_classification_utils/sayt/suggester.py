@@ -133,7 +133,9 @@ class SAYTSuggester:  # pylint: disable=too-many-instance-attributes
             default_retriever_specs() if retrievers is None else retrievers
         )
         self._retrievers = self._build_retrievers(self._retriever_specs)
-        self._max_duplication = max(self._corpus.display_text_count.values(), default=0)
+        self._max_duplication = max(
+            self._corpus._display_text_count.values(), default=0
+        )
         self._stored_retrievers: tuple[StoredRetrieverSpec, ...] | None = None
         self._artifact_provenance: SaytArtifactProvenance | None = None
         logger.info(

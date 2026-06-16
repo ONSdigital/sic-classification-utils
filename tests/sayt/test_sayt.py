@@ -3,6 +3,7 @@
 # pylint: disable=protected-access,redefined-outer-name,too-few-public-methods,C0116,W0613
 
 import json
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
@@ -58,6 +59,18 @@ def test_clean_corpus_accepts_existing_instance_and_dict_input(small_corpus):
     assert dict_corpus.rows == corpus.rows
 
 
+def test_clean_corpus_model_dump_excludes_derived_lookup_dicts(small_corpus):
+    """Keep derived lookup dictionaries out of the public model fields."""
+    corpus = CleanCorpus.model_validate(small_corpus)
+
+    dumped = corpus.model_dump()
+
+    assert "id_to_search" not in dumped
+    assert "id_to_display" not in dumped
+    assert "display_text_count" not in dumped
+    assert dumped["rows"] == corpus.rows
+
+
 def test_clean_corpus_restores_persisted_rows(small_corpus):
     """Restore cleaned corpus rows without regenerating row identifiers."""
     corpus = CleanCorpus.model_validate(small_corpus)
@@ -67,9 +80,7 @@ def test_clean_corpus_restores_persisted_rows(small_corpus):
     )
 
     assert restored.rows == corpus.rows
-    assert restored.id_to_search == corpus.id_to_search
-    assert restored.id_to_display == corpus.id_to_display
-    assert restored.display_text_count == corpus.display_text_count
+    assert restored.model_dump() == corpus.model_dump()
 
 
 def test_clean_corpus_rejects_non_iterable_input():
@@ -221,6 +232,7 @@ def test_get_config_returns_rich_runtime_summary(small_corpus):
     )
 
     config = suggester.get_config()
+    display_counts = Counter(display for _, _, display in suggester._corpus.rows)
 
     assert isinstance(config, SaytConfiguration)
     assert config.settings.model_dump() == {
@@ -229,8 +241,8 @@ def test_get_config_returns_rich_runtime_summary(small_corpus):
     }
     assert config.corpus.model_dump() == {
         "size": suggester._corpus.size,
-        "unique_display_texts": len(suggester._corpus.display_text_count),
-        "max_duplication": suggester._max_duplication,
+        "unique_display_texts": len(display_counts),
+        "max_duplication": max(display_counts.values(), default=0),
     }
     assert [retriever.name for retriever in config.retrievers] == ["prefix", "ngram"]
     assert config.retrievers[0].config == {}
