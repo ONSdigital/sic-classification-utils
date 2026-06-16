@@ -3,6 +3,7 @@
 from .builder import SAYTBuilder
 from .core import SaytConfiguration
 from .retriever_specs import (
+    ArtifactRetrieverSpec,
     NgramRetrieverSpec,
     PrefixRetrieverSpec,
     Retriever,
@@ -14,6 +15,7 @@ from .retrievers import NgramRetriever, PrefixRetriever, SemanticRetriever
 from .suggester import SAYTSuggester
 
 __all__ = [
+    "ArtifactRetrieverSpec",
     "NgramRetriever",
     "NgramRetrieverSpec",
     "PrefixRetriever",

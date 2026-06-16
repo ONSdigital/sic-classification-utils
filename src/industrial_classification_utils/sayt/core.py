@@ -46,7 +46,6 @@ class CleanCorpus(BaseModel):
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    corpus: object
     rows: list[tuple[str, str, str]] = Field(default_factory=list)
     id_to_search: dict[str, str] = Field(default_factory=dict)
     id_to_display: dict[str, str] = Field(default_factory=dict)
@@ -56,15 +55,22 @@ class CleanCorpus(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _coerce_input(cls, data: object) -> object:
-        if isinstance(data, cls | dict):
+        if isinstance(data, cls):
             return data
-        return {"corpus": data}
+        if isinstance(data, dict):
+            if "rows" in data:
+                return data
+            if "corpus" in data:
+                data = data["corpus"]
+
+        return {
+            "rows": cls._clean_corpus(
+                cast(Iterable[str] | Iterable[tuple[object, object]], data)
+            )
+        }
 
     @model_validator(mode="after")
     def _build_indexes(self) -> "CleanCorpus":
-        self.rows = self._clean_corpus(
-            cast(Iterable[str] | Iterable[tuple[object, object]], self.corpus)
-        )
         return self._populate_indexes()
 
     def _populate_indexes(self) -> "CleanCorpus":
@@ -102,10 +108,6 @@ class CleanCorpus(BaseModel):
             raise ValueError("corpus is empty after filtering")
 
         corpus = cls.model_construct(
-            corpus=[
-                (search_text, display_text)
-                for _, search_text, display_text in restored_rows
-            ],
             rows=restored_rows,
             id_to_search={},
             id_to_display={},

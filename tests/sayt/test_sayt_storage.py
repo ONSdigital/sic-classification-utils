@@ -9,6 +9,7 @@ import pytest
 from industrial_classification_utils.sayt import (
     PrefixRetrieverSpec,
     SemanticRetrieverSpec,
+    retriever_specs,
     storage,
 )
 from industrial_classification_utils.sayt.core import CleanCorpus
@@ -84,9 +85,7 @@ def test_read_artifact_inputs_validate_missing_and_malformed_state(tmp_path):
 def test_storage_helper_validation_errors():
     """Guard helper APIs against invalid types, paths, and unsupported specs."""
     stored_retriever = storage.StoredRetrieverSpec(
-        artifact_type="prefix",
         spec=PrefixRetrieverSpec(),
-        config={},
         path=None,
     )
 
@@ -112,7 +111,7 @@ def test_storage_helper_validation_errors():
 
     with pytest.raises(
         TypeError,
-        match="Only built-in retriever specs can be persisted; got _UnknownSpec",
+        match="Only artifact-aware retriever specs can be persisted; got _UnknownSpec",
     ):
         storage._build_stored_retriever(0, _UnknownSpec())
 
@@ -163,28 +162,31 @@ def test_semantic_retriever_artifact_round_trips_and_loads(
             }
             return {"index": index, "min_chars": min_chars}
 
-    monkeypatch.setattr(storage, "build_semantic_index", _fake_build_semantic_index)
-    monkeypatch.setattr(storage, "load_semantic_index", _fake_load_semantic_index)
-    monkeypatch.setattr(storage, "SemanticRetriever", _StubSemanticRetriever)
+    monkeypatch.setattr(
+        retriever_specs, "build_semantic_index", _fake_build_semantic_index
+    )
+    monkeypatch.setattr(
+        retriever_specs, "load_semantic_index", _fake_load_semantic_index
+    )
+    monkeypatch.setattr(retriever_specs, "SemanticRetriever", _StubSemanticRetriever)
 
     rebuilt = storage._deserialise_stored_retriever(
         {
-            "type": stored_retriever.artifact_type,
+            "type": stored_retriever.spec.name,
             "weight": spec.weight,
             "path": stored_retriever.path,
-            "config": stored_retriever.config,
+            "config": {"model": "all-MiniLM-L6-v2"},
         }
     )
 
-    assert stored_retriever.artifact_type == "semantic"
-    assert stored_retriever.config == {"model": "all-MiniLM-L6-v2"}
+    assert stored_retriever.spec.name == "semantic"
     assert stored_retriever.path == "retrievers/02-semantic"
     assert isinstance(rebuilt.spec, SemanticRetrieverSpec)
     assert rebuilt.spec.weight == pytest.approx(2.5)
-    assert rebuilt.config == {"model": "all-MiniLM-L6-v2"}
 
     storage.build_retriever_artifact(
         corpus=corpus,
+        min_chars=3,
         stored_retriever=stored_retriever,
         artifact_dir=tmp_path,
     )

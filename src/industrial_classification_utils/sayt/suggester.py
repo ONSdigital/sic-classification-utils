@@ -462,22 +462,6 @@ def _normalised_retriever_specs(
     return [(spec, weight / total_weight) for spec, weight in validated_specs]
 
 
-def _restore_retriever_from_artifact(
-    *,
-    corpus: CleanCorpus,
-    min_chars: int,
-    stored_retriever: StoredRetrieverSpec,
-    artifact_dir: Path,
-) -> Retriever:
-    """Restore a runtime retriever from persisted artifact state."""
-    return load_retriever_from_artifact(
-        corpus=corpus,
-        min_chars=min_chars,
-        stored_retriever=stored_retriever,
-        artifact_dir=artifact_dir,
-    )
-
-
 def _load_retrievers_from_artifact(
     *,
     corpus: CleanCorpus,
@@ -493,7 +477,7 @@ def _load_retrievers_from_artifact(
         _ConfiguredRetriever(
             name=stored_retriever.spec.name,
             weight=weight,
-            retriever=_restore_retriever_from_artifact(
+            retriever=load_retriever_from_artifact(
                 corpus=corpus,
                 min_chars=min_chars,
                 stored_retriever=stored_retriever,
@@ -548,14 +532,10 @@ def _build_retriever_summary(
     artifact_provenance = None
     config = _summarise_retriever_config(spec)
     if stored_retriever is not None:
-        artifact_config = {
-            str(key): _jsonable_value(value)
-            for key, value in stored_retriever.config.items()
-        }
         artifact_provenance = SaytRetrieverArtifactProvenance(
-            artifact_type=stored_retriever.artifact_type,
+            artifact_type=stored_retriever.spec.name,
             path=stored_retriever.path,
-            config=artifact_config,
+            config=_summarise_retriever_config(stored_retriever.spec),
         )
 
     return SaytRetrieverSummary(

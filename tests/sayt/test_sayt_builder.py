@@ -4,6 +4,7 @@
 
 import csv
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -26,6 +27,30 @@ class _CustomRetrieverSpec:
 
     def build(self, corpus, *, min_chars):
         _ = (corpus, min_chars)
+
+
+@dataclass(frozen=True)
+class _FailingArtifactRetrieverSpec:
+    name: str = "failing"
+    weight: float = 1.0
+
+    def build(
+        self,
+        corpus,
+        *,
+        min_chars,
+        filespace_path=None,
+        overwrite=True,
+    ):
+        _ = (corpus, min_chars, overwrite)
+        if filespace_path is not None:
+            Path(filespace_path).mkdir(parents=True, exist_ok=True)
+            Path(filespace_path, "partial.txt").write_text("partial", encoding="utf-8")
+        raise RuntimeError("boom")
+
+    def load_from_artifact(self, corpus, *, min_chars, filespace_path):
+        _ = (corpus, min_chars, filespace_path)
+        raise NotImplementedError
 
 
 def test_builder_from_csv_loads_columns_and_persists_artifact(tmp_path, small_corpus):
@@ -136,7 +161,7 @@ def test_builder_writes_ngram_filespace(monkeypatch, tmp_path, small_corpus):
     manifest = json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8"))
     filespace_path = artifact_dir / manifest["retrievers"][0]["path"]
 
-    assert captured["output_dir"] == str(filespace_path)
+    assert Path(captured["output_dir"]).name == filespace_path.name
     assert (filespace_path / "metadata.json").exists()
     assert (filespace_path / "vectors.parquet").exists()
 
@@ -222,6 +247,61 @@ def test_builder_rejects_custom_runtime_only_retriever_specs(tmp_path, small_cor
 
     with pytest.raises(
         TypeError,
-        match="Only built-in retriever specs can be persisted; got _CustomRetrieverSpec",
+        match="Only artifact-aware retriever specs can be persisted; got _CustomRetrieverSpec",
     ):
         builder.build_artifact(tmp_path / "artifact")
+
+
+def test_builder_cleans_up_staged_artifact_when_later_retriever_fails(
+    tmp_path, small_corpus
+):
+    """A failed staged build should not leave a partial artifact behind."""
+    artifact_dir = tmp_path / "artifact"
+
+    builder = SAYTBuilder(
+        small_corpus,
+        retrievers=[PrefixRetrieverSpec(), _FailingArtifactRetrieverSpec()],
+        min_chars=3,
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        builder.build_artifact(artifact_dir)
+
+    assert not artifact_dir.exists()
+    assert not list(tmp_path.glob(".artifact.tmp-*"))
+
+
+def test_builder_preserves_existing_artifact_when_staged_overwrite_fails(
+    tmp_path, small_corpus
+):
+    """A failed overwrite should leave the previous complete artifact intact."""
+    artifact_dir = tmp_path / "artifact"
+    original_builder = SAYTBuilder(
+        small_corpus,
+        retrievers=[PrefixRetrieverSpec()],
+        min_chars=3,
+        max_suggestions=5,
+    )
+    original_builder.build_artifact(artifact_dir)
+
+    original_manifest = json.loads(
+        (artifact_dir / "manifest.json").read_text(encoding="utf-8")
+    )
+    original_corpus = (artifact_dir / "corpus.csv").read_text(encoding="utf-8")
+
+    failing_builder = SAYTBuilder(
+        small_corpus,
+        retrievers=[PrefixRetrieverSpec(), _FailingArtifactRetrieverSpec()],
+        min_chars=3,
+        max_suggestions=7,
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        failing_builder.build_artifact(artifact_dir, overwrite=True)
+
+    assert json.loads((artifact_dir / "manifest.json").read_text(encoding="utf-8")) == (
+        original_manifest
+    )
+    assert (artifact_dir / "corpus.csv").read_text(encoding="utf-8") == original_corpus
+    assert not list(tmp_path.glob(".artifact.tmp-*"))
+    assert not list(tmp_path.glob(".artifact.bak-*"))
