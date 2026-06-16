@@ -4,8 +4,6 @@ This module provides the public suggester API that coordinates configured
 retrievers and combines their scores into ranked suggestions.
 """
 
-# pylint: disable=duplicate-code
-
 import math
 import os
 from collections.abc import Iterable, Mapping, Sequence
@@ -15,6 +13,7 @@ from typing import Any
 
 from survey_assist_utils.logging import get_logger
 
+from ._base import BaseCorpusBound
 from .core import (
     CleanCorpus,
     SaytArtifactProvenance,
@@ -26,19 +25,15 @@ from .core import (
     Suggestion,
     _normalise,
     take_with_ties,
-    validate_max_suggestions,
-    validate_min_chars,
 )
 from .retriever_specs import (
     Retriever,
     RetrieverSpec,
-    default_retriever_specs,
 )
 from .storage import (
     SAYT_ARTIFACT_TYPE,
     SAYT_ARTIFACT_VERSION,
     StoredRetrieverSpec,
-    load_corpus_from_csv,
     load_retriever_from_artifact,
     read_artifact_corpus,
     read_artifact_manifest,
@@ -56,7 +51,7 @@ class _ConfiguredRetriever:
     retriever: Retriever
 
 
-class SAYTSuggester:  # pylint: disable=too-many-instance-attributes
+class SAYTSuggester(BaseCorpusBound):  # pylint: disable=too-many-instance-attributes
     """Suggest free-text responses as a user types.
 
     The suggester:
@@ -125,17 +120,14 @@ class SAYTSuggester:  # pylint: disable=too-many-instance-attributes
             max_suggestions: Default maximum number of ranked suggestions to
                 return.
         """
-        self._corpus = CleanCorpus.model_validate(corpus)
-        self._min_chars = validate_min_chars(min_chars)
-        self._max_suggestions = validate_max_suggestions(max_suggestions)
-
-        self._retriever_specs = tuple(
-            default_retriever_specs() if retrievers is None else retrievers
+        super().__init__(
+            corpus,
+            retrievers=retrievers,
+            min_chars=min_chars,
+            max_suggestions=max_suggestions,
         )
         self._retrievers = self._build_retrievers(self._retriever_specs)
-        self._max_duplication = max(
-            self._corpus._display_text_count.values(), default=0
-        )
+        self._max_duplication = max(self._corpus.display_text_count.values(), default=0)
         self._stored_retrievers: tuple[StoredRetrieverSpec, ...] | None = None
         self._artifact_provenance: SaytArtifactProvenance | None = None
         logger.info(
@@ -172,48 +164,6 @@ class SAYTSuggester:  # pylint: disable=too-many-instance-attributes
             config=suggester.get_config().model_dump(mode="json"),
         )
         return suggester
-
-    @classmethod
-    def from_csv(  # pylint: disable=too-many-arguments  # noqa: PLR0913
-        cls,
-        file_path: str | os.PathLike,
-        *,
-        search_text_col: str = "title",
-        display_text_col: str | None = None,
-        retrievers: Sequence[RetrieverSpec] | None = None,
-        min_chars: int = 4,
-        max_suggestions: int = 10,
-    ) -> "SAYTSuggester":
-        """Build a suggester from CSV input.
-
-        Args:
-            file_path: Path to the CSV file containing suggestion rows.
-            search_text_col: Column containing the searchable text.
-            display_text_col: Optional column containing display text. When
-                omitted, the search column is reused for display values.
-            retrievers: Optional retriever specifications. When omitted, the
-                standard retriever set is used.
-            min_chars: Minimum query length before retrieval runs.
-            max_suggestions: Default maximum number of ranked suggestions to
-                return.
-
-        Returns:
-            A configured ``SAYTSuggester`` instance.
-
-        Raises:
-            ValueError: If the requested search or display column is missing.
-        """
-        corpus_rows = load_corpus_from_csv(
-            file_path,
-            search_text_col=search_text_col,
-            display_text_col=display_text_col,
-        )
-        return cls(
-            corpus_rows,
-            retrievers=retrievers,
-            min_chars=min_chars,
-            max_suggestions=max_suggestions,
-        )
 
     @classmethod
     def from_artifact(cls, artifact_dir: str | os.PathLike) -> "SAYTSuggester":

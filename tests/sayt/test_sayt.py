@@ -571,7 +571,7 @@ def test_suggester_defaults_to_standard_retriever_specs(monkeypatch, small_corpu
             return _StubRetriever()
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.suggester.default_retriever_specs",
+        "industrial_classification_utils.sayt._base.default_retriever_specs",
         lambda: [
             _StubRetrieverSpec(name="prefix"),
             _StubRetrieverSpec(name="ngram"),
