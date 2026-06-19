@@ -3,31 +3,77 @@
 # pylint: disable=too-few-public-methods, R0801
 
 import pytest
-from pydantic import ValidationError
 
 from industrial_classification_utils.sayt import (
     NgramRetrieverSpec,
     PrefixRetrieverSpec,
+    SAYTBuilder,
+    SAYTSuggester,
     SemanticRetrieverSpec,
     default_retriever_specs,
 )
-from industrial_classification_utils.sayt.sayt_core import CleanCorpus, SaytConfig
+from industrial_classification_utils.sayt.core import CleanCorpus
 
 
 @pytest.mark.parametrize(
-    "kwargs, exc_type",
+    "factory, kwargs, exc_type, match",
     [
-        ({"min_chars": 2}, ValidationError),
-        ({"min_chars": True}, ValidationError),
-        ({"max_suggestions": 0}, ValidationError),
-        ({"max_suggestions": 101}, ValidationError),
-        ({"ngram_enable": True}, ValidationError),
+        (SAYTSuggester, {"min_chars": 2}, ValueError, "min_chars must be >= 3"),
+        (
+            SAYTSuggester,
+            {"min_chars": True},
+            TypeError,
+            "min_chars must be an integer",
+        ),
+        (
+            SAYTSuggester,
+            {"max_suggestions": 0},
+            ValueError,
+            "max_suggestions must be between 1 and 100",
+        ),
+        (
+            SAYTSuggester,
+            {"max_suggestions": 101},
+            ValueError,
+            "max_suggestions must be between 1 and 100",
+        ),
+        (
+            SAYTSuggester,
+            {"min_chars": "abc"},
+            TypeError,
+            "min_chars must be an integer",
+        ),
+        (SAYTBuilder, {"min_chars": 2}, ValueError, "min_chars must be >= 3"),
+        (
+            SAYTBuilder,
+            {"min_chars": True},
+            TypeError,
+            "min_chars must be an integer",
+        ),
+        (
+            SAYTBuilder,
+            {"max_suggestions": 0},
+            ValueError,
+            "max_suggestions must be between 1 and 100",
+        ),
+        (
+            SAYTBuilder,
+            {"max_suggestions": 101},
+            ValueError,
+            "max_suggestions must be between 1 and 100",
+        ),
+        (
+            SAYTBuilder,
+            {"max_suggestions": "abc"},
+            TypeError,
+            "max_suggestions must be an integer",
+        ),
     ],
 )
-def test_config_validation(kwargs, exc_type):
-    """Reject unsupported SAYT config values and types."""
-    with pytest.raises(exc_type):
-        SaytConfig.model_validate(kwargs)
+def test_runtime_setting_validation(factory, kwargs, exc_type, match):
+    """Reject unsupported global SAYT settings on public entry points."""
+    with pytest.raises(exc_type, match=match):
+        factory([("car wash", "Car Wash")], **kwargs)
 
 
 def test_default_retriever_specs_returns_standard_set():
@@ -86,7 +132,7 @@ def test_ngram_retriever_spec_validates_against_corpus_size():
 
 
 def test_retriever_specs_keep_their_config():
-    """Expose per-retriever settings on the spec object rather than SaytConfig."""
+    """Expose per-retriever settings on the spec object."""
     n = 4
     max_df = 0.8
     spec = NgramRetrieverSpec(weight=2.0, n=n, max_df=max_df)
@@ -108,7 +154,7 @@ def test_semantic_retriever_spec_builds_semantic_retriever(monkeypatch):
             captured["min_chars"] = min_chars
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_retriever_specs.SemanticRetriever",
+        "industrial_classification_utils.sayt.retriever_specs.SemanticRetriever",
         _StubSemanticRetriever,
     )
 

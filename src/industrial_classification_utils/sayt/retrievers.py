@@ -6,8 +6,8 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-from .sayt_core import CleanCorpus, Suggestion, take_with_ties
-from .sayt_indexes import DenseVectorIndex, build_ngram_index, build_semantic_index
+from .core import CleanCorpus, Suggestion, take_with_ties
+from .indexes import DenseVectorIndex, build_ngram_index, build_semantic_index
 
 _FUZZY_PREFIX_MIN_RATIO = 0.75
 
@@ -108,6 +108,21 @@ class _DenseRetriever:
     _corpus: CleanCorpus
     _min_chars: int
     _index: DenseVectorIndex
+
+    @classmethod
+    def from_index(
+        cls,
+        corpus: CleanCorpus,
+        *,
+        min_chars: int,
+        index: DenseVectorIndex,
+    ) -> "_DenseRetriever":
+        """Restore a dense retriever from an already-built dense index."""
+        retriever = cls.__new__(cls)
+        retriever._corpus = corpus
+        retriever._min_chars = min_chars
+        retriever._index = index
+        return retriever
 
     def suggest_with_scores(
         self, q_norm: str, num_suggestions: int

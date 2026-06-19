@@ -1,26 +1,30 @@
 """Tests for SAYT retrieval and ranking behavior."""
 
-# ruff: noqa: PLR2004
 # pylint: disable=protected-access,redefined-outer-name,too-few-public-methods,C0116,W0613
+
+import csv
+import shutil
+from pathlib import Path
 
 import numpy as np
 import pytest
 from classifai.vectorisers import VectoriserBase
 
 from industrial_classification_utils.sayt import NgramRetrieverSpec, PrefixRetrieverSpec
-from industrial_classification_utils.sayt.sayt import SAYTSuggester
-from industrial_classification_utils.sayt.sayt_core import CleanCorpus
-from industrial_classification_utils.sayt.sayt_indexes import (
+from industrial_classification_utils.sayt.core import CleanCorpus
+from industrial_classification_utils.sayt.indexes import (
     DenseVectorIndex,
     _CharNgramVectoriser,
     _L2NormalisingVectoriser,
+    load_semantic_index,
 )
-from industrial_classification_utils.sayt.sayt_retrievers import (
+from industrial_classification_utils.sayt.retrievers import (
     NgramRetriever,
     PrefixRetriever,
     SemanticRetriever,
     _PrefixIndex,
 )
+from industrial_classification_utils.sayt.suggester import SAYTSuggester
 
 
 def test_prefix_full_string_match_ranks_expected_terms(small_corpus):
@@ -233,6 +237,108 @@ def test_dense_retriever_keeps_ties_at_cutoff(small_corpus):
     ]
 
 
+def test_dense_vector_index_builds_persistent_filespace(
+    monkeypatch, tmp_path, small_corpus
+):
+    """Persist dense indexes even when the output folder is replaced first."""
+    captured = {}
+    corpus = CleanCorpus.model_validate(small_corpus)
+    output_dir = tmp_path / "ngram"
+    output_dir.mkdir()
+
+    class _StubPersistentVectorStore:
+        # pylint: disable=too-many-arguments
+        def __init__(  # noqa: PLR0913
+            self,
+            *,
+            file_name,
+            data_type,
+            vectoriser,
+            batch_size,
+            output_dir,
+            overwrite,
+            hooks,
+        ):
+            captured["file_name"] = file_name
+            captured["data_type"] = data_type
+            captured["vectoriser_type"] = type(vectoriser).__name__
+            captured["batch_size"] = batch_size
+            captured["output_dir"] = output_dir
+            captured["overwrite"] = overwrite
+            captured["hooks"] = hooks
+            output_path = Path(output_dir)
+            if output_path.is_dir() and overwrite:
+                shutil.rmtree(output_path)
+            output_path.mkdir(parents=True, exist_ok=True)
+            with open(file_name, encoding="utf-8") as input_file:
+                captured["rows"] = list(csv.DictReader(input_file))
+            (output_path / "metadata.json").write_text("{}", encoding="utf-8")
+            (output_path / "vectors.parquet").write_text("dummy", encoding="utf-8")
+            self.num_vectors = len(captured["rows"])
+
+    monkeypatch.setattr(
+        "industrial_classification_utils.sayt.indexes.VectorStore",
+        _StubPersistentVectorStore,
+    )
+
+    index = DenseVectorIndex.from_corpus(
+        corpus=corpus,
+        vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
+        output_dir=output_dir,
+        overwrite=True,
+    )
+
+    assert index._num_vectors == len(corpus.rows)
+    assert Path(captured["file_name"]).name == "corpus.csv"
+    assert Path(captured["file_name"]).parent != output_dir
+    assert captured["data_type"] == "csv"
+    assert captured["vectoriser_type"] == "_StubVectoriser"
+    assert captured["batch_size"] == 64
+    assert captured["output_dir"] == str(output_dir)
+    assert captured["overwrite"] is True
+    assert captured["hooks"] is None
+    assert captured["rows"] == [
+        {"label": row_id, "text": search_text} for row_id, search_text, _ in corpus.rows
+    ]
+
+
+def test_dense_vector_index_loads_existing_filespace(
+    monkeypatch, tmp_path, small_corpus
+):
+    """Load a persisted dense index via ClassifAI's filespace API."""
+    captured = {}
+    corpus = CleanCorpus.model_validate(small_corpus)
+    folder_path = tmp_path / "existing-ngram"
+
+    class _StubLoadedVectorStore:
+        num_vectors = 7
+
+    def _fake_from_filespace(*, folder_path, vectoriser, hooks):
+        captured["folder_path"] = folder_path
+        captured["vectoriser_type"] = type(vectoriser).__name__
+        captured["hooks"] = hooks
+        return _StubLoadedVectorStore()
+
+    monkeypatch.setattr(
+        "industrial_classification_utils.sayt.indexes.VectorStore.from_filespace",
+        _fake_from_filespace,
+    )
+
+    index = DenseVectorIndex.from_filespace(
+        corpus=corpus,
+        folder_path=folder_path,
+        vectoriser=_StubVectoriser(np.array([[1.0, 0.0]])),
+    )
+
+    assert index._num_vectors == 7
+    assert index._corpus is corpus
+    assert captured == {
+        "folder_path": str(folder_path),
+        "vectoriser_type": "_StubVectoriser",
+        "hooks": None,
+    }
+
+
 def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
     monkeypatch, small_corpus
 ):
@@ -247,8 +353,16 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
         def transform(self, texts):
             return np.array([[1.0, 0.0]])
 
-    def _fake_build_dense_vector_index(*, corpus, vectoriser):
+    def _fake_build_dense_vector_index(
+        *,
+        corpus,
+        vectoriser,
+        output_dir=None,
+        overwrite=True,
+    ):
         captured["vectoriser_type"] = type(vectoriser).__name__
+        captured["output_dir"] = output_dir
+        captured["overwrite"] = overwrite
         return DenseVectorIndex(
             _vector_store=_StubVectorStore([]),
             _num_vectors=1,
@@ -256,11 +370,11 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
         )
 
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.HuggingFaceVectoriser",
+        "industrial_classification_utils.sayt.indexes.HuggingFaceVectoriser",
         _StubHFVectoriser,
     )
     monkeypatch.setattr(
-        "industrial_classification_utils.sayt.sayt_indexes.DenseVectorIndex.from_corpus",
+        "industrial_classification_utils.sayt.indexes.DenseVectorIndex.from_corpus",
         _fake_build_dense_vector_index,
     )
 
@@ -269,8 +383,60 @@ def test_semantic_retriever_builds_index_with_wrapped_vectoriser(
     assert captured == {
         "model_name": "sentence-transformers/all-MiniLM-L6-v2",
         "vectoriser_type": "_L2NormalisingVectoriser",
+        "output_dir": None,
+        "overwrite": True,
     }
     assert retriever._min_chars == 3
+
+
+def test_load_semantic_index_loads_existing_filespace_with_wrapped_vectoriser(
+    monkeypatch, tmp_path, small_corpus
+):
+    """Wrap the embedding vectoriser before loading a persisted semantic index."""
+    captured = {}
+    corpus = CleanCorpus.model_validate(small_corpus)
+    folder_path = tmp_path / "existing-semantic"
+
+    class _StubHFVectoriser:
+        def __init__(self, model_name):
+            captured["model_name"] = model_name
+
+        def transform(self, texts):
+            _ = texts
+            return np.array([[1.0, 0.0]])
+
+    def _fake_load_dense_vector_index(*, corpus, folder_path, vectoriser):
+        captured["corpus"] = corpus
+        captured["folder_path"] = folder_path
+        captured["vectoriser_type"] = type(vectoriser).__name__
+        return DenseVectorIndex(
+            _vector_store=_StubVectorStore([]),
+            _num_vectors=2,
+            _corpus=corpus,
+        )
+
+    monkeypatch.setattr(
+        "industrial_classification_utils.sayt.indexes.HuggingFaceVectoriser",
+        _StubHFVectoriser,
+    )
+    monkeypatch.setattr(
+        "industrial_classification_utils.sayt.indexes.DenseVectorIndex.from_filespace",
+        _fake_load_dense_vector_index,
+    )
+
+    index = load_semantic_index(
+        corpus,
+        model="all-MiniLM-L6-v2",
+        folder_path=folder_path,
+    )
+
+    assert index._num_vectors == 2
+    assert captured == {
+        "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+        "corpus": corpus,
+        "folder_path": folder_path,
+        "vectoriser_type": "_L2NormalisingVectoriser",
+    }
 
 
 def test_semantic_retriever_returns_empty_for_short_queries():

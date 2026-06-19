@@ -105,6 +105,8 @@ ignore = [
     "E501",
     # indentation contains tabs
     "W191",
+    # Allow the use of older TypeVar syntax for generic functions
+    "UP047",
 ]
 
 [tool.ruff.lint.pydocstyle]

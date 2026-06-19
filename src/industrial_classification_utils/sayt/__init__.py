@@ -1,7 +1,9 @@
 """Public SAYT interfaces and built-in retriever components."""
 
-from .sayt import SAYTSuggester
-from .sayt_retriever_specs import (
+from .builder import SAYTBuilder
+from .core import SaytConfiguration
+from .retriever_specs import (
+    ArtifactRetrieverSpec,
     NgramRetrieverSpec,
     PrefixRetrieverSpec,
     Retriever,
@@ -9,16 +11,20 @@ from .sayt_retriever_specs import (
     SemanticRetrieverSpec,
     default_retriever_specs,
 )
-from .sayt_retrievers import NgramRetriever, PrefixRetriever, SemanticRetriever
+from .retrievers import NgramRetriever, PrefixRetriever, SemanticRetriever
+from .suggester import SAYTSuggester
 
 __all__ = [
+    "ArtifactRetrieverSpec",
     "NgramRetriever",
     "NgramRetrieverSpec",
     "PrefixRetriever",
     "PrefixRetrieverSpec",
     "Retriever",
     "RetrieverSpec",
+    "SAYTBuilder",
     "SAYTSuggester",
+    "SaytConfiguration",
     "SemanticRetriever",
     "SemanticRetrieverSpec",
     "default_retriever_specs",
