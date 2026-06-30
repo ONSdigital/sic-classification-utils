@@ -145,7 +145,7 @@ class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
         return self.embed_query(text)
 
 
-class LightEmbedONNXVectoriser:
+class LightEmbedONNXVectoriser(VectoriserBase):
     """POC ONNX vectoriser using light-embed."""
 
     def __init__(self, model_name: str):
