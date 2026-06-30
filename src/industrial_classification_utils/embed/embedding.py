@@ -19,6 +19,7 @@ from autocorrect import Speller
 from classifai.indexers import VectorStore, VectorStoreSearchInput
 from classifai.vectorisers import (
     HuggingFaceVectoriser,
+    VectoriserBase
 )
 
 from industrial_classification_utils.models.config_model import EmbeddingStatus
