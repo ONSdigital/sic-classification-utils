@@ -41,6 +41,7 @@ def get_default_config() -> FullConfig:
     return {
         "embedding": EmbeddingConfig(
             embedding_model_name="all-MiniLM-L6-v2",  # text-embedding-004
+            embedding_backend="sentence-transformers",
             db_dir="src/industrial_classification_utils/data/vector_store",
             index_source_file="src/industrial_classification_utils/data/sic_index/"
             + "uksic2007indexeswithaddendumdecember2022.csv",

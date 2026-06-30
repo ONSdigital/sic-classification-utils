@@ -7,11 +7,13 @@ flat csv file, manage vector stores, and perform similarity searches.
 
 # pylint: disable=too-many-instance-attributes
 
+from importlib import metadata
 import json
 import logging
 import os
 from typing import Any
 
+from industrial_classification import meta
 import numpy as np
 from autocorrect import Speller
 from classifai.indexers import VectorStore, VectorStoreSearchInput
@@ -32,14 +34,55 @@ from industrial_classification_utils.utils.gcs_file_access import (
     is_gcs_path,
 )
 
+from time import perf_counter
+
+SENTENCE_TRANSFORMERS_BACKEND = "sentence-transformers"
+LIGHT_EMBED_ONNX_BACKEND = "light-embed-onnx"
+DEFAULT_ONNX_MODEL_NAME = "onnx-models/all-MiniLM-L6-v2-onnx"
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 config = get_default_config()
 
 
+def _duration_ms(started: float) -> float:
+    return (perf_counter() - started) * 1000
+
+
+def _normalise(vectors: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    norms = np.where(norms == 0, 1.0, norms)
+    return vectors / norms
+
+
+def _docs_per_second(batch_size: int, duration_ms: float) -> float:
+    return batch_size / (duration_ms / 1000) if duration_ms > 0 else 0.0
+
+
+def _resolve_sentence_transformer_model_name(model_name: str) -> str:
+    return model_name if "/" in model_name else f"sentence-transformers/{model_name}"
+
+
+def _resolve_onnx_model_name(model_name: str) -> str:
+    if model_name in {"all-MiniLM-L6-v2", "sentence-transformers/all-MiniLM-L6-v2"}:
+        return DEFAULT_ONNX_MODEL_NAME
+    return model_name
+
+
 class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
     """Custom HuggingFaceVectoriser that normalizes vectors to unit length after embedding."""
+
+    def __init__(self, model_name: str):
+        started = perf_counter()
+        super().__init__(model_name=model_name)
+        logger.info(
+            "embedding_model_loaded backend=%s model=%s duration_ms=%.2f",
+            SENTENCE_TRANSFORMERS_BACKEND,
+            model_name,
+            _duration_ms(started),
+        )
+    
 
     def _normalize(self, vectors: np.ndarray) -> np.ndarray:
         """Normalizes row vectors to unit length.
@@ -68,8 +111,19 @@ class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
         if isinstance(texts, str):
             texts = [texts]
 
+        started = perf_counter()
         vectors = super().transform(texts)
         vectors = self._normalize(vectors)
+
+        duration_ms = _duration_ms(started)
+
+        logger.info(
+            "embedding_transform_complete backend=%s batch_size=%s duration_ms=%.2f docs_per_second=%.2f",
+            SENTENCE_TRANSFORMERS_BACKEND,
+            len(texts),
+            duration_ms,
+            _docs_per_second(len(texts), duration_ms),
+        )
 
         return vectors
 
@@ -90,6 +144,71 @@ class ChromaDBesqueHFVectoriser(HuggingFaceVectoriser):
         return self.embed_query(text)
 
 
+class LightEmbedONNXVectoriser:
+    """POC ONNX vectoriser using light-embed."""
+
+    def __init__(self, model_name: str):
+        from light_embed import TextEmbedding
+
+        self.model_name = model_name
+        started = perf_counter()
+        self.model = TextEmbedding(model_name_or_path=model_name)
+
+        logger.info(
+            "embedding_model_loaded backend=%s model=%s duration_ms=%.2f",
+            LIGHT_EMBED_ONNX_BACKEND,
+            model_name,
+            _duration_ms(started),
+        )
+
+    def transform(self, texts: list[str] | str) -> np.ndarray:
+        if isinstance(texts, str):
+            texts = [texts]
+
+        started = perf_counter()
+        vectors = np.asarray(list(self.model.encode(texts)), dtype=np.float32)
+        if vectors.ndim == 1:
+            vectors = vectors.reshape(1, -1)
+
+        vectors = _normalise(vectors)
+        duration_ms = _duration_ms(started)
+
+        logger.info(
+            "embedding_transform_complete backend=%s batch_size=%s duration_ms=%.2f docs_per_second=%.2f",
+            LIGHT_EMBED_ONNX_BACKEND,
+            len(texts),
+            duration_ms,
+            _docs_per_second(len(texts), duration_ms),
+        )
+        return vectors
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self.transform(texts).tolist()
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.transform([text]).tolist()[0]
+
+    def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self.embed_documents(texts)
+
+    def aembed_query(self, text: str) -> list[float]:
+        return self.embed_query(text)
+
+
+def _create_vectoriser(embedding_backend: str, embedding_model_name: str) -> Any:
+    if embedding_backend == SENTENCE_TRANSFORMERS_BACKEND:
+        return ChromaDBesqueHFVectoriser(
+            model_name=_resolve_sentence_transformer_model_name(embedding_model_name)
+        )
+
+    if embedding_backend == LIGHT_EMBED_ONNX_BACKEND:
+        return LightEmbedONNXVectoriser(
+            model_name=_resolve_onnx_model_name(embedding_model_name)
+        )
+
+    raise ValueError(f"Unsupported embedding backend: {embedding_backend}")
+
+
 class EmbeddingHandler:
     """Handles embedding operations for the Classifai vector store.
 
@@ -108,6 +227,7 @@ class EmbeddingHandler:
     def __init__(
         self,
         embedding_model_name: str = config["embedding"].embedding_model_name,
+        embedding_backend: str | None = None,
         db_dir: str = config["embedding"].db_dir,
         k_matches: int = config["embedding"].k_matches,
         index_source_file: str | None = None,
@@ -124,15 +244,24 @@ class EmbeddingHandler:
             index_source_file: Optional csv source file to build new embedding index.
                 When provided, the vector store (db_dir) will be overwritten.
         """
-        self.embedding_model_name = embedding_model_name
+        self.embedding_model_name = embedding_model_name or os.getenv(
+            "EMBEDDING_MODEL_NAME", config["embedding"].embedding_model_name
+        )
+        self.embedding_backend = embedding_backend or os.getenv(
+            "EMBEDDING_BACKEND", config["embedding"].embedding_backend
+        )       
         self.k_matches = k_matches
         self.db_dir = db_dir
         self.index_source_file = index_source_file
 
-        self.embeddings: Any = ChromaDBesqueHFVectoriser(
-            model_name=f"sentence-transformers/{embedding_model_name}"
+        self.embeddings: Any = _create_vectoriser(
+            embedding_backend=self.embedding_backend,
+            embedding_model_name=self.embedding_model_name,
         )
-        logger.info("Using embedding model: %s", embedding_model_name)
+        logger.info(
+            "Using embedding model: %s and backend: %s",
+            self.embedding_model_name, self.embedding_backend
+        )
 
         self.spell = Speller()
 
@@ -199,6 +328,23 @@ class EmbeddingHandler:
         with open(metadata_path, encoding="utf-8") as f:
             meta = json.load(f)
         index_source_file = meta.get("index_source_file", None)
+
+        store_backend = meta.get("embedding_backend")
+        store_model = meta.get("embedding_model_name")
+
+        if store_backend and store_backend != self.embedding_backend:
+            logger.warning(
+                "Vector store backend mismatch. metadata=%s runtime=%s",
+                store_backend,
+                self.embedding_backend,
+            )
+
+        if store_model and store_model != self.embedding_model_name:
+            logger.warning(
+                "Vector store model mismatch. metadata=%s runtime=%s",
+                store_model,
+                self.embedding_model_name,
+            )
         return (vs, index_source_file)
 
     def _build_vector_store(self) -> VectorStore:
@@ -232,6 +378,8 @@ class EmbeddingHandler:
             downloaded_file = download_one_file_from_gcs(index_source_file)
             index_source_file = downloaded_file.path
 
+        started = perf_counter()
+
         vector_store = VectorStore(
             file_name=str(index_source_file),
             data_type="csv",
@@ -251,8 +399,18 @@ class EmbeddingHandler:
         else:
             metadata = {}
         metadata["index_source_file"] = str(self.index_source_file)
+        metadata["embedding_backend"] = self.embedding_backend
+        metadata["embedding_model_name"] = self.embedding_model_name
         with open(metadata_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f)
+
+        logger.info(
+            "vector_store_build_complete backend=%s model=%s index_size=%s duration_ms=%.2f",
+            self.embedding_backend,
+            self.embedding_model_name,
+            vector_store.num_vectors,
+            _duration_ms(started),
+        )
 
         logger.info(
             "Vector store built successfully in %s with data from %s.",
@@ -282,7 +440,19 @@ class EmbeddingHandler:
             if self.index_size is None
             else min(self.index_size, self.k_matches)
         )
+
+        started = perf_counter()
         results = self.vector_store.search(search_input, n_results=n_results)
+        duration_ms = _duration_ms(started)
+
+        logger.info(
+            "search_index_complete backend=%s model=%s n_results=%s duration_ms=%.2f query_length=%s",
+            self.embedding_backend,
+            self.embedding_model_name,
+            n_results,
+            duration_ms,
+            len(query),
+        )
 
         # ClassifAI returns a dataframe-like object.
         # Depending on the exact backend/version, one of these usually works.
@@ -334,6 +504,7 @@ class EmbeddingHandler:
         """
         embed_config = EmbeddingStatus(
             embedding_model_name=self.embedding_model_name,
+            embedding_backend=self.embedding_backend,
             db_dir=self.db_dir,
             k_matches=self.k_matches,
             index_source_file=self.index_source_file,

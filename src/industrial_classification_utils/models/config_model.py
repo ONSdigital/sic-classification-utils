@@ -25,6 +25,7 @@ class EmbeddingConfig(BaseModel):
     """
 
     embedding_model_name: str
+    embedding_backend: str = "sentence-transformers"
     db_dir: str
     index_source_file: str | None = None
     k_matches: int
