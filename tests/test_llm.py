@@ -293,7 +293,7 @@ async def test_llm_response_mocked_unambiguous_sic_code(
     }
 
     result = await classification_llm_with_sic_unambiguous.unambiguous_sic_code(
-        respondent_data = respondent_data,
+        respondent_data=respondent_data,
         semantic_search_results=[],
     )
     assert isinstance(result[0], UnambiguousResponse)
@@ -532,8 +532,12 @@ async def test_sa_rag_sic_code_prep_followup_is_str(
             "two_digit_code": "11xxx",
         }
     ]
-    
-    respondent_data = {"industry_descr":"school", "job_description":"teacher", "job_title":"educate kids"}
+
+    respondent_data = {
+        "industry_descr": "school",
+        "job_description": "teacher",
+        "job_title": "educate kids",
+    }
     result = (
         await classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
             respondent_data=respondent_data, short_list=short_list
@@ -546,7 +550,11 @@ async def test_sa_rag_sic_code_prep_followup_is_str(
 async def test_unambiguous_sic_code_followup_is_str(
     mock_sic_meta_patch, classification_llm_with_sic_unambiguous
 ):
-    respondent_data = {"industry_descr": "school", "job_title": "teacher", "job_description": "educate kids"}
+    respondent_data = {
+        "industry_descr": "school",
+        "job_title": "teacher",
+        "job_description": "educate kids",
+    }
     result = (
         await classification_llm_with_sic_unambiguous.unambiguous_sic_code(
             respondent_data=respondent_data,
@@ -613,7 +621,7 @@ async def test_sa_rag_sic_code_short_list_is_none_raise_value_error(
     with pytest.raises(
         ValueError, match="Short list is None - list provided from embedding search."
     ):
-        respondent_data = {"industry_descr":"", "job_description":"", "job_title":""}
+        respondent_data = {"industry_descr": "", "job_description": "", "job_title": ""}
         await classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
             respondent_data=respondent_data
         )
