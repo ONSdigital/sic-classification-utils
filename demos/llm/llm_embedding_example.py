@@ -34,6 +34,12 @@ CANDIDATE_LIMIT = 100
 with (DATA_DIR / "school_embed_short_list.json").open(encoding="utf-8") as handle:
     EXAMPLE_EMBED_SHORT_LIST = json.load(handle)
 
+respondent_data = {
+    "industry_descr": ORG_DESCRIPTION,
+    "job_title": JOB_TITLE,
+    "job_description": JOB_DESCRIPTION,
+}
+
 # %%
 # The vector store is decoupled from the LLM.
 # The expectation is that the embedding will be queried and then
@@ -53,9 +59,7 @@ print(response_sic_code.model_dump_json(indent=2))
 # %%
 response, short_list, prompt = loop.run_until_complete(
     gemini_llm.sa_rag_sic_code(
-        ORG_DESCRIPTION,
-        JOB_TITLE,
-        JOB_DESCRIPTION,
+        respondent_data=respondent_data,
         candidates_limit=CANDIDATE_LIMIT,
         short_list=EXAMPLE_EMBED_SHORT_LIST,
     )
@@ -65,10 +69,8 @@ print(response.model_dump_json(indent=2))
 # %%
 query_response, call_dict = loop.run_until_complete(
     gemini_llm.unambiguous_sic_code(
-        industry_descr=ORG_DESCRIPTION,
+        respondent_data=respondent_data,
         semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
-        job_title=JOB_TITLE,
-        job_description=JOB_DESCRIPTION,
     )
 )
 
