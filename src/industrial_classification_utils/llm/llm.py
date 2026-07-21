@@ -335,11 +335,9 @@ class ClassificationLLM:
 
         return "\n".join(sic_candidates)
 
-    async def sa_rag_sic_code(  # noqa: PLR0913
+    async def sa_rag_sic_code(
         self,
-        industry_descr: str,
-        job_title: str | None = None,
-        job_description: str | None = None,
+        respondent_data: dict[str, Any],
         code_digits: int = config["llm"]["code_digits"],
         candidates_limit: int = config["llm"]["candidates_limit"],
         short_list: list[dict[Any, Any]] | None = None,
@@ -347,9 +345,7 @@ class ClassificationLLM:
         """Generates a SIC classification based on respondent's data using RAG approach.
 
         Args:
-            industry_descr (str): The description of the industry.
-            job_title (str, optional): The job title. Defaults to None.
-            job_description (str, optional): The job description. Defaults to None.
+            respondent_data (dict[str]): A dictionary containing all responses collected.
             code_digits (int, optional): The number of digits in the generated
                 SIC code. Defaults to 5.
             candidates_limit (int, optional): The maximum number of SIC code candidates
@@ -365,28 +361,6 @@ class ClassificationLLM:
                 not loaded correctly.
 
         """
-
-        def prep_call_dict(industry_descr, job_title, job_description, sic_codes):
-            # Helper function to prepare the call dictionary
-            is_job_title_present = job_title is None or job_title in {"", " "}
-            job_title = "Unknown" if is_job_title_present else job_title
-
-            is_job_description_present = job_description is None or job_description in {
-                "",
-                " ",
-            }
-            job_description = (
-                "Unknown" if is_job_description_present else job_description
-            )
-
-            call_dict = {
-                "industry_descr": industry_descr,
-                "job_title": job_title,
-                "job_description": job_description,
-                "sic_index": sic_codes,
-            }
-            return call_dict
-
         if short_list is None:
             raise ValueError(
                 "Short list is None - list provided from embedding search."
@@ -396,12 +370,10 @@ class ClassificationLLM:
             short_list, code_digits=code_digits, candidates_limit=candidates_limit
         )
 
-        call_dict = prep_call_dict(
-            industry_descr=industry_descr,
-            job_title=job_title,
-            job_description=job_description,
-            sic_codes=sic_codes,
-        )
+        call_dict = {
+            "respondent_data": respondent_data,
+            "sic_index": sic_codes,
+        }
 
         if self.verbose:
             final_prompt = self.sa_sic_prompt_rag.format(**call_dict)
@@ -466,12 +438,10 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    async def unambiguous_sic_code(  # noqa: PLR0913
+    async def unambiguous_sic_code(
         self,
-        industry_descr: str,
+        respondent_data: dict[str, Any],
         semantic_search_results: list[dict],
-        job_title: str | None = None,
-        job_description: str | None = None,
         candidates_limit: int = config["llm"]["candidates_limit"],
         code_digits: int = config["llm"]["code_digits"],
         correlation_id: str | None = None,
@@ -479,10 +449,8 @@ class ClassificationLLM:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
         Args:
-            industry_descr (str): The description of the industry.
+            respondent_data (dict[str]): A dictionary containing all responses collected.
             semantic_search_results (list of dicts): List of semantic search results.
-            job_title (str, optional): The job title. Defaults to None.
-            job_description (str, optional): The job description. Defaults to None.
             candidates_limit (int, optional): The maximum number of candidates
                 to include in the prompt. Defaults to 5.
             code_digits (int, optional): The number of digits to consider from
@@ -504,19 +472,8 @@ class ClassificationLLM:
             candidates_limit=candidates_limit,
         )
 
-        job_title = (
-            "Unknown" if (job_title is None or job_title in {"", " "}) else job_title
-        )
-        job_description = (
-            "Unknown"
-            if (job_description is None or job_description in {"", " "})
-            else job_description
-        )
-
         call_dict = {
-            "industry_descr": industry_descr,
-            "job_title": job_title,
-            "job_description": job_description,
+            "respondent_data": respondent_data,
             "sic_candidates": sic_candidates,
         }
 
@@ -529,9 +486,7 @@ class ClassificationLLM:
         # Log LLM request sent
         logger.info(
             "LLM request sent - unambiguous_sic_code",
-            job_title=truncate_identifier(job_title),
-            job_description=truncate_identifier(job_description),
-            industry_descr=truncate_identifier(industry_descr),
+            **{k: truncate_identifier(str(v)) for k, v in respondent_data.items()},
             correlation_id=correlation_id or "",
         )
         llm_start = time.perf_counter()
@@ -896,18 +851,14 @@ class ClassificationLLM:
 
     async def formulate_open_question(
         self,
-        industry_descr: str,
-        job_title: str | None = None,
-        job_description: str | None = None,
+        respondent_data: dict[str, Any],
         llm_output: SicCandidate | None = None,
         correlation_id: str | None = None,
     ) -> tuple[OpenFollowUp, Any]:
         """Formulates an open-ended question using respondent data and survey design guidelines.
 
         Args:
-            industry_descr (str): The description of the industry.
-            job_title (str, optional): The job title. Defaults to None.
-            job_description (str, optional): The job description. Defaults to None.
+            respondent_data (dict[str]): A dictionary containing all responses collected.
             llm_output (SicCandidate, optional): The response from the LLM model.
             correlation_id (str, optional): Optional correlation ID for request tracking.
 
@@ -920,34 +871,10 @@ class ClassificationLLM:
                 not loaded correctly.
 
         """
-
-        def prep_call_dict(industry_descr, job_title, job_description, llm_output):
-            # Helper function to prepare the call dictionary
-            is_job_title_present = job_title is None or job_title in {"", " "}
-            job_title = "Unknown" if is_job_title_present else job_title
-
-            is_job_description_present = job_description is None or job_description in {
-                "",
-                " ",
-            }
-            job_description = (
-                "Unknown" if is_job_description_present else job_description
-            )
-
-            call_dict = {
-                "industry_descr": industry_descr,
-                "job_title": job_title,
-                "job_description": job_description,
-                "llm_output": str(llm_output),
-            }
-            return call_dict
-
-        call_dict = prep_call_dict(
-            industry_descr=industry_descr,
-            job_title=job_title,
-            job_description=job_description,
-            llm_output=llm_output,
-        )
+        call_dict = {
+            "respondent_data": respondent_data,
+            "llm_output": str(llm_output),
+        }
 
         if self.verbose:
             final_prompt = self.sic_prompt_openfollowup.format(**call_dict)
@@ -958,9 +885,7 @@ class ClassificationLLM:
         # Log LLM request sent
         logger.info(
             "LLM request sent - formulate_open_question",
-            job_title=truncate_identifier(job_title),
-            job_description=truncate_identifier(job_description),
-            industry_descr=truncate_identifier(industry_descr),
+            **{k: truncate_identifier(str(v)) for k, v in respondent_data.items()},
             correlation_id=correlation_id or "",
         )
         llm_start = time.perf_counter()
