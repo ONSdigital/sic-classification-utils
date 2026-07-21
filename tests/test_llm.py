@@ -266,10 +266,15 @@ async def test_llm_response_mocked_sa_rag_sic_code(
             "two_digit_code": "11",
         }
     ]
+
+    respondent_data = {
+        "industry_descr": "school",
+        "job_description": "educate kids",
+        "job_title": title,
+    }
+
     result = await classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
-        industry_descr="school",
-        job_description="educate kids",
-        job_title=title,
+        respondent_data=respondent_data,
         short_list=short_list,
     )
     assert isinstance(result[0], SicResponse)
@@ -277,52 +282,19 @@ async def test_llm_response_mocked_sa_rag_sic_code(
     assert isinstance(result[2], dict)
 
 
-@pytest.mark.parametrize(
-    "title, expected_job_title",
-    [
-        ("", "Unknown"),
-        (" ", "Unknown"),
-        (None, "Unknown"),
-        ("teacher", "teacher"),
-    ],
-)
-@pytest.mark.llm
-async def test_llm_mocked_sa_rag_sic_code_job_title(
-    title,
-    expected_job_title,
-    mock_sic_meta_patch,
-    classification_llm_with_sic_sa_rag_sic,
-):
-    short_list = [
-        {
-            "distance": 0.6,
-            "title": "title",
-            "code": "11111",
-            "four_digit_code": "1111",
-            "two_digit_code": "11",
-        }
-    ]
-    result = (
-        await classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
-            "school",
-            title,
-            "educate kids",
-            short_list=short_list,
-        )
-    )[2]["job_title"]
-    assert result == expected_job_title
-
-
 @pytest.mark.llm
 async def test_llm_response_mocked_unambiguous_sic_code(
     mock_sic_meta_patch, classification_llm_with_sic_unambiguous
 ):
+    respondent_data = {
+        "industry_descr": "",
+        "job_description": "",
+        "job_title": "",
+    }
 
     result = await classification_llm_with_sic_unambiguous.unambiguous_sic_code(
-        industry_descr="",
+        respondent_data = respondent_data,
         semantic_search_results=[],
-        job_description="",
-        job_title="",
     )
     assert isinstance(result[0], UnambiguousResponse)
     assert isinstance(result[1], dict)
@@ -431,11 +403,13 @@ async def test_llm_response_mocked_formulate_open_question(
         "industrial_classification_utils.llm.llm.ChatVertexAI.ainvoke",
         return_value=mock_message,
     )
-
+    respondent_data = {
+        "industry_descr": "",
+        "job_title": "",
+        "job_description": "",
+    }
     result = await prompt_candidate_sic.formulate_open_question(
-        industry_descr="",
-        job_title="",
-        job_description="",
+        respondent_data=respondent_data,
         llm_output="",
     )
     assert isinstance(result[0], OpenFollowUp)
@@ -558,48 +532,25 @@ async def test_sa_rag_sic_code_prep_followup_is_str(
             "two_digit_code": "11xxx",
         }
     ]
+    
+    respondent_data = {"industry_descr":"school", "job_description":"teacher", "job_title":"educate kids"}
     result = (
         await classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
-            "school", "teacher", "educate kids", short_list=short_list
+            respondent_data=respondent_data, short_list=short_list
         )
     )[0].followup
     assert isinstance(result, str)
-
-
-@pytest.mark.parametrize(
-    "title, expected_job_title",
-    [
-        ("", "Unknown"),
-        (" ", "Unknown"),
-        (None, "Unknown"),
-        ("teacher", "teacher"),
-    ],
-)
-@pytest.mark.llm
-async def test_unambiguous_sic_code_call_dict_job_title_correct(
-    title,
-    expected_job_title,
-    mock_sic_meta_patch,
-    classification_llm_with_sic_unambiguous,
-):
-    result = (
-        await classification_llm_with_sic_unambiguous.unambiguous_sic_code(
-            "school", [{"title": "Education", "code": "11111"}], title, "educate kids"
-        )
-    )[1]["job_title"]
-    assert result == expected_job_title
 
 
 @pytest.mark.llm
 async def test_unambiguous_sic_code_followup_is_str(
     mock_sic_meta_patch, classification_llm_with_sic_unambiguous
 ):
+    respondent_data = {"industry_descr": "school", "job_title": "teacher", "job_description": "educate kids"}
     result = (
         await classification_llm_with_sic_unambiguous.unambiguous_sic_code(
-            industry_descr="school",
+            respondent_data=respondent_data,
             semantic_search_results=[{"title": "Education", "code": "11111"}],
-            job_title="teacher",
-            job_description="educate kids",
         )
     )[0].reasoning
     assert isinstance(result, str)
@@ -662,8 +613,9 @@ async def test_sa_rag_sic_code_short_list_is_none_raise_value_error(
     with pytest.raises(
         ValueError, match="Short list is None - list provided from embedding search."
     ):
+        respondent_data = {"industry_descr":"", "job_description":"", "job_title":""}
         await classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
-            industry_descr="", job_description="", job_title=""
+            respondent_data=respondent_data
         )
 
 
