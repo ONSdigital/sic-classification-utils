@@ -57,6 +57,9 @@ from industrial_classification_utils.utils.constants import (
     get_default_config,
     truncate_identifier,
 )
+from industrial_classification_utils.utils.prep_respondent_data import (
+    respondent_data_to_dict,
+)
 
 logger = get_logger(__name__)
 config = get_default_config()
@@ -335,9 +338,11 @@ class ClassificationLLM:
 
         return "\n".join(sic_candidates)
 
-    async def sa_rag_sic_code(
+    async def sa_rag_sic_code(  # noqa: PLR0913
         self,
-        respondent_data: dict[str, Any],
+        industry_descr: str,
+        job_title: str | None = None,
+        job_description: str | None = None,
         code_digits: int = config["llm"]["code_digits"],
         candidates_limit: int = config["llm"]["candidates_limit"],
         short_list: list[dict[Any, Any]] | None = None,
@@ -345,7 +350,9 @@ class ClassificationLLM:
         """Generates a SIC classification based on respondent's data using RAG approach.
 
         Args:
-            respondent_data (dict[str]): A dictionary containing all responses collected.
+            industry_descr (str): The description of the industry.
+            job_title (str, optional): The job title. Defaults to None.
+            job_description (str, optional): The job description. Defaults to None.
             code_digits (int, optional): The number of digits in the generated
                 SIC code. Defaults to 5.
             candidates_limit (int, optional): The maximum number of SIC code candidates
@@ -368,6 +375,11 @@ class ClassificationLLM:
 
         sic_codes = self._prompt_candidate_list(
             short_list, code_digits=code_digits, candidates_limit=candidates_limit
+        )
+        respondent_data = respondent_data_to_dict(
+            industry_descr=industry_descr,
+            job_title=job_title,
+            job_description=job_description,
         )
 
         call_dict = {
@@ -438,10 +450,12 @@ class ClassificationLLM:
 
         return validated_answer, short_list, call_dict
 
-    async def unambiguous_sic_code(
+    async def unambiguous_sic_code(  # noqa: PLR0913
         self,
-        respondent_data: dict[str, Any],
+        industry_descr: str,
         semantic_search_results: list[dict],
+        job_title: str | None = None,
+        job_description: str | None = None,
         candidates_limit: int = config["llm"]["candidates_limit"],
         code_digits: int = config["llm"]["code_digits"],
         correlation_id: str | None = None,
@@ -449,8 +463,10 @@ class ClassificationLLM:
         """Evaluates codability to a single 5-digit SIC code based on respondent's data.
 
         Args:
-            respondent_data (dict[str]): A dictionary containing all responses collected.
+            industry_descr (str): The description of the industry.
             semantic_search_results (list of dicts): List of semantic search results.
+            job_title (str, optional): The job title. Defaults to None.
+            job_description (str, optional): The job description. Defaults to None.
             candidates_limit (int, optional): The maximum number of candidates
                 to include in the prompt. Defaults to 5.
             code_digits (int, optional): The number of digits to consider from
@@ -470,6 +486,12 @@ class ClassificationLLM:
             short_list=semantic_search_results,
             code_digits=code_digits,
             candidates_limit=candidates_limit,
+        )
+
+        respondent_data = respondent_data_to_dict(
+            industry_descr=industry_descr,
+            job_title=job_title,
+            job_description=job_description,
         )
 
         call_dict = {
@@ -851,14 +873,18 @@ class ClassificationLLM:
 
     async def formulate_open_question(
         self,
-        respondent_data: dict[str, Any],
+        industry_descr: str,
+        job_title: str | None = None,
+        job_description: str | None = None,
         llm_output: SicCandidate | None = None,
         correlation_id: str | None = None,
     ) -> tuple[OpenFollowUp, Any]:
         """Formulates an open-ended question using respondent data and survey design guidelines.
 
         Args:
-            respondent_data (dict[str]): A dictionary containing all responses collected.
+            industry_descr (str): The description of the industry.
+            job_title (str, optional): The job title. Defaults to None.
+            job_description (str, optional): The job description. Defaults to None.
             llm_output (SicCandidate, optional): The response from the LLM model.
             correlation_id (str, optional): Optional correlation ID for request tracking.
 
@@ -871,6 +897,12 @@ class ClassificationLLM:
                 not loaded correctly.
 
         """
+        respondent_data = respondent_data_to_dict(
+            industry_descr=industry_descr,
+            job_title=job_title,
+            job_description=job_description,
+        )
+
         call_dict = {
             "respondent_data": respondent_data,
             "llm_output": str(llm_output),
