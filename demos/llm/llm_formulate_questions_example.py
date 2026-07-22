@@ -27,16 +27,12 @@ uni_chat = ClassificationLLM(model_name="gemini-2.5-flash", verbose=True)
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
-respondent_data = {
-    "industry_descr": ORG_DESCRIPTION,
-    "job_title": JOB_TITLE,
-    "job_description": JOB_DESCRIPTION,
-}
-
 sic_response_unambiguous = loop.run_until_complete(
     uni_chat.unambiguous_sic_code(
-        respondent_data=respondent_data,
+        industry_descr=ORG_DESCRIPTION,
         semantic_search_results=EXAMPLE_EMBED_SHORT_LIST,
+        job_title=JOB_TITLE,
+        job_description=JOB_DESCRIPTION,
     )
 )
 
@@ -44,7 +40,9 @@ sic_response_unambiguous = loop.run_until_complete(
 # Formulate Open Question
 sic_followup = loop.run_until_complete(
     uni_chat.formulate_open_question(
-        respondent_data=respondent_data,
+        industry_descr=ORG_DESCRIPTION,
+        job_title=JOB_TITLE,
+        job_description=JOB_DESCRIPTION,
         llm_output=sic_response_unambiguous[0].alt_candidates,  # type: ignore
     )
 )
