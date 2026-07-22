@@ -38,8 +38,11 @@ class FollowupAnswerRequest(BaseModel):
     """
 
     org_description: str | None = Field(description="The company's main activity.")
-    job_title: str | None = Field(description="The respondant's job title.")
-    job_description: str | None = Field(description="The respondant's job description.")
+    job_title: str | None = Field(description="The respondent's job title.")
+    job_description: str | None = Field(description="The respondent's job description.")
+    level_of_education: str | None = Field(
+        description="The respondent's level of education."
+    )
     followup_question: str | None = Field(
         description="The LLM-generated followup question."
     )
