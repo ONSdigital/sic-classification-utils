@@ -59,6 +59,7 @@ from industrial_classification_utils.utils.constants import (
 )
 from industrial_classification_utils.utils.prep_respondent_data import (
     respondent_data_to_dict,
+    respondent_data_to_multiline_string,
 )
 
 logger = get_logger(__name__)
@@ -382,8 +383,12 @@ class ClassificationLLM:
             job_description=job_description,
         )
 
+        respondent_data_string = respondent_data_to_multiline_string(
+            respondent_data=respondent_data
+        )
+
         call_dict = {
-            "respondent_data": respondent_data,
+            "respondent_data": respondent_data_string,
             "sic_index": sic_codes,
         }
 
@@ -494,8 +499,12 @@ class ClassificationLLM:
             job_description=job_description,
         )
 
+        respondent_data_string = respondent_data_to_multiline_string(
+            respondent_data=respondent_data
+        )
+
         call_dict = {
-            "respondent_data": respondent_data,
+            "respondent_data": respondent_data_string,
             "sic_candidates": sic_candidates,
         }
 
@@ -903,8 +912,12 @@ class ClassificationLLM:
             job_description=job_description,
         )
 
+        respondent_data_string = respondent_data_to_multiline_string(
+            respondent_data=respondent_data
+        )
+
         call_dict = {
-            "respondent_data": respondent_data,
+            "respondent_data": respondent_data_string,
             "llm_output": str(llm_output),
         }
 
