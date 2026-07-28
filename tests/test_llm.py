@@ -277,6 +277,66 @@ async def test_llm_response_mocked_sa_rag_sic_code(
     assert isinstance(result[2], dict)
 
 
+@pytest.mark.parametrize(
+    "title",
+    [
+        (""),
+        (" "),
+        (None),
+    ],
+)
+@pytest.mark.llm
+async def test_llm_mocked_sa_rag_sic_code_job_title_not_collected(
+    title,
+    mock_sic_meta_patch,
+    classification_llm_with_sic_sa_rag_sic,
+):
+    short_list = [
+        {
+            "distance": 0.6,
+            "title": "title",
+            "code": "11111",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        }
+    ]
+    result = (
+        await classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
+            "school",
+            title,
+            "educate kids",
+            short_list=short_list,
+        )
+    )[2]
+    assert "Job title" not in result
+
+
+@pytest.mark.llm
+async def test_llm_mocked_sa_rag_sic_code_job_title_correct(
+    mock_sic_meta_patch, classification_llm_with_sic_sa_rag_sic
+):
+    """Job title in call dict when provided."""
+    short_list = [
+        {
+            "distance": 0.6,
+            "title": "title",
+            "code": "11111",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        }
+    ]
+    result = (
+        await classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
+            "school",
+            "Teacher",
+            "educate kids",
+            short_list=short_list,
+        )
+    )[2]
+
+    assert "Teacher" in str(result)
+
+
 @pytest.mark.llm
 async def test_llm_response_mocked_unambiguous_sic_code(
     mock_sic_meta_patch, classification_llm_with_sic_unambiguous
