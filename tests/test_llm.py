@@ -307,7 +307,7 @@ async def test_llm_mocked_sa_rag_sic_code_job_title_not_collected(
             "educate kids",
             short_list=short_list,
         )
-    )[2]
+    )[2]["respondent_data"]
     assert "Job title" not in result
 
 
@@ -332,9 +332,9 @@ async def test_llm_mocked_sa_rag_sic_code_job_title_correct(
             "educate kids",
             short_list=short_list,
         )
-    )[2]
+    )[2]["respondent_data"]
 
-    assert "Teacher" in str(result)
+    assert "Teacher" in result
 
 
 @pytest.mark.llm
@@ -588,6 +588,45 @@ async def test_sa_rag_sic_code_prep_followup_is_str(
         )
     )[0].followup
     assert isinstance(result, str)
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        (""),
+        (" "),
+        (None),
+    ],
+)
+@pytest.mark.llm
+async def test_unambiguous_sic_code_call_dict_job_title_not_collected(
+    title,
+    mock_sic_meta_patch,
+    classification_llm_with_sic_unambiguous,
+):
+    result = (
+        await classification_llm_with_sic_unambiguous.unambiguous_sic_code(
+            "school", [{"title": "Education", "code": "11111"}], title, "educate kids"
+        )
+    )[1]["respondent_data"]
+    assert "Job title" not in result
+
+
+@pytest.mark.llm
+async def test_unambiguous_sic_code_call_dict_job_title_correct(
+    mock_sic_meta_patch, classification_llm_with_sic_unambiguous
+):
+    """Job title in call dict when provided."""
+    result = (
+        await classification_llm_with_sic_unambiguous.unambiguous_sic_code(
+            "school",
+            [{"title": "Education", "code": "11111"}],
+            "Teacher",
+            "educate kids",
+        )
+    )[1]["respondent_data"]
+
+    assert "Teacher" in result
 
 
 @pytest.mark.llm
