@@ -110,12 +110,12 @@ def test_some_answers_provided(education, jd, jt, ind, expected):
                 "Job title": "jt1",
                 "Company main activity": "ind1",
             },
-            """- Level of education: ed1
-- Job description: jd1
-- Job title: jt1
-- Company main activity: ind1""",
+            """    - Level of education: ed1
+    - Job description: jd1
+    - Job title: jt1
+    - Company main activity: ind1""",
         ),
-        ({"Level of education": "edu1"}, "- Level of education: edu1"),
+        ({"Level of education": "edu1"}, "    - Level of education: edu1"),
         ({}, ""),
     ],
 )

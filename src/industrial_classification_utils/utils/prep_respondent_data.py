@@ -48,4 +48,4 @@ def respondent_data_to_multiline_string(respondent_data: dict) -> str:
     Returns:
         str: dictionary converted to a multiline string.
     """
-    return "\n".join(f"- {k}: {v}" for k, v in respondent_data.items())
+    return "\n".join(f"    - {k}: {v}" for k, v in respondent_data.items())
