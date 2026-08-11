@@ -278,18 +278,16 @@ async def test_llm_response_mocked_sa_rag_sic_code(
 
 
 @pytest.mark.parametrize(
-    "title, expected_job_title",
+    "title",
     [
-        ("", "Unknown"),
-        (" ", "Unknown"),
-        (None, "Unknown"),
-        ("teacher", "teacher"),
+        (""),
+        (" "),
+        (None),
     ],
 )
 @pytest.mark.llm
-async def test_llm_mocked_sa_rag_sic_code_job_title(
+async def test_llm_mocked_sa_rag_sic_code_job_title_not_collected(
     title,
-    expected_job_title,
     mock_sic_meta_patch,
     classification_llm_with_sic_sa_rag_sic,
 ):
@@ -309,8 +307,34 @@ async def test_llm_mocked_sa_rag_sic_code_job_title(
             "educate kids",
             short_list=short_list,
         )
-    )[2]["job_title"]
-    assert result == expected_job_title
+    )[2]["respondent_data"]
+    assert "Job title" not in result
+
+
+@pytest.mark.llm
+async def test_llm_mocked_sa_rag_sic_code_job_title_correct(
+    mock_sic_meta_patch, classification_llm_with_sic_sa_rag_sic
+):
+    """Job title in call dict when provided."""
+    short_list = [
+        {
+            "distance": 0.6,
+            "title": "title",
+            "code": "11111",
+            "four_digit_code": "1111",
+            "two_digit_code": "11",
+        }
+    ]
+    result = (
+        await classification_llm_with_sic_sa_rag_sic.sa_rag_sic_code(
+            "school",
+            "Teacher",
+            "educate kids",
+            short_list=short_list,
+        )
+    )[2]["respondent_data"]
+
+    assert "Teacher" in result
 
 
 @pytest.mark.llm
@@ -567,18 +591,16 @@ async def test_sa_rag_sic_code_prep_followup_is_str(
 
 
 @pytest.mark.parametrize(
-    "title, expected_job_title",
+    "title",
     [
-        ("", "Unknown"),
-        (" ", "Unknown"),
-        (None, "Unknown"),
-        ("teacher", "teacher"),
+        (""),
+        (" "),
+        (None),
     ],
 )
 @pytest.mark.llm
-async def test_unambiguous_sic_code_call_dict_job_title_correct(
+async def test_unambiguous_sic_code_call_dict_job_title_not_collected(
     title,
-    expected_job_title,
     mock_sic_meta_patch,
     classification_llm_with_sic_unambiguous,
 ):
@@ -586,8 +608,25 @@ async def test_unambiguous_sic_code_call_dict_job_title_correct(
         await classification_llm_with_sic_unambiguous.unambiguous_sic_code(
             "school", [{"title": "Education", "code": "11111"}], title, "educate kids"
         )
-    )[1]["job_title"]
-    assert result == expected_job_title
+    )[1]["respondent_data"]
+    assert "Job title" not in result
+
+
+@pytest.mark.llm
+async def test_unambiguous_sic_code_call_dict_job_title_correct(
+    mock_sic_meta_patch, classification_llm_with_sic_unambiguous
+):
+    """Job title in call dict when provided."""
+    result = (
+        await classification_llm_with_sic_unambiguous.unambiguous_sic_code(
+            "school",
+            [{"title": "Education", "code": "11111"}],
+            "Teacher",
+            "educate kids",
+        )
+    )[1]["respondent_data"]
+
+    assert "Teacher" in result
 
 
 @pytest.mark.llm

@@ -175,9 +175,7 @@ Always provide reasoning for your decision.
 
 
 ===Respondent Data===
-- Company's main activity: {industry_descr}
-- Job Title: {job_title}
-- Job Description: {job_description}
+{respondent_data}
 
 ===Relevant subset of UK SIC 2007===
 {sic_index}
@@ -254,9 +252,7 @@ Follow these steps in order:
 5. Provide reasoning for your decision.
 
 ===Respondent Data===
-- Company's main activity: {industry_descr}
-- Job Title: {job_title}
-- Job Description: {job_description}
+{respondent_data}
 
 ===Shortlist===
 {sic_candidates}
@@ -497,9 +493,7 @@ Objective
 
 Inputs
 - Respondent data:
-- Company's main activity: {industry_descr}
-- Job title: {job_title}
-- Job description: {job_description}
+{respondent_data}
 - Shortlist from previous model: {llm_output}
 - Note: These are candidate SIC categories; do not mention codes or "SIC" to the respondent.
 

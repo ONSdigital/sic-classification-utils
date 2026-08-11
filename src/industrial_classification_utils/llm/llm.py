@@ -57,6 +57,10 @@ from industrial_classification_utils.utils.constants import (
     get_default_config,
     truncate_identifier,
 )
+from industrial_classification_utils.utils.prep_respondent_data import (
+    respondent_data_to_dict,
+    respondent_data_to_multiline_string,
+)
 
 logger = get_logger(__name__)
 config = get_default_config()
@@ -365,28 +369,6 @@ class ClassificationLLM:
                 not loaded correctly.
 
         """
-
-        def prep_call_dict(industry_descr, job_title, job_description, sic_codes):
-            # Helper function to prepare the call dictionary
-            is_job_title_present = job_title is None or job_title in {"", " "}
-            job_title = "Unknown" if is_job_title_present else job_title
-
-            is_job_description_present = job_description is None or job_description in {
-                "",
-                " ",
-            }
-            job_description = (
-                "Unknown" if is_job_description_present else job_description
-            )
-
-            call_dict = {
-                "industry_descr": industry_descr,
-                "job_title": job_title,
-                "job_description": job_description,
-                "sic_index": sic_codes,
-            }
-            return call_dict
-
         if short_list is None:
             raise ValueError(
                 "Short list is None - list provided from embedding search."
@@ -395,13 +377,20 @@ class ClassificationLLM:
         sic_codes = self._prompt_candidate_list(
             short_list, code_digits=code_digits, candidates_limit=candidates_limit
         )
-
-        call_dict = prep_call_dict(
+        respondent_data = respondent_data_to_dict(
             industry_descr=industry_descr,
             job_title=job_title,
             job_description=job_description,
-            sic_codes=sic_codes,
         )
+
+        respondent_data_string = respondent_data_to_multiline_string(
+            respondent_data=respondent_data
+        )
+
+        call_dict = {
+            "respondent_data": respondent_data_string,
+            "sic_index": sic_codes,
+        }
 
         if self.verbose:
             final_prompt = self.sa_sic_prompt_rag.format(**call_dict)
@@ -504,19 +493,18 @@ class ClassificationLLM:
             candidates_limit=candidates_limit,
         )
 
-        job_title = (
-            "Unknown" if (job_title is None or job_title in {"", " "}) else job_title
+        respondent_data = respondent_data_to_dict(
+            industry_descr=industry_descr,
+            job_title=job_title,
+            job_description=job_description,
         )
-        job_description = (
-            "Unknown"
-            if (job_description is None or job_description in {"", " "})
-            else job_description
+
+        respondent_data_string = respondent_data_to_multiline_string(
+            respondent_data=respondent_data
         )
 
         call_dict = {
-            "industry_descr": industry_descr,
-            "job_title": job_title,
-            "job_description": job_description,
+            "respondent_data": respondent_data_string,
             "sic_candidates": sic_candidates,
         }
 
@@ -529,9 +517,7 @@ class ClassificationLLM:
         # Log LLM request sent
         logger.info(
             "LLM request sent - unambiguous_sic_code",
-            job_title=truncate_identifier(job_title),
-            job_description=truncate_identifier(job_description),
-            industry_descr=truncate_identifier(industry_descr),
+            **{k: truncate_identifier(str(v)) for k, v in respondent_data.items()},
             correlation_id=correlation_id or "",
         )
         llm_start = time.perf_counter()
@@ -920,34 +906,20 @@ class ClassificationLLM:
                 not loaded correctly.
 
         """
-
-        def prep_call_dict(industry_descr, job_title, job_description, llm_output):
-            # Helper function to prepare the call dictionary
-            is_job_title_present = job_title is None or job_title in {"", " "}
-            job_title = "Unknown" if is_job_title_present else job_title
-
-            is_job_description_present = job_description is None or job_description in {
-                "",
-                " ",
-            }
-            job_description = (
-                "Unknown" if is_job_description_present else job_description
-            )
-
-            call_dict = {
-                "industry_descr": industry_descr,
-                "job_title": job_title,
-                "job_description": job_description,
-                "llm_output": str(llm_output),
-            }
-            return call_dict
-
-        call_dict = prep_call_dict(
+        respondent_data = respondent_data_to_dict(
             industry_descr=industry_descr,
             job_title=job_title,
             job_description=job_description,
-            llm_output=llm_output,
         )
+
+        respondent_data_string = respondent_data_to_multiline_string(
+            respondent_data=respondent_data
+        )
+
+        call_dict = {
+            "respondent_data": respondent_data_string,
+            "llm_output": str(llm_output),
+        }
 
         if self.verbose:
             final_prompt = self.sic_prompt_openfollowup.format(**call_dict)
@@ -958,9 +930,7 @@ class ClassificationLLM:
         # Log LLM request sent
         logger.info(
             "LLM request sent - formulate_open_question",
-            job_title=truncate_identifier(job_title),
-            job_description=truncate_identifier(job_description),
-            industry_descr=truncate_identifier(industry_descr),
+            **{k: truncate_identifier(str(v)) for k, v in respondent_data.items()},
             correlation_id=correlation_id or "",
         )
         llm_start = time.perf_counter()

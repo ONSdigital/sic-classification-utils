@@ -43,9 +43,7 @@ Please answer this clarifying question, using the Output Format specified below.
 {format_instructions}
 
 ===Your Job Data===
-- Company's main activity: {org_description}
-- Job Title: {job_title}
-- Job Description: {job_description}
+{respondent_data}
 
 ===Survey Data===
 - clarifying question: {followup_question}
@@ -59,10 +57,11 @@ def make_followup_answer_prompt_pydantic(
 
     Args:
         persona (TODO): An object describing the characteristics of the persona to emulate.
-        request_body (dict): A dictionary containing the survey response data, including
+        request_body (dict): A dictionary containing the survey response data, including any of
                              "org_description",
                              "job_title",
-                             "job_description".
+                             "job_description",
+                             "level_of_education".
         followup_question (str): The clarifying question from the survey interviewer.
 
     Returns:
@@ -74,9 +73,7 @@ def make_followup_answer_prompt_pydantic(
         template=persona_prompt + _REMINDER_TEMPLATE,
         partial_variables={
             "format_instructions": parser.get_format_instructions(),
-            "org_description": request_body["industry_descr"],
-            "job_title": request_body["job_title"],
-            "job_description": request_body["job_description"],
+            "respondent_data": request_body,
             "followup_question": followup_question,
         },
     )
