@@ -6,8 +6,8 @@ This module is currently limited to a template and template constructor to
 request an LLM to answer a SIC follow-up question.
 """
 
-from langchain.output_parsers import PydanticOutputParser
-from langchain.prompts.prompt import PromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import PromptTemplate
 
 from industrial_classification_utils.llm.prompt import _core_prompt
 
