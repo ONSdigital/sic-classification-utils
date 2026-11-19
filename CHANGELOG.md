@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
+## [Unreleased]
+
+## Changed
+- Upgraded survey-assist-utils to v0.0.9 and its required Google Cloud Storage and LangChain integrations.
+- Replaced legacy LangChain prompt and parser imports with langchain-core imports.
+- Updated vulnerable runtime and development dependencies, including Black, Pylint and pytest.
+
 ## [0.1.7] - 2025-10-27
 
 ## Changed
