@@ -55,8 +55,8 @@ import json
 import logging
 from collections.abc import Callable
 
-from langchain.output_parsers import PydanticOutputParser
-from langchain.prompts.prompt import PromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import PromptTemplate
 from langchain_google_vertexai import ChatVertexAI
 
 from industrial_classification_utils.utils.constants import get_default_config
