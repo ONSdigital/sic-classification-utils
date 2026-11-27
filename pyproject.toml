@@ -23,7 +23,7 @@ include = [
 
 [tool.poetry.dependencies]
 autocorrect = "^2.6.1"
-classifai = { git = "https://github.com/datasciencecampus/classifai.git", tag = "v1.1.1", extras = ["huggingface"] }
+classifai = { git = "https://github.com/datasciencecampus/classifai.git", tag = "v1.1.2", extras = ["huggingface"] }
 google-cloud-storage = ">=3.9,<4"
 langchain-core = ">=1.2.22,<2"
 langchain-google-vertexai = "^3.1.0"
